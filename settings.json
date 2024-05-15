@@ -1,0 +1,13 @@
+{
+    "output": "converter.js",
+    "version": "1.0.0",
+    "BIPFolder": "bips",
+    "subfolderPrefix": "bip-",
+    "BIPtables": {
+        "_comment": "list of BIPs to be in the final file",
+        "39": {
+            "languages": [],
+            "_comment": "list of languages, if empty, all langages are implemented"
+        }
+    }
+}
