@@ -1,6 +1,6 @@
-const hardcodedWordsLists = {
-    "BIP39": {
-        "chinese_simplified": [
+const BIPTables = {
+    "BIP-0039": {
+        "chinesesimplified": [
             "的",
             "一",
             "是",
@@ -2050,7 +2050,7 @@ const hardcodedWordsLists = {
             "矮",
             "歇"
         ],
-        "chinese_traditional": [
+        "chinesetraditional": [
             "的",
             "一",
             "是",
@@ -20502,33 +20502,34 @@ const hardcodedWordsLists = {
         ]
     }
 };
+const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 class converter {
     constructor() {
-		this.wordslists = hardcodedWordsLists;
+		this.BIPTables = BIPTables;
     }
 	
     getListOfBIPs() {
-		return Object.keys(this.wordslists);
+		return Object.keys(this.BIPTables);
 	}
 
 	getListOfLanguages(bip) {
-		return Object.keys(this.wordslists[bip]);
+		return Object.keys(this.BIPTables[bip]);
 	}
 
 	getWord(bip, language, index) {
-		return this.wordslists[bip][language][index];
+		return this.BIPTables[bip][language][index];
 	}
 
 	getWordIndex(bip, language, word) {
-		return this.wordslists[bip][language].indexOf(word);
+		return this.BIPTables[bip][language].indexOf(word);
 	}
 
 	/**
-	 * Find the BIP, language and wordlist corresponding to the mnemonic
+	 * Find the BIP, language and wordsTable corresponding to the mnemonic
 	 * @param {string[]} mnemonic - The mnemonic to get the words list from
 	 */
-	getWordsListFromMnemonic(mnemonic = []) {
+	getBIPTableFromMnemonic(mnemonic = []) {
 		let bip = '';
 		let language = '';
 
@@ -20543,12 +20544,12 @@ class converter {
 			for (let j = 0; j < languages.length; j++) {
 				currentSearch.foundWords = [];
 				currentSearch.language = languages[j];
-				const wordsList = this.wordslists[currentSearch.bip][currentSearch.language];
+				const wordsTable = this.BIPTables[currentSearch.bip][currentSearch.language];
 
 				for (let k = 0; k < mnemonic.length; k++) {
 					currentSearch.word = mnemonic[k];
 
-					if (!wordsList.includes(currentSearch.word)) { break; }
+					if (!wordsTable.includes(currentSearch.word)) { break; }
 					currentSearch.foundWords.push(currentSearch.word);
 					if (k < mnemonic.length - 1) { continue; }
 
@@ -20566,10 +20567,11 @@ class converter {
 		if (bip === '' || language === '') { console.error(`BIP and/or language not found for the mnemonic ! Best result -> ${bestSearch.bip} | ${bestSearch.language} | words found: ${bestSearch.foundWords.length} | missing word: ${bestSearch.word}`);  return false; }
 
 		/** @type {string[]} */
-		const resultWordsList = this.wordslists[bip][language];
-		if (resultWordsList === undefined) { return false; }
+		const resultWordsTable = this.BIPTables[bip][language];
+		if (resultWordsTable === undefined) { return false; }
 
-		return { bip, language, wordsList: resultWordsList };
+		const BIPTable = new BIPTableObject(bip, language, resultWordsTable);
+		return BIPTable;
 	}
 
 	/**
@@ -20586,15 +20588,13 @@ class converter {
 		if (pseudoMnemonic.length > mnemonic.length) { return false; }
 
 		// DETECT THE BIP AND LANGUAGE OF THE MNEMONICS
-		const originDetected = this.getWordsListFromMnemonic(mnemonic);
-		const pseudoDetected = this.getWordsListFromMnemonic(pseudoMnemonic);
-		if (!originDetected || !pseudoDetected) { return false; }
+		const originBIPTable = this.getBIPTableFromMnemonic(mnemonic);
+		const pseudoBIPTable = this.getBIPTableFromMnemonic(pseudoMnemonic);
+		if (!originBIPTable || !pseudoBIPTable) { return false; }
 		
 		const doubleWordMode = mnemonic.length !== pseudoMnemonic.length;
-		const originWordsList = originDetected.wordsList;
-		const pseudoWordsList = pseudoDetected.wordsList;
 		const pseudoBIP = [];
-		const freePseudoWords = pseudoWordsList.slice();
+		const freePseudoWords = pseudoBIPTable.wordsTable.slice();
 
 		// REMOVE THE USED PSEUDO WORDS FROM THE FREE PSEUDO WORDS LIST
 		for (let i = 0; i < pseudoMnemonic.length; i++) {
@@ -20605,10 +20605,10 @@ class converter {
 		}
 		
 		// GENERATE THE PSEUDO BIP
-		for (let i = 0; i < originWordsList.length; i++) {
+		for (let i = 0; i < originBIPTable.wordsTable.length; i++) {
 			if (freePseudoWords.length === 0) { 
 				console.error('No more free pseudo words available'); return false; }
-			const word = originWordsList[i];
+			const word = originBIPTable.wordsTable[i];
 			const index = mnemonic.indexOf(word);
 			const isInMnemonic = index !== -1;
 			let pseudo = []; // should contain 1 or 2 words depending on the doubleWordMode
@@ -20634,18 +20634,166 @@ class converter {
 			pseudoBIP.push(pseudoStr);
 		}
 
+		pseudoBIPTable.prefix = originBIPTable.getPrefix();
+		pseudoBIPTable.setPseudoWordsTable(pseudoBIP);
+		pseudoBIPTable.encodeTable(this.BIPTables);
+
 		return {
-			origin: {
-				bip: originDetected.bip,
-				language: originDetected.language,
-				wordsList: originWordsList
-			},
-			pseudo: {
-				bip: pseudoDetected.bip,
-				language: pseudoDetected.language,
-				wordsList: pseudoBIP
-			},
-		};
+			origin: originBIPTable,
+			pseudo: pseudoBIPTable
+		}
+	}
+}
+
+class BIPTableObject {
+	constructor(bip = '', language = '', wordsTable = [''], indexTable = [], encodedTable = '') {
+		this.isPseudoTable = false;
+		this.prefix = '';
+
+		this.bip = bip;
+		this.language = language;
+		this.wordsTable = wordsTable;
+		this.indexTable = indexTable;
+		this.encodedTable = encodedTable;
+	}
+
+	setPseudoWordsTable(pseudoWordsTable = []) {
+		this.isPseudoTable = true;
+		this.wordsTable = pseudoWordsTable;
+	}
+	getPrefix() {
+		if (this.bip === '') { console.error('getPrefix(): bip is empty'); return false; }
+		if (this.language === '') { console.error('getPrefix(): language is empty'); return false; }
+
+		return this.language + this.bip;
+	}
+	getEncodedTable(withPrefix = true) {
+		if (this.encodedTable === '') { console.error('encodedTable is empty'); return false; }
+		if (withPrefix && this.prefix === '') { console.error('prefix is empty'); return false; }
+
+		return withPrefix ? this.prefix + this.encodedTable : this.encodedTable;
+	}
+
+	/**
+	 * Convert the BIP Table to a base64 string
+	 * - base64 is used as numeric basis to index the words, reducing the size of the table
+	 * - will clear the indexTable and encodedTable
+	 */
+	encodeTable(BIPTables) {
+		if (this.wordsTable.length === 0) { console.error('wordsTable to encode is empty'); return false; }
+		if (!this.#isWordsTableAPseudoTable(BIPTables)) { console.error('wordsTable need to be a pseudoTable'); return false; }
+
+		const BIPTable = BIPTables[this.bip][this.language];
+		if (!BIPTable) { console.error('unable to find the BIP table while encoding table'); return false; }
+		
+		let indexTable = [];
+		for (let i = 0; i < this.wordsTable.length; i++) {
+			const word = this.wordsTable[i];
+			const wordIndex = BIPTable.indexOf(word);
+			if (wordIndex === -1) { console.error(`Word not found in BIPTable: ${word}`); return false; }
+
+			indexTable.push(wordIndex);
+		}
+
+		let encodedPseudoTable = '';
+		for (let i = 0; i < indexTable.length; i++) {
+			const wordIndex = indexTable[i];
+			const encodedIndex = this.#encode(wordIndex);
+			encodedPseudoTable += encodedIndex;
+		}
+
+		this.encodedTable = encodedPseudoTable;
+		this.indexTable = indexTable;
+		return encodedPseudoTable;
+	}
+	/**
+	 * Encode a number using base64 as numeric basis - 2 chars per number
+	 * - The number is divided by 64 and the remainder is used as the second char
+	 * - The maximum number is 4095 (63*64+63)
+	 * @param {number} number - The number to encode
+	 * @returns {string} - The encoded number
+	 */
+	#encode(number) {
+		if (isNaN(number)) { console.error('number is not a number'); return false; }
+		if (number > 4095) { console.error('number is too high to be encoded'); return false; }
+
+		const firstChar = base64EncodingChars[Math.floor(number / 64)];
+		const secondChar = base64EncodingChars[number % 64];
+		return firstChar + secondChar;
+	}
+	#isWordsTableAPseudoTable(BIPTables) {
+		const controlTable = BIPTables[this.bip][this.language];
+		for (let i = 0; i < this.wordsTable.length; i++) {
+			const word = this.wordsTable[i];
+			const controlWord = controlTable[i];
+			if (word !== controlWord) { return true; }
+		}
+		return false;
+	}
+
+	/**
+	 * Convert the base64 encoded string to :
+	 * - this.indexTable
+	 * - this.wordsTable (if possible)
+	 * @returns {string} - 'FullyDecoded' if BIP Table fully decoded, 'indexTable' if only indexTable decoded
+	 */
+	decodeTable(BIPTables) {
+		if (this.encodedTable === '') { console.error('encodedTable is empty'); return false; }
+
+		// --- Prefix info corresponds to the original BIP Table ---
+		const bip = "BIP-" + this.encodedTable.split('BIP')[1].slice(0, 4);
+		const language = this.encodedTable.split('BIP')[0];
+		const language_detected = BIPTables[bip] !== undefined && BIPTables[bip][language] !== undefined;
+		if (language_detected) { console.info(`language detected: ${language} | ${bip}`); }
+
+		// DECODING THE TABLE
+		this.indexTable = [];
+		const encoded = language_detected ? this.encodedTable.split('BIP')[1].slice(0, 4) : this.encodedTable;
+
+		for (let i = 0; i < encoded.length; i += 2) {
+			const encodedNumber = encoded.slice(i, i + 2);
+			const decodedNumber = this.#decode(encodedNumber);
+			indexTable.push(decodedNumber);
+		}
+
+		const originWordsTable = BIPTables[bip][language];
+		if (!originWordsTable) { console.error('unable to find the original BIP table while decoding table'); return false; }
+
+		return originWordsTable ? 'FullyDecoded' : 'indexTable';
+	}
+	/**
+	 * Decode a number using base64 as numeric basis - 2 chars per number
+	 * - The first char is multiplied by 64 and the second char is added to it
+	 * @param {string} encodedNumber - The encoded number
+	 * @returns {number} - The decoded number
+	 */
+	#decode(encodedNumber) {
+		const firstChar = base64EncodingChars.indexOf(encodedNumber[0]);
+		const secondChar = base64EncodingChars.indexOf(encodedNumber[1]);
+		return firstChar * 64 + secondChar;
+	}
+
+	/**
+	 * Convert the IndexTable to a readable list of words
+	 * @param {string} bip - The BIP of the table (default: this.bip)
+	 * @param {string} language - The language of the table (default: this.language)
+	 * @returns {string[]} - The readable list of words
+	 */
+	toReadable(BIPTables, bip = this.bip, language = this.language) {
+		if (this.indexTable.length === 0) { console.error('indexTable is empty'); return false; }
+		const table = BIPTables[bip][language];
+		if (!table) { console.error('unable to find the BIP table while decoding table'); return false; }
+
+		this.wordsTable = [];
+
+		for (let i = 0; i < this.indexTable.length; i++) {
+			const index = this.indexTable[i];
+			const word = table[index];
+			if (!word) { console.error('unable to find the word in the BIP table'); return false; }
+			this.wordsTable.push(word);
+		}
+		
+		return this.wordsTable;
 	}
 }
 
@@ -20653,7 +20801,7 @@ function getRandomInt(min, max) {
 	// Create a buffer of one Uint32
 	const buffer = new Uint32Array(1);
 
-	// Fill the buffer with a secure random number
+	// Fill the buffer with a secure random number - manage himself browser compatibility
 	try {
 		window.crypto.getRandomValues(buffer);
 	} catch (e) {

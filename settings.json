@@ -2,11 +2,15 @@
     "output": "converter.js",
     "version": "1.0.0",
     "BIPFolder": "bips",
-    "subfolderPrefix": "bip-",
     "BIPtables": {
-        "_comment": "list of BIPs to be in the final file",
-        "39": {
-            "languages": [],
+        "_comment": "list of BIPs to be in the final file - numeric keys should be 4 digits long, with leading zeros",
+        "BIP-0039": {
+            "languages": {},
+            "_languages_example": {
+                "english": "english",
+                "chinesesimplified": "chinese-simplified",
+                "chinesetraditional": "chinese-traditional"
+            },
             "_comment": "list of languages, if empty, all langages are implemented"
         }
     }
