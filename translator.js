@@ -20512,7 +20512,6 @@ const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxy
  * @param {string[]} params.mnemonic - The original mnemonic
  */
 class Translator {
-	//constructor(BIPTables, bip = '', language = '', wordsTable = [''], indexTable = []) { to remove
 	constructor(params = { mnemonic: null, pseudoMnemonic: null, encodedTable: null }) {
 		this.BIPTables = BIPTablesHardcoded;
 		this.initialized = false;
@@ -20679,8 +20678,6 @@ class Translator {
 	getEncodedTable(withPrefix = true) {
 		if (this.encodedTable === '') { this.encodeTable(); }
 		if (this.encodedTable === '') { console.error('encodedTable is empty'); return false; }
-
-		//if (withPrefix && this.prefix === '') { console.error('prefix is empty'); return false; } to remove
 
 		return withPrefix ? this.getOriginPrefix() + this.encodedTable : this.encodedTable;
 	}
