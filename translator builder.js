@@ -127,9 +127,11 @@ function singleTest(mnemonic, pseudoMnemonic, logs = true) {
 	const encodedTable = translatorA.getEncodedTable(true);
 	if (!encodedTable) { console.error('getEncodedTable() failed !'); return translatorA.error; }
 
-	const translatorB = new Translator( {encodedTable} );
+	console.log(encodedTable);
+
+	const translatorB = new Translator( {encodedTable, pseudoMnemonic} );
 	translatorB.BIPTables = BIPTables; // NOT NECESSARY WHEN EXPORTED TRANSLATOR
-	const decodedMnemonic = translatorB.translateMnemonic(pseudoMnemonic, 'string'); // output: 'array' or 'string'
+	const decodedMnemonic = translatorB.translateMnemonic('string'); // output: 'array' or 'string'
 
 	if (logs) { console.log(`Decoded mnemonic: ${decodedMnemonic}`); }
 
@@ -186,6 +188,14 @@ function exportTranslator() {
 }
 
 //const testResult = testLoop(100, 'english', 'french');
+
+// SOLO TEST
+const mnemonic_ = "abaisser abandon abdiquer abeille abolir aborder aboutir aboyer abrasif abreuver abriter abroger";
+const pseudoMnemonic_ = "abaisser abandon abdiquer abeille abolir aborder aboutir aboyer abrasif abreuver abriter abroger";
+const singleTestResult = singleTest(mnemonic_, pseudoMnemonic_);
+return true;
+
+// MULTI TEST
 const testResult = testLoop(100, 'random', 'random');
 if (testResult.success === testResult.iterations) {
 	console.log('All tests passed successfully, exporting translator...'); 
