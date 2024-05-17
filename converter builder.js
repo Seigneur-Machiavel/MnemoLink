@@ -1,12 +1,9 @@
 const fs = require('fs');
 const path = require('path');
-const { converter, Translator } = require('./converter-src.js');
+const Translator = require('./translator-src.js');
 
-const cter = new converter();
 const BIPTables = {};
 const settings = loadSettings();
-const testMnemonic = "abandon number industry connect town stay such ribbon return cabbage bus spy" // 12 words english BIP39
-const testPseudoMnemonic = "abaisser bannière caneton décider ennemi filetage guide hormone infini jauger kiosque lampe" // 12 words french BIP39
 
 //#region LOADING SETTINGS && BIP TABLES
 if (!settings) { console.error('Settings could not be loaded'); return; }
@@ -85,46 +82,118 @@ function isMultipleOf1024(number) {
 }
 //#endregion
 
-/*function test(mnemonicStr, pseudoMnemonicStr) {
-	cter.BIPTables = BIPTables;
+function testLoop(iterations = 100, language = "random", pseudoLanguage = "random", mnemonicLengths = [12, 24]) {
+	let success = 0;
+	let failure = 0;
+	const failureInfos = [];
+	for (let i = 0; i < iterations; i++) {
+		const mnemonicLength = mnemonicLengths[ getRandomInt(0, mnemonicLengths.length - 1) ];
+		const gen1 = generateMnemonic(mnemonicLength, 'BIP-0039', language);
+		const gen2 = generateMnemonic(12, 'BIP-0039', pseudoLanguage);
+		const mnemonic = gen1.wordsList;
+		const pseudoMnemonic = gen2.wordsList;
 
-	const mnemonic = mnemonicStr.split(' ');
-	const pseudoMnemonic = pseudoMnemonicStr.split(' ');
+		//const mnemonic = "abandon able industry connect town stay such ribbon return cabbage bus spy" // 12 words english BIP39
+		//const mnemonic24 = "abandon able industry connect town stay such ribbon return cabbage bus spy glue goat goddess gold good goose gorilla gospel gossip govern gown grab";
+		//const pseudoMnemonic = "abaisser bannière caneton décider ennemi filetage guide hormone infini jauger kiosque lampe" // 12 words french BIP39
+		
+		const result = singleTest(mnemonic, pseudoMnemonic, true);
+		if (result === true) { success++; } else { 
+			failureInfos.push({
+				reason: result,
+				mnemonic: gen1,
+				pseudoMnemonic: gen2
+			});
+			failure++;
+		}
+	}
+	console.log(`\n\nSuccess: ${success} / Failure: ${failure}`);
 
-	// Searching for the BIP and language of the mnemonic
-	//const detected = cter.getBIPTableFromMnemonic(mnemonic);
-	//if (!detected) { console.error('bip and language not found'); return false; }
-	//console.log(`bip: ${detected.bip}, language: ${detected.language}`);
-
-	const generated = cter.genPseudoBipTable(mnemonic, pseudoMnemonic);
-
-	return generated;
-}*/
-function test(mnemonicStr, pseudoMnemonicStr) {
-	const mnemonic = mnemonicStr.split(' '); // From "abandon number industry ..." to ["abandon", "number", "industry", ...]
-	const pseudoMnemonic = pseudoMnemonicStr.split(' '); // Can be passed as string or array
+	return { success, failure, iterations, failureInfos };
+}
+/**
+ * 
+ * @param {string|string[]} mnemonic
+ * @param {string|string[]} pseudoMnemonic
+ * @returns {boolean}
+ */
+function singleTest(mnemonic, pseudoMnemonic, logs = true) {
+	if (!mnemonic || !pseudoMnemonic) { console.error('mnemonic or pseudoMnemonic is undefined'); return "mnemonic or pseudoMnemonic is undefined"; }
+	const mnemonicStr = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
+	if (logs) { console.log(`\nTesting with mnemonic: ${mnemonicStr}\n`) };
 
 	const translatorA = new Translator( {mnemonic, pseudoMnemonic} );
 	translatorA.BIPTables = BIPTables; // NOT NECESSARY WHEN EXPORTED TRANSLATOR
 	const encodedTable = translatorA.getEncodedTable(true);
-	if (!encodedTable) { console.error('getEncodedTable() failed !'); return false; }
+	if (!encodedTable) { console.error('getEncodedTable() failed !'); return translatorA.error; }
 
 	const translatorB = new Translator( {encodedTable} );
 	translatorB.BIPTables = BIPTables; // NOT NECESSARY WHEN EXPORTED TRANSLATOR
-	const decodedMnemonic = translatorB.translate(pseudoMnemonic);
+	const decodedMnemonic = translatorB.translateMnemonic(pseudoMnemonic, 'string'); // output: 'array' or 'string'
 
-	return decodedMnemonic;
+	if (logs) { console.log(`Decoded mnemonic: ${decodedMnemonic}`); }
+
+	// Check if the decoded mnemonic is the same as the original one
+	if (mnemonicStr !== decodedMnemonic) { console.error('Decoded mnemonic is different from the original one !'); return "Decoded mnemonic is different from the original one !"; }
+
+	return true;
+}
+function generateMnemonic(length = 12, bip = "BIP-0039", language = "random") {
+	if (!BIPTables[bip]) { console.error(`BIP ${bip} not found`); return false; }
+
+	const BIPLanguages = Object.keys(BIPTables[bip]);
+	if (BIPLanguages.length === 0) { console.error(`No languages found for BIP ${bip}`); return false; }
+
+	const randomLanguageIndex = getRandomInt(0, BIPLanguages.length - 1);
+	const BIPlangague = language === "random" ? BIPLanguages[randomLanguageIndex] : language;
+
+	const BIPTable = BIPTables[bip][BIPlangague];
+	const mnemonic = [];
+	for (let i = 0; i < length; i++) {
+		let rnd = getRandomInt(0, BIPTable.length - 1);
+		while(mnemonic.includes(BIPTable[rnd])) {
+			rnd = getRandomInt(0, BIPTable.length - 1);
+		}
+		mnemonic.push(BIPTable[rnd]);
+	}
+
+	return { wordsList: mnemonic, language: BIPlangague };
+}
+function getRandomInt(min, max) {
+	// Create a buffer of one Uint32
+	const buffer = new Uint32Array(1);
+
+	// Fill the buffer with a secure random number - manage himself browser compatibility
+	crypto.getRandomValues(buffer);
+
+	// Calculate a range of numbers
+	const range = max - min + 1;
+	
+	// Reduce the random number to the desired range [min, max]
+	const randomNumberInRange = min + (buffer[0] % range);
+	
+	return randomNumberInRange;
 }
 
-function exportConverter() {
-	const srcFile = fs.readFileSync('converter-src.js', 'utf8');
+function exportTranslator() {
+	const srcFile = fs.readFileSync('translator-src.js', 'utf8');
 	const BIPTablesStr = JSON.stringify(BIPTables, null, 4);
 
-    const output = srcFile.replace('const BIPTablesHardcoded = {};', `const BIPTablesHardcoded = ${BIPTablesStr};`);
+    let output = srcFile.replace('const BIPTablesHardcoded = {};', `const BIPTablesHardcoded = ${BIPTablesStr};`);
 	output = output.split('//END')[0];
 
-    fs.writeFileSync('converter.js', output);
+    fs.writeFileSync('translator.js', output);
 }
 
-const testResult = test(testMnemonic, testPseudoMnemonic);
-exportConverter();
+//const testResult = testLoop(100, 'english', 'french');
+const testResult = testLoop(100, 'random', 'random');
+if (testResult.success === testResult.iterations) {
+	console.log('All tests passed successfully, exporting translator...'); 
+	exportTranslator();
+	console.log('Translator exported successfully');
+} else {
+	console.error('Some tests failed:');
+	testResult.failureInfos.forEach((info) => {
+		console.log(JSON.stringify(info));
+	});
+}
