@@ -45,14 +45,15 @@ This transformation generates a **pBIP** (pseudo Binary Improvement Proposal) st
 To begin using MnemoShift, follow these steps:
 
 - Clone the repository to your local machine.
-
 ```
 git clone https://github.com/Seigneur-Machiavel/MnemoShift.git
 ```
 
 - **translator.js** - Can be used directly - without dependency.
 *(copy-past code in your project or import it as file)*
+```javascript
 <script src="translator.js"></script>
+```
 
 -  **translator builder.js** - Can be used to generate a custom "translator.js" file. ( NodeJS )
 
