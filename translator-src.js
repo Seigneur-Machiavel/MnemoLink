@@ -34,7 +34,7 @@ class Translator {
 		this.error = '';
 	}
 
-	init() {
+	#init() {
 		if (typeof this.params.pseudoMnemonic !== 'string' && typeof this.params.pseudoMnemonic !== 'object') { console.error('pseudoMnemonic is not a string or an array'); return false; }
 		this.pseudo.mnemonic = typeof this.params.pseudoMnemonic === 'string' ? this.params.pseudoMnemonic.split(' ') : this.params.pseudoMnemonic;
 		if (this.#mnemonicContainsDuplicates(this.pseudo.mnemonic)) { console.error('pseudoMnemonic contains duplicates'); this.error = 'invalid pseudoMnemonic'; return false; }
@@ -47,7 +47,7 @@ class Translator {
 
 			if (!this.#detectMnemonicsLanguage()) { console.error('detectMnemonicsLanguage() failed'); return false; }
 
-			if (!this.genPseudoBipTable()) { console.error('genPseudoBipTable() failed'); return false; }
+			if (!this.#genPseudoBipTable()) { console.error('#genPseudoBipTable() failed'); return false; }
 			this.initialized = true;
 		} else if (this.params.encodedTable && this.pseudo.mnemonic.length > 0) {
 			if (!typeof this.params.encodedTable === 'string') { console.error('encodedTable is not a string'); return false; }
@@ -55,7 +55,7 @@ class Translator {
 			
 			this.encodedTable = this.params.encodedTable;
 
-			if (!this.decodeTable()) { console.info('decodeTable() failed'); return false; }
+			if (!this.#decodeTable()) { console.info('#decodeTable() failed'); return false; }
 			this.initialized = true;
 		}
 
@@ -105,7 +105,7 @@ class Translator {
 	 * - PseudoMnemonic cannot be longer than the original Mnemonic
 	 * @param {string|string[]} mnemonic - The original mnemonic
 	*/
-	genPseudoBipTable() {
+	#genPseudoBipTable() {
 		const mnemonic = this.origin.mnemonic;
 		const pseudoMnemonic = this.pseudo.mnemonic;
 		if (pseudoMnemonic.length > mnemonic.length) { console.error('pseudoMnemonic is longer than mnemonic'); return false; }
@@ -231,26 +231,26 @@ class Translator {
 		return Math.abs(hash);
 	}
 
-	setOriginWordsTable(wordsTable = []) {
+	#setOriginWordsTable(wordsTable = []) {
 		this.origin.wordsTable = wordsTable;
 	}
-	setPseudoLanguageAndBIP(language = '', bip = '') {
+	#setPseudoLanguageAndBIP(language = '', bip = '') {
 		this.pseudo.bip = bip;
 		this.pseudo.language = language;
 	}
 
-	getPseudoPrefix() {
-		if (this.pseudo.bip === '') { console.error('getPseudoPrefix(): bip is empty'); return false; }
-		if (this.pseudo.language === '') { console.error('getPseudoPrefix(): language is empty'); return false; }
+	#getPseudoPrefix() {
+		if (this.pseudo.bip === '') { console.error('#getPseudoPrefix(): bip is empty'); return false; }
+		if (this.pseudo.language === '') { console.error('#getPseudoPrefix(): language is empty'); return false; }
 
 		const bip = this.pseudo.bip.replace('-', '');
 		const language = this.pseudo.language
 
 		return language + bip;
 	}
-	getOriginPrefix() {
-		if (this.origin.bip === '') { console.error('getOriginPrefix(): bip is empty'); return false; }
-		if (this.origin.language === '') { console.error('getOriginPrefix(): language is empty'); return false; }
+	#getOriginPrefix() {
+		if (this.origin.bip === '') { console.error('#getOriginPrefix(): bip is empty'); return false; }
+		if (this.origin.language === '') { console.error('#getOriginPrefix(): language is empty'); return false; }
 
 		const bip = this.origin.bip.replace('-', '');
 		const language = this.origin.language
@@ -261,7 +261,7 @@ class Translator {
 		if (this.encodedTable === '') { this.#encodeTable(); }
 		if (this.encodedTable === '') { console.error('encodedTable is empty'); return false; }
 
-		return withPrefix ? this.getOriginPrefix() + this.encodedTable : this.encodedTable;
+		return withPrefix ? this.#getOriginPrefix() + this.encodedTable : this.encodedTable;
 	}
 	/**
 	 * Convert the BIP Table to a base64 string
@@ -361,7 +361,7 @@ class Translator {
 	 * - this.indexTable
 	 * - this.wordsTable (if possible)
 	 */
-	decodeTable() {
+	#decodeTable() {
 		if (this.encodedTable === '') { console.error('encodedTable is empty'); return false; }
 
 		// --- Prefix info corresponds to the origin BIPTable ---
@@ -470,7 +470,7 @@ class Translator {
 		const tempArray = [];
 		for (let i = 0; i < pseudoMnemonic.length; i++) {
 			const word = pseudoMnemonic[i];
-			const correspondingWords = this.translateWord(word);
+			const correspondingWords = this.#translateWord(word);
 			if (!correspondingWords) { console.error('unable to find the corresponding word in the BIP table'); return false; }
 
 			for (let j = 0; j < correspondingWords.length; j++) {
@@ -487,7 +487,7 @@ class Translator {
 	 * @param {string} word - The word to translate
 	 * @returns {string} - The translated word
 	 */
-	translateWord(word) {
+	#translateWord(word) {
 		if (!this.#isInitialized()) { console.error('Translator not initialized'); return false; }
 		if (this.origin.BIPTable.length === 0) { console.error("originBIPTable is empty -> Language isn't setup"); return false; }
 		if (!typeof word === 'string') { console.error('word is not a string'); return false; }
@@ -548,7 +548,7 @@ class Translator {
 
 	#isInitialized() {
 		//try {
-			if (!this.initialized) { this.init(); }
+			if (!this.initialized) { this.#init(); }
 			if (this.initialized) { return true; }
 		//} catch (error) {
 			//console.error(error);

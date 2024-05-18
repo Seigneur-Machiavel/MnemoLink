@@ -1,4 +1,5 @@
 {
+    "testIterations": 100,
     "output": "converter.js",
     "version": "1.0.0",
     "BIPFolder": "bips",

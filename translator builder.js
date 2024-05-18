@@ -4,10 +4,8 @@ const Translator = require('./translator-src.js');
 
 const BIPTables = {};
 const settings = loadSettings();
-let lastUpdateProgress = -1;
-
-//#region LOADING SETTINGS && BIP TABLES
 if (!settings) { console.error('Settings could not be loaded'); return; }
+let lastUpdateProgress = -1;
 
 // SOLO TEST -> Used for coding only
 /*
@@ -22,7 +20,7 @@ return true;
 */
 
 // MULTI TEST -> Used to control the validity of the translator before exporting it
-const testResult = testLoop(1000, 'random', 'random', [12, 24], false);
+const testResult = testLoop(settings.testIterations || 100, 'random', 'random', [12, 24], false);
 if (testResult.success === testResult.iterations) {
 	console.log('All tests passed successfully, exporting translator...'); 
 	exportTranslator();
@@ -33,80 +31,6 @@ if (testResult.success === testResult.iterations) {
 		console.log(JSON.stringify(info));
 	});
 }
-
-function loadSettings() {
-	const settings = JSON.parse(fs.readFileSync('settings.json'));
-	if (settings === undefined) { return false; }
-	if (settings.BIPtables === undefined) { return false; }
-
-	// LOAD BIP WORDS LISTS
-	const bipList = Object.keys(settings.BIPtables);
-	for (let i = 0; i < bipList.length; i++) {
-		const BIPName = bipList[i];
-		const BIPFolderName = BIPName.toLowerCase();
-		if (BIPName.includes('_')) { continue; }
-
-		const folderPath = path.join(__dirname, settings.BIPFolder, BIPFolderName);
-		let languagesObject = settings.BIPtables[BIPName].languages;
-		if (Object.keys(languagesObject).length === 0) {
-			languagesObject = languagesFinder(folderPath);
-		}
-
-		const languages = Object.keys(languagesObject);
-		for (let j = 0; j < languages.length; j++) {
-			const language = languages[j];
-			const fileName = languagesObject[language];
-			const wordsList = arrayFromTxtList(path.join(folderPath, fileName + '.txt'));
-			if (!wordsList) { return false; }
-			if (BIPTables[BIPName] === undefined) { BIPTables[BIPName] = {}; }
-			BIPTables[BIPName][language] = wordsList;
-		}
-	}
-
-	return settings;
-}
-function languagesFinder(path, AlphabeticOnly = true) {
-	// Extract filename of each ".txt" file in the directory
-	const files = fs.readdirSync(path);
-	const languages = {};
-	for (let i = 0; i < files.length; i++) {
-		const file = files[i];
-		if (file.endsWith('.txt')) {
-			const fileName = file.split('.txt')[0];
-			const language = AlphabeticOnly ? removeNonAlphabeticChars(fileName) : fileName;
-			languages[language] = fileName;
-		}
-	}
-	return languages;
-}
-function removeNonAlphabeticChars(str) {
-	return str.replace(/[^a-zA-Z]/g, '');
-}
-function arrayFromTxtList(path) {
-	try {
-		const result = [];
-		const data = fs.readFileSync(path, 'utf8');
-		const lines = data.split('\r\n');
-	
-		for (let i = 0; i < lines.length; i++) {
-			const line = lines[i];
-			if (line === '' || line.length === 0) { continue; }
-			result.push(line);
-		}
-	
-		if (!isMultipleOf1024(result.length)) { console.error('wordsList length is not a multiple of 1024'); return false;}
-
-		return result;
-	} catch (error) {
-		console.error(error);
-	}
-	
-	return false;
-}
-function isMultipleOf1024(number) {
-	return number % 1024 === 0;
-}
-//#endregion
 
 function testLoop(iterations = 100, language = "random", pseudoLanguage = "random", mnemonicLengths = [12, 24], logs = true) {
 	lastUpdateProgress = -1;
@@ -225,6 +149,81 @@ function countSimilaritiesBetweenLanguages(bip = 'BIP-0039', language1, language
 	}
 	return similarities.length;
 }
+
+//#region LOADING SETTINGS && BIP TABLES
+function loadSettings() {
+	const settingsLoaded = JSON.parse(fs.readFileSync('settings.json'));
+	if (settingsLoaded === undefined) { return false; }
+	if (settingsLoaded.BIPtables === undefined) { return false; }
+
+	// LOAD BIP WORDS LISTS
+	const bipList = Object.keys(settingsLoaded.BIPtables);
+	for (let i = 0; i < bipList.length; i++) {
+		const BIPName = bipList[i];
+		const BIPFolderName = BIPName.toLowerCase();
+		if (BIPName.includes('_')) { continue; }
+
+		const folderPath = path.join(__dirname, settingsLoaded.BIPFolder, BIPFolderName);
+		let languagesObject = settingsLoaded.BIPtables[BIPName].languages;
+		if (Object.keys(languagesObject).length === 0) {
+			languagesObject = languagesFinder(folderPath);
+		}
+
+		const languages = Object.keys(languagesObject);
+		for (let j = 0; j < languages.length; j++) {
+			const language = languages[j];
+			const fileName = languagesObject[language];
+			const wordsList = arrayFromTxtList(path.join(folderPath, fileName + '.txt'));
+			if (!wordsList) { return false; }
+			if (BIPTables[BIPName] === undefined) { BIPTables[BIPName] = {}; }
+			BIPTables[BIPName][language] = wordsList;
+		}
+	}
+
+	return settingsLoaded;
+}
+function languagesFinder(path, AlphabeticOnly = true) {
+	// Extract filename of each ".txt" file in the directory
+	const files = fs.readdirSync(path);
+	const languages = {};
+	for (let i = 0; i < files.length; i++) {
+		const file = files[i];
+		if (file.endsWith('.txt')) {
+			const fileName = file.split('.txt')[0];
+			const language = AlphabeticOnly ? removeNonAlphabeticChars(fileName) : fileName;
+			languages[language] = fileName;
+		}
+	}
+	return languages;
+}
+function removeNonAlphabeticChars(str) {
+	return str.replace(/[^a-zA-Z]/g, '');
+}
+function arrayFromTxtList(path) {
+	try {
+		const result = [];
+		const data = fs.readFileSync(path, 'utf8');
+		const lines = data.split('\r\n');
+	
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			if (line === '' || line.length === 0) { continue; }
+			result.push(line);
+		}
+	
+		if (!isMultipleOf1024(result.length)) { console.error('wordsList length is not a multiple of 1024'); return false;}
+
+		return result;
+	} catch (error) {
+		console.error(error);
+	}
+	
+	return false;
+}
+function isMultipleOf1024(number) {
+	return number % 1024 === 0;
+}
+//#endregion
 
 function exportTranslator() {
 	const srcFile = fs.readFileSync('translator-src.js', 'utf8');
