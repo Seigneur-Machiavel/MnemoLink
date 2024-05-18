@@ -92,10 +92,6 @@ function testLoop(iterations = 100, language = "random", pseudoLanguage = "rando
 		const gen2 = generateMnemonic(12, 'BIP-0039', pseudoLanguage);
 		const mnemonic = gen1.wordsList;
 		const pseudoMnemonic = gen2.wordsList;
-
-		//const mnemonic = "abandon able industry connect town stay such ribbon return cabbage bus spy" // 12 words english BIP39
-		//const mnemonic24 = "abandon able industry connect town stay such ribbon return cabbage bus spy glue goat goddess gold good goose gorilla gospel gossip govern gown grab";
-		//const pseudoMnemonic = "abaisser bannière caneton décider ennemi filetage guide hormone infini jauger kiosque lampe" // 12 words french BIP39
 		
 		const result = singleTest(mnemonic, pseudoMnemonic, true);
 		if (result === true) { success++; } else { 
@@ -127,13 +123,13 @@ function singleTest(mnemonic, pseudoMnemonic, logs = true) {
 	const encodedTable = translatorA.getEncodedTable(true);
 	if (!encodedTable) { console.error('getEncodedTable() failed !'); return translatorA.error; }
 
-	console.log(encodedTable);
+	if (logs) { console.log(encodedTable) };
 
 	const translatorB = new Translator( {encodedTable, pseudoMnemonic} );
 	translatorB.BIPTables = BIPTables; // NOT NECESSARY WHEN EXPORTED TRANSLATOR
 	const decodedMnemonic = translatorB.translateMnemonic('string'); // output: 'array' or 'string'
 
-	if (logs) { console.log(`Decoded mnemonic: ${decodedMnemonic}`); }
+	if (logs) { console.log(`Decoded mnemonic: ${decodedMnemonic}`) };
 
 	// Check if the decoded mnemonic is the same as the original one
 	if (mnemonicStr !== decodedMnemonic) { console.error('Decoded mnemonic is different from the original one !'); return "Decoded mnemonic is different from the original one !"; }
@@ -190,10 +186,14 @@ function exportTranslator() {
 //const testResult = testLoop(100, 'english', 'french');
 
 // SOLO TEST
-const mnemonic_ = "abaisser abandon abdiquer abeille abolir aborder aboutir aboyer abrasif abreuver abriter abroger";
-const pseudoMnemonic_ = "abaisser abandon abdiquer abeille abolir aborder aboutir aboyer abrasif abreuver abriter abroger";
+/*
+const mnemonic12en = "abandon able industry connect town stay such ribbon return cabbage bus spy";
+const mnemonic12fr = "abaisser abandon abdiquer abeille abolir aborder aboutir aboyer abrasif abreuver abriter abroger";
+const mnemonic24en = "abandon able industry connect town stay such ribbon return cabbage bus spy glue goat goddess gold good goose gorilla gospel gossip govern gown grab";
+const pseudoMnemonic12fr = "abaisser abandon abdiquer abeille abolir aborder aboutir aboyer abrasif abreuver abriter abroger";
 const singleTestResult = singleTest(mnemonic_, pseudoMnemonic_);
 return true;
+*/
 
 // MULTI TEST
 const testResult = testLoop(100, 'random', 'random');

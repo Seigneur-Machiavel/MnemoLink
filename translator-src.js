@@ -10,20 +10,22 @@ const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxy
  */
 class Translator {
 	constructor(params = { mnemonic: null, pseudoMnemonic: null, encodedTable: null }) {
+		this.authorizedMnemonicLengths = [12, 24];
 		this.BIPTables = BIPTablesHardcoded;
 		this.initialized = false;
 		this.params = params;
 		this.prefix = '';
 		this.encodedTable = '';
-		this.pseudoMnemonic = [];
 		this.indexTable = [];
 
 		this.origin = {
+			mnemonic: [],
 			bip: '',
 			language: '',
 			BIPTable: [],
 		};
 		this.pseudo = {
+			mnemonic: [],
 			bip: '',
 			language: '',
 			BIPTable: [],
@@ -34,19 +36,23 @@ class Translator {
 
 	init() {
 		if (typeof this.params.pseudoMnemonic !== 'string' && typeof this.params.pseudoMnemonic !== 'object') { console.error('pseudoMnemonic is not a string or an array'); return false; }
-		this.pseudoMnemonic = typeof this.params.pseudoMnemonic === 'string' ? this.params.pseudoMnemonic.split(' ') : this.params.pseudoMnemonic;
-		if (this.#mnemonicContainsDuplicates(this.pseudoMnemonic)) { console.error('pseudoMnemonic contains duplicates'); this.error = 'invalid pseudoMnemonic'; return false; }
+		this.pseudo.mnemonic = typeof this.params.pseudoMnemonic === 'string' ? this.params.pseudoMnemonic.split(' ') : this.params.pseudoMnemonic;
+		if (this.#mnemonicContainsDuplicates(this.pseudo.mnemonic)) { console.error('pseudoMnemonic contains duplicates'); this.error = 'invalid pseudoMnemonic'; return false; }
 		
-		if (this.params.mnemonic && this.pseudoMnemonic.length > 0) {
+		if (this.params.mnemonic && this.pseudo.mnemonic.length > 0) {
 			if (typeof this.params.mnemonic !== 'string' && typeof this.params.mnemonic !== 'object') { console.error('mnemonic is not a string or an array'); return false; }
 			
-			const mnemonic = typeof this.params.mnemonic === 'string' ? this.params.mnemonic.split(' ') : this.params.mnemonic;
-			if (this.#mnemonicContainsDuplicates(mnemonic)) { console.error('mnemonic contains duplicates'); this.error = 'invalid mnemonic'; return false; }
+			this.origin.mnemonic = typeof this.params.mnemonic === 'string' ? this.params.mnemonic.split(' ') : this.params.mnemonic;
+			if (this.#mnemonicContainsDuplicates(this.origin.mnemonic)) { console.error('mnemonic contains duplicates'); this.error = 'invalid mnemonic'; return false; }
 
-			if (!this.genPseudoBipTable(mnemonic)) { console.error('genPseudoBipTable() failed'); return false; }
+			if (!this.#detectMnemonicsLanguage()) { console.error('detectMnemonicsLanguage() failed'); return false; }
+
+			if (!this.genPseudoBipTable()) { console.error('genPseudoBipTable() failed'); return false; }
 			this.initialized = true;
-		} else if (this.params.encodedTable && this.pseudoMnemonic.length > 0) {
+		} else if (this.params.encodedTable && this.pseudo.mnemonic.length > 0) {
 			if (!typeof this.params.encodedTable === 'string') { console.error('encodedTable is not a string'); return false; }
+			if (!this.#detectMnemonicsLanguage()) { console.error('detectMnemonicsLanguage() failed'); return false; }
+			
 			this.encodedTable = this.params.encodedTable;
 
 			if (!this.decodeTable()) { console.info('decodeTable() failed'); return false; }
@@ -64,7 +70,34 @@ class Translator {
 		}
 		return false;
 	}
+	#detectMnemonicsLanguage() {
+		//if (!this.authorizedMnemonicLengths.includes(mnemonic.length) || !this.authorizedMnemonicLengths.includes(pseudoMnemonic.length)) { console.error('mnemonic or pseudoMnemonic length is not 12 or 24'); return false; }
 
+		const authorizedLengths = this.authorizedMnemonicLengths;
+		const mnemonic = this.origin.mnemonic;
+		const pseudoMnemonic = this.pseudo.mnemonic;
+
+		// DETECT THE BIP AND LANGUAGE OF THE MNEMONICS
+		if (authorizedLengths.includes(mnemonic.length)) {
+			const originBIPTable = this.#getBIPTableFromMnemonic(mnemonic);
+			if (!originBIPTable) { console.error('Unable to detect the BIP and language of the mnemonic'); return false; }
+			// SET THE ORIGIN BIP TABLES
+			this.origin.BIPTable = originBIPTable.wordsTable;
+			this.origin.bip = originBIPTable.bip;
+			this.origin.language = originBIPTable.language;
+		}
+
+		if (authorizedLengths.includes(pseudoMnemonic.length)) {
+			const pseudoBIPTable = this.#getBIPTableFromMnemonic(pseudoMnemonic);
+			if (!pseudoBIPTable) { console.error('Unable to detect the BIP and language of the pseudoMnemonic'); return false; }
+			// SET THE PSEUDO BIP TABLES
+			this.pseudo.BIPTable = pseudoBIPTable.wordsTable;
+			this.pseudo.bip = pseudoBIPTable.bip;
+			this.pseudo.language = pseudoBIPTable.language;
+		}
+		
+		return true;
+	}
 	/**
 	 * Generate pseudo BIP table from mnemonic and pseudoMnemonic
 	 * - Language of Mnemonic and pseudoMnemonic should be detected automatically
@@ -72,22 +105,14 @@ class Translator {
 	 * - PseudoMnemonic cannot be longer than the original Mnemonic
 	 * @param {string|string[]} mnemonic - The original mnemonic
 	*/
-	genPseudoBipTable(mnemonic) {
-		const pseudoMnemonic = this.pseudoMnemonic;
-		// CONTROL THE LENGTH OF THE MNEMONIC AND PSEUDOMNEMONIC
-		//if (mnemonic.length < 12 || mnemonic.length > 24 || pseudoMnemonic.length < 12 || pseudoMnemonic.length > 24) { return false; }
-		const authorizedLengths = [12, 24];
-		if (!authorizedLengths.includes(mnemonic.length) || !authorizedLengths.includes(pseudoMnemonic.length)) { console.error('mnemonic or pseudoMnemonic length is not 12 or 24'); return false; }
+	genPseudoBipTable() {
+		const mnemonic = this.origin.mnemonic;
+		const pseudoMnemonic = this.pseudo.mnemonic;
 		if (pseudoMnemonic.length > mnemonic.length) { console.error('pseudoMnemonic is longer than mnemonic'); return false; }
-
-		// DETECT THE BIP AND LANGUAGE OF THE MNEMONICS
-		const originBIPTable = this.#getBIPTableFromMnemonic(mnemonic);
-		const pseudoBIPTable = this.#getBIPTableFromMnemonic(pseudoMnemonic);
-		if (!originBIPTable || !pseudoBIPTable) { console.error('Unable to detect the BIP and language of the mnemonic'); return false; }
 		
 		const doubleWordMode = mnemonic.length === pseudoMnemonic.length * 2; // if true, use 2 words for each pseudo word
 		const pseudoBIP = [];
-		const freeOriginWords = originBIPTable.wordsTable.slice();
+		const freeOriginWords = this.origin.BIPTable.slice();
 
 		// REMOVE THE USED WORDS FROM THE FREE ORIGIN WORDS LIST
 		// IF doubleWordMode, remove only 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22 indexes -> First of 2 words
@@ -101,8 +126,8 @@ class Translator {
 		}
 		
 		// GENERATE THE PSEUDO BIP
-		for (let i = 0; i < pseudoBIPTable.wordsTable.length; i++) {
-			const pseudoWord = pseudoBIPTable.wordsTable[i];
+		for (let i = 0; i < this.pseudo.BIPTable.length; i++) {
+			const pseudoWord = this.pseudo.BIPTable[i];
 			const refIndex = pseudoMnemonic.indexOf(pseudoWord);
 			const isInPseudoMnemonic = refIndex !== -1;
 			let pseudo = []; // should contain 1 or 2 words depending on the doubleWordMode
@@ -122,8 +147,8 @@ class Translator {
 				pseudo.push(removedWord);
 
 				if (doubleWordMode) {
-					const randomIndex = this.#getRandomInt(0, originBIPTable.wordsTable.length - 1);
-					const word2 = originBIPTable.wordsTable[randomIndex];
+					const randomIndex = this.#getRandomInt(0, this.origin.BIPTable.length - 1);
+					const word2 = this.origin.BIPTable[randomIndex];
 					if (word2 === undefined) { console.error('word2 is undefined'); return false; }
 					pseudo.push(word2);
 				}
@@ -135,29 +160,25 @@ class Translator {
 			pseudoBIP.push(pseudo);
 		}
 
-		// SET THE ORIGIN AND PSEUDO BIP TABLES
-		this.origin.BIPTable = originBIPTable.wordsTable;
-		this.origin.bip = originBIPTable.bip;
-		this.origin.language = originBIPTable.language;
-
-		this.pseudo.BIPTable = pseudoBIPTable.wordsTable;
 		this.pseudo.pseudoBIP = pseudoBIP;
-		this.pseudo.bip = pseudoBIPTable.bip;
-		this.pseudo.language = pseudoBIPTable.language;
 
 		return true;
 	}
 
-	#shuffleArrayUsingMnemonic(array, mnemonic = [], bip = '', language = '') {
-		const wordsTable = this.BIPTables[bip][language];
+	#shuffleArrayUsingPseudoMnemonic(array, reverse = false) {
+		const wordsTable = this.pseudo.BIPTable;
 		if (array.length !== wordsTable.length) { console.error('array length is not equal to wordsTable length'); return false; }
 
 		const indexArray = this.#createIndexArray(wordsTable.length);
-		const numbers = this.#numbersFromMnemonic(mnemonic, wordsTable);
+		const numbers = this.#numbersFromMnemonic(this.pseudo.mnemonic, wordsTable);
+		if (!numbers) { console.error('numbersFromMnemonic() failed'); return false; }
 		const hashValue = this.#hashFromNumbers(numbers);
+
 		this.#shuffleArray(indexArray, hashValue);
+		if (reverse) { this.#transmuteArray(indexArray); }
 
 		const resultArray = [];
+
 		for (let i = 0; i < indexArray.length; i++) {
 			const index = indexArray[i];
 			const val = array[index];
@@ -175,9 +196,20 @@ class Translator {
 	}
 	#shuffleArray(indices, hashValue) {
 		for (let i = indices.length - 1; i > 0; i--) {
-			hashValue = (hashValue * 9301 + 49297) % 233280; // Modification de la valeur de hachage
+			hashValue = (hashValue * 9301 + 49297) % 233280;
 			const j = Math.floor(hashValue / 233280 * (i + 1));
 			[indices[i], indices[j]] = [indices[j], indices[i]];
+		}
+	}
+	#transmuteArray(array) {
+		const transmutedArray = {};
+		for (let i = 0; i < array.length; i++) {
+			const val = array[i];
+			transmutedArray[val] = i;
+		}
+
+		for (let i = 0; i < array.length; i++) {
+			array[i] = transmutedArray[i];
 		}
 	}
 	#numbersFromMnemonic(mnemonic = [], wordsTable) {
@@ -259,7 +291,8 @@ class Translator {
 		if (indexTable.length !== 2048) {
 			console.error('indexTable length is not 2048'); return false; }
 
-		//indexTable = this.#shuffleArrayUsingMnemonic(indexTable, this.pseudoMnemonic, this.origin.bip, this.origin.language);
+		indexTable = this.#shuffleArrayUsingPseudoMnemonic(indexTable, false);
+		if (!indexTable) { console.error('shuffleArrayUsingPseudoMnemonic() failed'); return false; }
 		this.indexTable = indexTable;
 
 		let encodedPseudoTable = '';
@@ -366,7 +399,8 @@ class Translator {
 			indexTable.push(indexes);
 		}
 
-		//indexTable = this.#shuffleArrayUsingMnemonic(indexTable, this.pseudoMnemonic, this.origin.bip, this.origin.language);
+		indexTable = this.#shuffleArrayUsingPseudoMnemonic(indexTable, true);
+		if (!indexTable) { console.error('shuffleArrayUsingPseudoMnemonic() failed'); return false; }
 		this.indexTable = indexTable;
 
 		return true;
@@ -422,7 +456,7 @@ class Translator {
 		if (!this.#isInitialized()) { console.error('Translator not initialized'); return false; }
 		if (this.origin.BIPTable.length === 0) { console.error("originBIPTable is empty -> Language isn't setup"); return false; }
 		
-		const pseudoMnemonic = this.pseudoMnemonic;
+		const pseudoMnemonic = this.pseudo.mnemonic;
 		const pseudoBIPTable = this.#getBIPTableFromMnemonic(pseudoMnemonic);
 		if (!pseudoBIPTable) { console.error('Unable to detect the BIP and language of the pseudoMnemonic'); return false; }
 
