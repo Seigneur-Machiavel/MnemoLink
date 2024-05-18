@@ -1,3 +1,5 @@
+# MnemoShift: A Pseudo Mnemonic Generator
+
 ## Overview
 
 MnemoShift is an innovative tool designed to enhance the usability and security of cryptographic mnemonic phrases. By transforming an original mnemonic phrase into a simpler, user-chosen* pseudo mnemonic, MnemoShift offers a unique approach to secure key management.
