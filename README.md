@@ -25,7 +25,7 @@ This transformation generates a **pBIP** (pseudo Binary Improvement Proposal) st
 **Developers**: 
 - **"translator.js"** Can be used directly - without dependency.
 *(copy-past code in your project or import it as file)*
-- **"translator builder.js"** Can be used to generate a custom "translator.js" file.
+- **"translator builder.js"** Can be used to generate a custom "translator.js" file. ( NodeJS )
 
 ## Use Cases
 
