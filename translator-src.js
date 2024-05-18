@@ -257,7 +257,7 @@ class Translator {
 
 		return language + bip;
 	}
-	getEncodedTable(withPrefix = true) {
+	getEncodedPseudoBIP(withPrefix = true) {
 		if (this.encodedTable === '') { this.#encodeTable(); }
 		if (this.encodedTable === '') { console.error('encodedTable is empty'); return false; }
 

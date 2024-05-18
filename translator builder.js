@@ -85,12 +85,12 @@ function singleTest(mnemonic, pseudoMnemonic, logs = true) {
 
 	const translatorA = new Translator( {mnemonic, pseudoMnemonic} );
 	translatorA.BIPTables = BIPTables; // NOT NECESSARY WHEN EXPORTED TRANSLATOR
-	const encodedTable = translatorA.getEncodedTable(true);
-	if (!encodedTable) { console.error('getEncodedTable() failed !'); return translatorA.error; }
+	const pBIP = translatorA.getEncodedPseudoBIP(true);
+	if (!pBIP) { console.error('getEncodedPseudoBIP() failed !'); return translatorA.error; }
 
-	if (logs) { console.log(encodedTable) };
+	if (logs) { console.log(pBIP) };
 
-	const translatorB = new Translator( {encodedTable, pseudoMnemonic} );
+	const translatorB = new Translator( {pBIP, pseudoMnemonic} );
 	translatorB.BIPTables = BIPTables; // NOT NECESSARY WHEN EXPORTED TRANSLATOR
 	const decodedMnemonic = translatorB.translateMnemonic('string'); // output: 'array' or 'string'
 
