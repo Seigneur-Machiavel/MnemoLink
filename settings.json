@@ -5,12 +5,18 @@
     "BIPtables": {
         "_comment": "list of BIPs to be in the final file - numeric keys should be 4 digits long, with leading zeros",
         "BIP-0039": {
-            "languages": {},
-            "_languages_example": {
+            "languages": {
+                "chinesetraditional": "chinese_traditional",
+                "czech": "czech",
                 "english": "english",
-                "chinesesimplified": "chinese-simplified",
-                "chinesetraditional": "chinese-traditional"
+                "french": "french",
+                "italian": "italian",
+                "japanese": "japanese",
+                "korean": "korean",
+                "portuguese": "portuguese",
+                "spanish": "spanish"
             },
+
             "_comment": "list of languages, if empty, all langages are implemented"
         }
     }

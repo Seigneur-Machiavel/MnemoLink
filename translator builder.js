@@ -4,9 +4,35 @@ const Translator = require('./translator-src.js');
 
 const BIPTables = {};
 const settings = loadSettings();
+let lastUpdateProgress = -1;
 
 //#region LOADING SETTINGS && BIP TABLES
 if (!settings) { console.error('Settings could not be loaded'); return; }
+
+// SOLO TEST -> Used for coding only
+/*
+const mnemonic12en = "abandon able industry connect town stay such ribbon return cabbage bus spy";
+const mnemonic12fr = "abaisser abandon abdiquer abeille abolir aborder aboutir aboyer abrasif abreuver abriter abroger";
+const mnemonic24en = "abandon able industry connect town stay such ribbon return cabbage bus spy glue goat goddess gold good goose gorilla gospel gossip govern gown grab";
+const pseudoMnemonic12fr = "abaisser abandon abdiquer abeille abolir aborder aboutir aboyer abrasif abreuver abriter abroger";
+const mnemonic_ = ["odtud","ortel","rozum","puberta","pacient","glejt","rubrika","jindy","hejkal","nesoulad","lehkost","procento","romaneto","cirkus","bankomat","losos","manko","oproti","omladina","znamenat","mazurka","diplom","tehdy","azyl"]
+const pseudoMnemonic_ = ["舍","刀","享","制","央","厘","只","悲","棒","菜","燕","漆"]
+const singleTestResult = singleTest(mnemonic_, pseudoMnemonic_);
+return true;
+*/
+
+// MULTI TEST -> Used to control the validity of the translator before exporting it
+const testResult = testLoop(1000, 'random', 'random', [12, 24], false);
+if (testResult.success === testResult.iterations) {
+	console.log('All tests passed successfully, exporting translator...'); 
+	exportTranslator();
+	console.log('Translator exported successfully');
+} else {
+	console.error('Some tests failed:');
+	testResult.failureInfos.forEach((info) => {
+		console.log(JSON.stringify(info));
+	});
+}
 
 function loadSettings() {
 	const settings = JSON.parse(fs.readFileSync('settings.json'));
@@ -82,7 +108,8 @@ function isMultipleOf1024(number) {
 }
 //#endregion
 
-function testLoop(iterations = 100, language = "random", pseudoLanguage = "random", mnemonicLengths = [12, 24]) {
+function testLoop(iterations = 100, language = "random", pseudoLanguage = "random", mnemonicLengths = [12, 24], logs = true) {
+	lastUpdateProgress = -1;
 	let success = 0;
 	let failure = 0;
 	const failureInfos = [];
@@ -93,7 +120,7 @@ function testLoop(iterations = 100, language = "random", pseudoLanguage = "rando
 		const mnemonic = gen1.wordsList;
 		const pseudoMnemonic = gen2.wordsList;
 		
-		const result = singleTest(mnemonic, pseudoMnemonic, true);
+		const result = singleTest(mnemonic, pseudoMnemonic, logs);
 		if (result === true) { success++; } else { 
 			failureInfos.push({
 				reason: result,
@@ -102,10 +129,24 @@ function testLoop(iterations = 100, language = "random", pseudoLanguage = "rando
 			});
 			failure++;
 		}
+
+		updateProgressBar(i + 1, iterations);
 	}
 	console.log(`\n\nSuccess: ${success} / Failure: ${failure}`);
 
 	return { success, failure, iterations, failureInfos };
+}
+function updateProgressBar(current, total) {
+    const length = 50;
+    const percentage = (current / total);
+    const progress = Math.floor(length * percentage);
+	if (progress === lastUpdateProgress) { return; }
+	lastUpdateProgress = progress;
+    const empty = length - progress;
+    
+    const progressBar = `[${'='.repeat(progress)}${' '.repeat(empty)}] ${Math.floor(percentage * 100)}%`;
+
+    console.log(progressBar);
 }
 /**
  * 
@@ -172,6 +213,18 @@ function getRandomInt(min, max) {
 	
 	return randomNumberInRange;
 }
+function countSimilaritiesBetweenLanguages(bip = 'BIP-0039', language1, language2) {
+	const words1 = BIPTables['BIP-0039'][language1];
+	const words2 = BIPTables['BIP-0039'][language2];
+	const similarities = [];
+	for (let i = 0; i < words1.length; i++) {
+		const word = words1[i];
+		if (words2.includes(word)) {
+			similarities.push(word);
+		}
+	}
+	return similarities.length;
+}
 
 function exportTranslator() {
 	const srcFile = fs.readFileSync('translator-src.js', 'utf8');
@@ -181,29 +234,4 @@ function exportTranslator() {
 	output = output.split('//END')[0];
 
     fs.writeFileSync('translator.js', output);
-}
-
-//const testResult = testLoop(100, 'english', 'french');
-
-// SOLO TEST
-/*
-const mnemonic12en = "abandon able industry connect town stay such ribbon return cabbage bus spy";
-const mnemonic12fr = "abaisser abandon abdiquer abeille abolir aborder aboutir aboyer abrasif abreuver abriter abroger";
-const mnemonic24en = "abandon able industry connect town stay such ribbon return cabbage bus spy glue goat goddess gold good goose gorilla gospel gossip govern gown grab";
-const pseudoMnemonic12fr = "abaisser abandon abdiquer abeille abolir aborder aboutir aboyer abrasif abreuver abriter abroger";
-const singleTestResult = singleTest(mnemonic_, pseudoMnemonic_);
-return true;
-*/
-
-// MULTI TEST
-const testResult = testLoop(100, 'random', 'random');
-if (testResult.success === testResult.iterations) {
-	console.log('All tests passed successfully, exporting translator...'); 
-	exportTranslator();
-	console.log('Translator exported successfully');
-} else {
-	console.error('Some tests failed:');
-	testResult.failureInfos.forEach((info) => {
-		console.log(JSON.stringify(info));
-	});
 }

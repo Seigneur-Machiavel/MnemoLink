@@ -370,7 +370,7 @@ class Translator {
 		const detectedLanguage = this.encodedTable.split('BIP')[0];
 		const detectionSuccess = !(this.BIPTables[detectedBip] === undefined && this.BIPTables[detectedBip][detectedLanguage] === undefined);
 		if (detectionSuccess) {
-			console.info(`language detected: ${detectedLanguage} | ${detectedBip}`);
+			// console.info(`language detected: ${detectedLanguage} | ${detectedBip}`);
 			this.origin.language = detectedLanguage;
 			this.origin.bip = detectedBip;
 			this.origin.BIPTable = this.BIPTables[detectedBip][detectedLanguage];
