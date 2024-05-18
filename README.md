@@ -51,7 +51,7 @@ git clone https://github.com/Seigneur-Machiavel/MnemoShift.git
 
 - **translator.js** - Can be used directly - without dependency.
 *(copy-past code in your project or import it as file)*
-```javascript
+```HTML
 <script src="translator.js"></script>
 ```
 
