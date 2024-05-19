@@ -85,6 +85,7 @@ function singleTest(mnemonic, pseudoMnemonic, logs = true) {
 
 	const translatorA = new Translator( {mnemonic, pseudoMnemonic} );
 	translatorA.BIPTables = BIPTables; // NOT NECESSARY WHEN EXPORTED TRANSLATOR
+	translatorA.version = settings.version; // NOT NECESSARY WHEN EXPORTED TRANSLATOR
 	const pBIP = translatorA.getEncodedPseudoBIP(true);
 	if (!pBIP) { console.error('getEncodedPseudoBIP() failed !'); return translatorA.error; }
 
@@ -92,6 +93,7 @@ function singleTest(mnemonic, pseudoMnemonic, logs = true) {
 
 	const translatorB = new Translator( {pBIP, pseudoMnemonic} );
 	translatorB.BIPTables = BIPTables; // NOT NECESSARY WHEN EXPORTED TRANSLATOR
+	translatorB.version = settings.version; // NOT NECESSARY WHEN EXPORTED TRANSLATOR
 	const decodedMnemonic = translatorB.translateMnemonic('string'); // output: 'array' or 'string'
 
 	if (logs) { console.log(`Decoded mnemonic: ${decodedMnemonic}`) };
@@ -150,7 +152,7 @@ function countSimilaritiesBetweenLanguages(bip = 'BIP-0039', language1, language
 	return similarities.length;
 }
 
-//#region LOADING SETTINGS && BIP TABLES
+//#region LOADING SETTINGS && BIP TABLES && lastBuild
 function loadSettings() {
 	const settingsLoaded = JSON.parse(fs.readFileSync('settings.json'));
 	if (settingsLoaded === undefined) { return false; }
@@ -228,9 +230,15 @@ function isMultipleOf1024(number) {
 function exportTranslator() {
 	const srcFile = fs.readFileSync('translator-src.js', 'utf8');
 	const BIPTablesStr = JSON.stringify(BIPTables, null, 4);
+	const versionStr = JSON.stringify(settings.version);
 
     let output = srcFile.replace('const BIPTablesHardcoded = {};', `const BIPTablesHardcoded = ${BIPTablesStr};`);
+	output = output.replace('const versionHardcoded = [];', `const versionHardcoded = ${versionStr};`);
 	output = output.split('//END')[0];
 
-    fs.writeFileSync('translator.js', output);
+	const folder = 'build';
+	const outputFileName = `translator_v${settings.version[0]}-${settings.version[1]}.js`;
+	const outputPath = path.join(__dirname, folder, outputFileName);
+
+    fs.writeFileSync(outputPath, output);
 }

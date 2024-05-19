@@ -18452,6 +18452,7 @@ const BIPTablesHardcoded = {
         ]
     }
 };
+const versionHardcoded = [0,1];
 const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 /**
@@ -18459,16 +18460,20 @@ const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxy
  * - Used to translate a mnemonic to a pseudo mnemonic and vice versa
  * @param {Object} BIPTables - The BIP tables
  * @param {Object} params - The parameters of the translator
- * @param {string[]} params.mnemonic - The original mnemonic
+ * @param {string|string[]} params.mnemonic - The original mnemonic
+ * @param {string|string[]} params.pseudoMnemonic - The pseudo mnemonic
+ * @param {string} params.pBIP - The pseudo BIP
  */
 class Translator {
-	constructor(params = { mnemonic: null, pseudoMnemonic: null, encodedTable: null }) {
+	constructor(params = { mnemonic: null, pseudoMnemonic: null, pBIP: null }) {
 		this.authorizedMnemonicLengths = [12, 24];
 		this.BIPTables = BIPTablesHardcoded;
+		this.version = versionHardcoded;
 		this.initialized = false;
 		this.params = params;
 		this.prefix = '';
-		this.encodedTable = '';
+		this.suffix = '';
+		this.pBIP = '';
 		this.indexTable = [];
 
 		this.origin = {
@@ -18502,11 +18507,11 @@ class Translator {
 
 			if (!this.#genPseudoBipTable()) { console.error('#genPseudoBipTable() failed'); return false; }
 			this.initialized = true;
-		} else if (this.params.encodedTable && this.pseudo.mnemonic.length > 0) {
-			if (!typeof this.params.encodedTable === 'string') { console.error('encodedTable is not a string'); return false; }
+		} else if (this.params.pBIP && this.pseudo.mnemonic.length > 0) {
+			if (!typeof this.params.pBIP === 'string') { console.error('pBIP is not a string'); return false; }
 			if (!this.#detectMnemonicsLanguage()) { console.error('detectMnemonicsLanguage() failed'); return false; }
 			
-			this.encodedTable = this.params.encodedTable;
+			this.pBIP = this.params.pBIP;
 
 			if (!this.#decodeTable()) { console.info('#decodeTable() failed'); return false; }
 			this.initialized = true;
@@ -18710,16 +18715,28 @@ class Translator {
 
 		return language + bip;
 	}
-	getEncodedTable(withPrefix = true) {
-		if (this.encodedTable === '') { this.#encodeTable(); }
-		if (this.encodedTable === '') { console.error('encodedTable is empty'); return false; }
+	#getVersionSuffix() {
+		const versionNumber = this.version;
+		const n1 = versionNumber[0];
+		const n2 = versionNumber[1];
+		const encodedN1 = this.#encode(n1);
+		const encodedN2 = this.#encode(n2);
 
-		return withPrefix ? this.#getOriginPrefix() + this.encodedTable : this.encodedTable;
+		return encodedN1 + encodedN2;
+	}
+	getEncodedPseudoBIP(withPrefix = true) {
+		if (this.pBIP === '') { this.#encodeTable(); }
+		if (this.pBIP === '') { console.error('pBIP is empty'); return false; }
+
+		const str = withPrefix ? this.#getOriginPrefix() + this.pBIP : this.pBIP
+		const suffix = this.#getVersionSuffix();
+
+		return str + suffix;
 	}
 	/**
 	 * Convert the BIP Table to a base64 string
 	 * - base64 is used as numeric basis to index the words, reducing the size of the table
-	 * - will clear the indexTable and encodedTable
+	 * - will clear the indexTable and pBIP
 	 */
 	#encodeTable() {
 		if (!this.#isInitialized()) { console.error('Translator not initialized'); return false; }
@@ -18760,7 +18777,7 @@ class Translator {
 
 		if (encodedPseudoTable.length !== 4096 && encodedPseudoTable.length !== 4096 * 2) {
 			console.error('encodedPseudoTable length is not 4096 or 4096 * 2'); return false; }
-		this.encodedTable = encodedPseudoTable;
+		this.pBIP = encodedPseudoTable;
 		return encodedPseudoTable;
 	}
 	/**
@@ -18815,12 +18832,23 @@ class Translator {
 	 * - this.wordsTable (if possible)
 	 */
 	#decodeTable() {
-		if (this.encodedTable === '') { console.error('encodedTable is empty'); return false; }
+		if (this.pBIP === '') { console.error('pBIP is empty'); return false; }
+
+		// --- Suffix info corresponds to the version of the table, saved on the last 4 characters ---
+		const versionSuffix = this.pBIP.slice(-4);
+		const versionPart1 = this.#decode(versionSuffix.slice(0, 2));
+		const versionPart2 = this.#decode(versionSuffix.slice(2, 4));
+		const versionNumber = [versionPart1, versionPart2];
+		if (versionNumber.join() !== this.version.join()) { 
+			this.error = 'invalid version number';
+			console.error('version number is not the same as the origin version number'); 
+			return false;
+		}
 
 		// --- Prefix info corresponds to the origin BIPTable ---
-		const BipCode = this.encodedTable.split('BIP')[1].substring(0, 4);
+		const BipCode = this.pBIP.split('BIP')[1].substring(0, 4);
 		const detectedBip = "BIP-" + BipCode;
-		const detectedLanguage = this.encodedTable.split('BIP')[0];
+		const detectedLanguage = this.pBIP.split('BIP')[0];
 		const detectionSuccess = !(this.BIPTables[detectedBip] === undefined && this.BIPTables[detectedBip][detectedLanguage] === undefined);
 		if (detectionSuccess) {
 			// console.info(`language detected: ${detectedLanguage} | ${detectedBip}`);
@@ -18832,8 +18860,9 @@ class Translator {
 		// DECODING THE TABLE
 		let indexTable = [];
 		const prefix = detectedLanguage + "BIP" + BipCode;
-		const encoded = detectionSuccess ? this.encodedTable.replace(prefix, '') : this.encodedTable;
-		if (encoded.length !== 4096 && encoded.length !== 4096 * 2) { console.error('encodedTable length is not 4096 or 4096 * 2'); return false; }
+		let encoded = detectionSuccess ? this.pBIP.replace(prefix, '') : this.pBIP;
+		encoded = encoded.slice(0, encoded.length - 4); // remove the version suffix
+		if (encoded.length !== 4096 && encoded.length !== 4096 * 2) { console.error('pBIP length is not 4096 or 4096 * 2'); return false; }
 		const doubleWordMode = encoded.length === 4096 * 2;
 
 		for (let i = 0; i < encoded.length; i += 2) {
