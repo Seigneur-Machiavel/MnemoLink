@@ -12,7 +12,7 @@ const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxy
  * @param {string} params.pBIP - The pseudo BIP
  */
 class Translator {
-	constructor(params = { mnemonic: null, pseudoMnemonic: null, pBIP: null }) {
+	constructor(params = { mnemonic: null, pseudoMnemonic: null, pBIP: null, BIPTables: null, version: null}) {
 		this.authorizedMnemonicLengths = [12, 24];
 		this.BIPTables = BIPTablesHardcoded;
 		this.version = versionHardcoded;
@@ -40,6 +40,9 @@ class Translator {
 	}
 
 	#init() {
+		if (this.params.BIPTables) { this.BIPTables = this.params.BIPTables; }
+		if (this.params.version) { this.version = this.params.version; }
+
 		if (typeof this.params.pseudoMnemonic !== 'string' && typeof this.params.pseudoMnemonic !== 'object') { console.error('pseudoMnemonic is not a string or an array'); return false; }
 		this.pseudo.mnemonic = typeof this.params.pseudoMnemonic === 'string' ? this.params.pseudoMnemonic.split(' ') : this.params.pseudoMnemonic;
 		if (this.#mnemonicContainsDuplicates(this.pseudo.mnemonic)) { console.error('pseudoMnemonic contains duplicates'); this.error = 'invalid pseudoMnemonic'; return false; }
@@ -64,6 +67,15 @@ class Translator {
 			this.initialized = true;
 		}
 
+		return false;
+	}
+	#isInitialized() {
+		//try {
+			if (!this.initialized) { this.#init(); }
+			if (this.initialized) { return true; }
+		//} catch (error) {
+			//console.error(error);
+		//}
 		return false;
 	}
 	#mnemonicContainsDuplicates(mnemonic = []) {
@@ -175,9 +187,12 @@ class Translator {
 		if (array.length !== wordsTable.length) { console.error('array length is not equal to wordsTable length'); return false; }
 
 		const indexArray = this.#createIndexArray(wordsTable.length);
+		/*
 		const numbers = this.#numbersFromMnemonic(this.pseudo.mnemonic, wordsTable);
 		if (!numbers) { console.error('numbersFromMnemonic() failed'); return false; }
 		const hashValue = this.#hashFromNumbers(numbers);
+		*/
+		const hashValue = this.#hashFromMnemonic(this.pseudo.mnemonic);
 
 		this.#shuffleArray(indexArray, hashValue);
 		if (reverse) { this.#transmuteArray(indexArray); }
@@ -217,22 +232,20 @@ class Translator {
 			array[i] = transmutedArray[i];
 		}
 	}
-	#numbersFromMnemonic(mnemonic = [], wordsTable) {
-		const numbers = [];
-		for (let i = 0; i < mnemonic.length; i++) {
-			const word = mnemonic[i];
-			const index = wordsTable.indexOf(word);
-			if (index === -1) { console.error(`Word not found in BIPTable: ${word}`); return false; }
-			numbers.push(index);
-		}
-		return numbers;
-	}
-	#hashFromNumbers(numbers) {
+	/**
+	 * Get the hash from a mnemonic
+	 * @param {string|string[]} mnemonic - The mnemonic to hash
+	 * @returns {number} - The hash
+	 */
+	#hashFromMnemonic(mnemonic) {
+		const str = typeof mnemonic === 'string' ? mnemonic : mnemonic.join(' ');
+
 		let hash = 0;
-		numbers.forEach(num => {
-			hash = ((hash << 5) - hash) + num;
+		for (let i = 0; i < str.length; i++) {
+			const char = str.charCodeAt(i);
+			hash = ((hash << 5) - hash) + char;
 			hash = hash & hash; // Convert to 32bit integer
-		});
+		}
 		return Math.abs(hash);
 	}
 
@@ -271,6 +284,11 @@ class Translator {
 
 		return encodedN1 + encodedN2;
 	}
+	/**
+	 * Get the encoded pseudo BIP (pBIP)
+	 * @param {boolean} withPrefix - If true, the prefix will be added to the encoded pseudo BIP
+	 * @returns {string} - The encoded pseudo BIP
+	 */
 	getEncodedPseudoBIP(withPrefix = true) {
 		if (this.pBIP === '') { this.#encodeTable(); }
 		if (this.pBIP === '') { console.error('pBIP is empty'); return false; }
@@ -388,7 +406,7 @@ class Translator {
 		const versionNumber = [versionPart1, versionPart2];
 		if (versionNumber.join() !== this.version.join()) { 
 			this.error = 'invalid version number';
-			console.error('version number is not the same as the origin version number'); 
+			console.error('version number is invalid');
 			return false;
 		}
 
@@ -478,7 +496,7 @@ class Translator {
 	/**
 	 * Translate a pseudo mnemonic to a mnemonic
 	 * @param {string} outputType - The output type: 'string' (default) or 'array'
-	 * @returns {string[]} - The translated mnemonic
+	 * @returns {string|string[]} - The translated mnemonic
 	 * @returns {boolean} - False if an error occured
 	 */
 	translateMnemonic(outputType = 'string' || 'array') {
@@ -573,16 +591,6 @@ class Translator {
 		/** @type {string[]} */
 		const resultWordsTable = this.BIPTables[bip][language];
 		return { bip, language, wordsTable: resultWordsTable };
-	}
-
-	#isInitialized() {
-		//try {
-			if (!this.initialized) { this.#init(); }
-			if (this.initialized) { return true; }
-		//} catch (error) {
-			//console.error(error);
-		//}
-		return false;
 	}
 }
 

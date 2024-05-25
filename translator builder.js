@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const Translator = require('./translator-src.js');
+const controlTranslator = require('./lastBuildControl.js');
 
 const BIPTables = {};
 const settings = loadSettings();
@@ -20,11 +21,22 @@ return true;
 */
 
 // MULTI TEST -> Used to control the validity of the translator before exporting it
-const testResult = testLoop(settings.testIterations || 100, 'random', 'random', [12, 24], false);
+const testResult = testLoop(settings.testIterations || 100, 'random', 'random', [12, 24], true, false);
 if (testResult.success === testResult.iterations) {
-	console.log('All tests passed successfully, exporting translator...'); 
-	exportTranslator();
-	console.log('Translator exported successfully');
+	console.log('All tests passed successfully, exporting translator...');
+	if (testResult.needVersionUpgrade) {
+		const currentVersion = settings.version[0] + '.' + settings.version[1];
+		const newVersion = settings.version[1] + 1 < 4095 ? [settings.version[0], settings.version[1] + 1] : [settings.version[0] + 1, 0];
+		settings.version = newVersion;
+		console.log(`Version upgraded from: ${currentVersion} to: ${settings.version[0]}.${settings.version[1]}`);
+	}
+
+	const exportSuccess = exportTranslator();
+	if (!exportSuccess) { console.error('Translator could not be exported'); return; }
+
+	const settingSaved = saveSettingsInFile(settings);
+	if (!settingSaved) { console.error('Settings could not be saved'); return; }
+	console.log('Settings.json saved successfully');
 } else {
 	console.error('Some tests failed:');
 	testResult.failureInfos.forEach((info) => {
@@ -32,10 +44,11 @@ if (testResult.success === testResult.iterations) {
 	});
 }
 
-function testLoop(iterations = 100, language = "random", pseudoLanguage = "random", mnemonicLengths = [12, 24], logs = true) {
+function testLoop(iterations = 100, language = "random", pseudoLanguage = "random", mnemonicLengths = [12, 24], autoVersionUpgrade = true, logs = true) {
 	lastUpdateProgress = -1;
 	let success = 0;
 	let failure = 0;
+	let needVersionUpgrade = false;
 	const failureInfos = [];
 	for (let i = 0; i < iterations; i++) {
 		const mnemonicLength = mnemonicLengths[ getRandomInt(0, mnemonicLengths.length - 1) ];
@@ -45,9 +58,12 @@ function testLoop(iterations = 100, language = "random", pseudoLanguage = "rando
 		const pseudoMnemonic = gen2.wordsList;
 		
 		const result = singleTest(mnemonic, pseudoMnemonic, logs);
-		if (result === true) { success++; } else { 
+		if (result.success === true) { 
+			success++;
+			if (result.needVersionUpgrade) { needVersionUpgrade = true; }
+		} else { 
 			failureInfos.push({
-				reason: result,
+				reason: result.reason,
 				mnemonic: gen1,
 				pseudoMnemonic: gen2
 			});
@@ -58,7 +74,7 @@ function testLoop(iterations = 100, language = "random", pseudoLanguage = "rando
 	}
 	console.log(`\n\nSuccess: ${success} / Failure: ${failure}`);
 
-	return { success, failure, iterations, failureInfos };
+	return { success, failure, iterations, failureInfos, needVersionUpgrade };
 }
 function updateProgressBar(current, total) {
     const length = 50;
@@ -79,29 +95,44 @@ function updateProgressBar(current, total) {
  * @returns {boolean}
  */
 function singleTest(mnemonic, pseudoMnemonic, logs = true) {
-	if (!mnemonic || !pseudoMnemonic) { console.error('mnemonic or pseudoMnemonic is undefined'); return "mnemonic or pseudoMnemonic is undefined"; }
+	const result = { success: false, needVersionUpgrade: false, reason: '' };
+	if (!mnemonic || !pseudoMnemonic) { console.error('mnemonic or pseudoMnemonic is undefined'); result.reason = 'mnemonic or pseudoMnemonic is undefined'; return result; }
 	const mnemonicStr = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
 	if (logs) { console.log(`\nTesting with mnemonic: ${mnemonicStr}\n`) };
 
-	const translatorA = new Translator( {mnemonic, pseudoMnemonic} );
-	translatorA.BIPTables = BIPTables; // NOT NECESSARY WHEN EXPORTED TRANSLATOR
-	translatorA.version = settings.version; // NOT NECESSARY WHEN EXPORTED TRANSLATOR
+	const translatorA = new Translator( {mnemonic, pseudoMnemonic, BIPTables: BIPTables, version: settings.version} );
 	const pBIP = translatorA.getEncodedPseudoBIP(true);
-	if (!pBIP) { console.error('getEncodedPseudoBIP() failed !'); return translatorA.error; }
-
+	if (!pBIP) { console.error('getEncodedPseudoBIP() failed !'); result.reason = 'getEncodedPseudoBIP() failed'; return result; }
 	if (logs) { console.log(pBIP) };
 
-	const translatorB = new Translator( {pBIP, pseudoMnemonic} );
-	translatorB.BIPTables = BIPTables; // NOT NECESSARY WHEN EXPORTED TRANSLATOR
-	translatorB.version = settings.version; // NOT NECESSARY WHEN EXPORTED TRANSLATOR
+	const translatorB = new Translator( {pBIP, pseudoMnemonic, BIPTables: BIPTables, version: settings.version} );
 	const decodedMnemonic = translatorB.translateMnemonic('string'); // output: 'array' or 'string'
-
+	if (!decodedMnemonic) { console.error('translateMnemonic() failed !'); result.reason = 'translateMnemonic() failed'; return result; }
 	if (logs) { console.log(`Decoded mnemonic: ${decodedMnemonic}`) };
 
 	// Check if the decoded mnemonic is the same as the original one
-	if (mnemonicStr !== decodedMnemonic) { console.error('Decoded mnemonic is different from the original one !'); return "Decoded mnemonic is different from the original one !"; }
+	if (mnemonicStr !== decodedMnemonic) { 
+		if (logs) { console.error('Decoded mnemonic is different from the original one !') };
+		result.reason = 'Decoded mnemonic is different from the original one'; 
+		return result; 
+	} else {
+		result.success = true;
+	}
 
-	return true;
+	// CONTROL VERSION COMPATIBILITY
+	try {
+		const controlTranslatorA = new controlTranslator( {mnemonic, pseudoMnemonic} );
+		const controlpBIP = controlTranslatorA.getEncodedPseudoBIP(true);
+		const controlTranslatorB = new Translator( {pBIP: controlpBIP, pseudoMnemonic, BIPTables: BIPTables, version: settings.version} );
+		if (controlTranslatorB.translateMnemonic('string') !== mnemonicStr) { throw new Error('Decoded mnemonic is different from the original one !'); }
+	
+		const controlTranslatorC = new controlTranslator( {pBIP, pseudoMnemonic} );
+		if (controlTranslatorC.translateMnemonic('string') !== mnemonicStr) { throw new Error('Decoded mnemonic is different from the original one !'); }
+	} catch (error) {
+		result.needVersionUpgrade = true;
+	}
+
+	return result;
 }
 function generateMnemonic(length = 12, bip = "BIP-0039", language = "random") {
 	if (!BIPTables[bip]) { console.error(`BIP ${bip} not found`); return false; }
@@ -227,18 +258,44 @@ function isMultipleOf1024(number) {
 }
 //#endregion
 
-function exportTranslator() {
-	const srcFile = fs.readFileSync('translator-src.js', 'utf8');
-	const BIPTablesStr = JSON.stringify(BIPTables, null, 4);
-	const versionStr = JSON.stringify(settings.version);
+function exportTranslator(logs = true) {
+	try {
+		const srcFile = fs.readFileSync('translator-src.js', 'utf8');
+		const BIPTablesStr = JSON.stringify(BIPTables, null, 4);
+		const versionStr = JSON.stringify(settings.version);
+	
+		let output = srcFile.replace('const BIPTablesHardcoded = {};', `const BIPTablesHardcoded = ${BIPTablesStr};`);
+		output = output.replace('const versionHardcoded = [];', `const versionHardcoded = ${versionStr};`);
+		const lastBuildControlFile = output;
+		output = output.split('//END')[0];
+	
+		const folder = 'build';
+		const outputFileName = `translator_v${settings.version[0]}.${settings.version[1]}.js`;
+		const outputPath = path.join(__dirname, folder, outputFileName);
+		const controlOutputPath = path.join(__dirname, 'lastBuildControl.js');
+	
+		fs.writeFileSync(outputPath, output);
+		fs.writeFileSync(controlOutputPath, lastBuildControlFile);
 
-    let output = srcFile.replace('const BIPTablesHardcoded = {};', `const BIPTablesHardcoded = ${BIPTablesStr};`);
-	output = output.replace('const versionHardcoded = [];', `const versionHardcoded = ${versionStr};`);
-	output = output.split('//END')[0];
-
-	const folder = 'build';
-	const outputFileName = `translator_v${settings.version[0]}-${settings.version[1]}.js`;
-	const outputPath = path.join(__dirname, folder, outputFileName);
-
-    fs.writeFileSync(outputPath, output);
+		if (logs) { 
+			console.log(`Translator exported to: ${outputPath}`); 
+			console.log(`Last build control exported to: ${controlOutputPath}`);
+		}
+	
+		return true;
+	} catch (error) {
+		console.error(error);
+		if (logs) { console.error('Translator could not be exported'); }
+		return false;
+	}
+}
+function saveSettingsInFile(settings) {
+	try {
+		const settingsStr = JSON.stringify(settings, null, 4);
+		fs.writeFileSync('settings.json', settingsStr);
+		return true;
+	} catch (error) {
+		console.error(error);
+		return false;
+	}
 }

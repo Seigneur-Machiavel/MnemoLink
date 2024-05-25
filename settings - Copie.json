@@ -1,14 +1,8 @@
 {
     "testIterations": 100,
     "output": "converter.js",
-    "version": [
-        0,
-        3
-    ],
-    "_versionFormatingMaxValues": [
-        4095,
-        4095
-    ],
+    "version": [0, 2],
+    "_versionFormatingMaxValues": [4095, 4095],
     "BIPFolder": "bips",
     "BIPtables": {
         "_comment": "list of BIPs to be in the final file - numeric keys should be 4 digits long, with leading zeros",
@@ -24,6 +18,7 @@
                 "portuguese": "portuguese",
                 "spanish": "spanish"
             },
+
             "_comment": "list of languages, if empty, all langages are implemented"
         }
     }

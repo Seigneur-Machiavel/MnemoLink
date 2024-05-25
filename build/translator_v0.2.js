@@ -18452,7 +18452,7 @@ const BIPTablesHardcoded = {
         ]
     }
 };
-const versionHardcoded = [0,1];
+const versionHardcoded = [0,2];
 const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 /**
@@ -18465,7 +18465,7 @@ const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxy
  * @param {string} params.pBIP - The pseudo BIP
  */
 class Translator {
-	constructor(params = { mnemonic: null, pseudoMnemonic: null, pBIP: null }) {
+	constructor(params = { mnemonic: null, pseudoMnemonic: null, pBIP: null, BIPTables: null, version: null}) {
 		this.authorizedMnemonicLengths = [12, 24];
 		this.BIPTables = BIPTablesHardcoded;
 		this.version = versionHardcoded;
@@ -18493,6 +18493,9 @@ class Translator {
 	}
 
 	#init() {
+		if (this.params.BIPTables) { this.BIPTables = this.params.BIPTables; }
+		if (this.params.version) { this.version = this.params.version; }
+
 		if (typeof this.params.pseudoMnemonic !== 'string' && typeof this.params.pseudoMnemonic !== 'object') { console.error('pseudoMnemonic is not a string or an array'); return false; }
 		this.pseudo.mnemonic = typeof this.params.pseudoMnemonic === 'string' ? this.params.pseudoMnemonic.split(' ') : this.params.pseudoMnemonic;
 		if (this.#mnemonicContainsDuplicates(this.pseudo.mnemonic)) { console.error('pseudoMnemonic contains duplicates'); this.error = 'invalid pseudoMnemonic'; return false; }
@@ -18724,6 +18727,11 @@ class Translator {
 
 		return encodedN1 + encodedN2;
 	}
+	/**
+	 * Get the encoded pseudo BIP (pBIP)
+	 * @param {boolean} withPrefix - If true, the prefix will be added to the encoded pseudo BIP
+	 * @returns {string} - The encoded pseudo BIP
+	 */
 	getEncodedPseudoBIP(withPrefix = true) {
 		if (this.pBIP === '') { this.#encodeTable(); }
 		if (this.pBIP === '') { console.error('pBIP is empty'); return false; }
@@ -18841,7 +18849,7 @@ class Translator {
 		const versionNumber = [versionPart1, versionPart2];
 		if (versionNumber.join() !== this.version.join()) { 
 			this.error = 'invalid version number';
-			console.error('version number is not the same as the origin version number'); 
+			console.error('version number is invalid');
 			return false;
 		}
 
@@ -18931,7 +18939,7 @@ class Translator {
 	/**
 	 * Translate a pseudo mnemonic to a mnemonic
 	 * @param {string} outputType - The output type: 'string' (default) or 'array'
-	 * @returns {string[]} - The translated mnemonic
+	 * @returns {string|string[]} - The translated mnemonic
 	 * @returns {boolean} - False if an error occured
 	 */
 	translateMnemonic(outputType = 'string' || 'array') {
