@@ -18452,7 +18452,7 @@ const BIPTablesHardcoded = {
         ]
     }
 };
-const versionHardcoded = [0,3];
+const versionHardcoded = [0,1];
 const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 /**
@@ -19044,6 +19044,27 @@ class Translator {
 		/** @type {string[]} */
 		const resultWordsTable = this.BIPTables[bip][language];
 		return { bip, language, wordsTable: resultWordsTable };
+	}
+	getAvailableLanguages(bip = 'BIP-0039') {
+		const BIP = this.BIPTables[bip];
+		if (!BIP) { console.error('BIP not found'); return false; }
+	
+		const languages = Object.keys(BIP);
+		return languages;
+	}
+	getSuggestions(partialWord = '', bip = 'BIP-0039', language = 'english') {
+		const BIP = this.BIPTables[bip];
+		if (!BIP) { console.error('BIP not found'); return false; }
+		const wordsTable = BIP[language];
+		if (!wordsTable) { console.error('wordsTable not found'); return false; }
+	
+		const suggestions = [];
+		for (let i = 0; i < wordsTable.length; i++) {
+			const word = wordsTable[i];
+			if (word.startsWith(partialWord)) { suggestions.push(word); }
+		}
+
+		return suggestions;
 	}
 }
 

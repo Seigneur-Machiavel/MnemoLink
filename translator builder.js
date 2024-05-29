@@ -1,7 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 const Translator = require('./translator-src.js');
-const controlTranslator = require('./lastBuildControl.js');
+let controlTranslator = false;
+if (fs.existsSync('lastBuildControl.js')) {
+	controlTranslator = require('./lastBuildControl.js');
+}
 
 const BIPTables = {};
 const settings = loadSettings();
@@ -118,6 +121,8 @@ function singleTest(mnemonic, pseudoMnemonic, logs = true) {
 	} else {
 		result.success = true;
 	}
+
+	if (!controlTranslator) { return result; }
 
 	// CONTROL VERSION COMPATIBILITY
 	try {
@@ -267,6 +272,9 @@ function exportTranslator(logs = true) {
 		let output = srcFile.replace('const BIPTablesHardcoded = {};', `const BIPTablesHardcoded = ${BIPTablesStr};`);
 		output = output.replace('const versionHardcoded = [];', `const versionHardcoded = ${versionStr};`);
 		const lastBuildControlFile = output;
+
+		// add export to the class Translator and remove the end of the file containing "module.exports = Translator;"
+		output = output.replace('class Translator', 'export class Translator');
 		output = output.split('//END')[0];
 	
 		const folder = 'build';

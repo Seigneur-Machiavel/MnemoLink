@@ -18464,7 +18464,7 @@ const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxy
  * @param {string|string[]} params.pseudoMnemonic - The pseudo mnemonic
  * @param {string} params.pBIP - The pseudo BIP
  */
-class Translator {
+export class Translator {
 	constructor(params = { mnemonic: null, pseudoMnemonic: null, pBIP: null, BIPTables: null, version: null}) {
 		this.authorizedMnemonicLengths = [12, 24];
 		this.BIPTables = BIPTablesHardcoded;
@@ -18520,6 +18520,15 @@ class Translator {
 			this.initialized = true;
 		}
 
+		return false;
+	}
+	#isInitialized() {
+		//try {
+			if (!this.initialized) { this.#init(); }
+			if (this.initialized) { return true; }
+		//} catch (error) {
+			//console.error(error);
+		//}
 		return false;
 	}
 	#mnemonicContainsDuplicates(mnemonic = []) {
@@ -18631,9 +18640,12 @@ class Translator {
 		if (array.length !== wordsTable.length) { console.error('array length is not equal to wordsTable length'); return false; }
 
 		const indexArray = this.#createIndexArray(wordsTable.length);
+		/*
 		const numbers = this.#numbersFromMnemonic(this.pseudo.mnemonic, wordsTable);
 		if (!numbers) { console.error('numbersFromMnemonic() failed'); return false; }
 		const hashValue = this.#hashFromNumbers(numbers);
+		*/
+		const hashValue = this.#hashFromMnemonic(this.pseudo.mnemonic);
 
 		this.#shuffleArray(indexArray, hashValue);
 		if (reverse) { this.#transmuteArray(indexArray); }
@@ -18673,22 +18685,20 @@ class Translator {
 			array[i] = transmutedArray[i];
 		}
 	}
-	#numbersFromMnemonic(mnemonic = [], wordsTable) {
-		const numbers = [];
-		for (let i = 0; i < mnemonic.length; i++) {
-			const word = mnemonic[i];
-			const index = wordsTable.indexOf(word);
-			if (index === -1) { console.error(`Word not found in BIPTable: ${word}`); return false; }
-			numbers.push(index);
-		}
-		return numbers;
-	}
-	#hashFromNumbers(numbers) {
+	/**
+	 * Get the hash from a mnemonic
+	 * @param {string|string[]} mnemonic - The mnemonic to hash
+	 * @returns {number} - The hash
+	 */
+	#hashFromMnemonic(mnemonic) {
+		const str = typeof mnemonic === 'string' ? mnemonic : mnemonic.join(' ');
+
 		let hash = 0;
-		numbers.forEach(num => {
-			hash = ((hash << 5) - hash) + num;
+		for (let i = 0; i < str.length; i++) {
+			const char = str.charCodeAt(i);
+			hash = ((hash << 5) - hash) + char;
 			hash = hash & hash; // Convert to 32bit integer
-		});
+		}
 		return Math.abs(hash);
 	}
 
@@ -19035,15 +19045,26 @@ class Translator {
 		const resultWordsTable = this.BIPTables[bip][language];
 		return { bip, language, wordsTable: resultWordsTable };
 	}
+	getAvailableLanguages(bip = 'BIP-0039') {
+		const BIP = this.BIPTables[bip];
+		if (!BIP) { console.error('BIP not found'); return false; }
+	
+		const languages = Object.keys(BIP);
+		return languages;
+	}
+	getSuggestions(partialWord = '', bip = 'BIP-0039', language = 'english') {
+		const BIP = this.BIPTables[bip];
+		if (!BIP) { console.error('BIP not found'); return false; }
+		const wordsTable = BIP[language];
+		if (!wordsTable) { console.error('wordsTable not found'); return false; }
+	
+		const suggestions = [];
+		for (let i = 0; i < wordsTable.length; i++) {
+			const word = wordsTable[i];
+			if (word.startsWith(partialWord)) { suggestions.push(word); }
+		}
 
-	#isInitialized() {
-		//try {
-			if (!this.initialized) { this.#init(); }
-			if (this.initialized) { return true; }
-		//} catch (error) {
-			//console.error(error);
-		//}
-		return false;
+		return suggestions;
 	}
 }
 
