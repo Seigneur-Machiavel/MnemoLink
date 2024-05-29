@@ -47,6 +47,7 @@ if (testResult.success === testResult.iterations) {
 	});
 }
 
+//#region TEST FUNCTIONS
 function testLoop(iterations = 100, language = "random", pseudoLanguage = "random", mnemonicLengths = [12, 24], autoVersionUpgrade = true, logs = true) {
 	lastUpdateProgress = -1;
 	let success = 0;
@@ -126,10 +127,12 @@ function singleTest(mnemonic, pseudoMnemonic, logs = true) {
 
 	// CONTROL VERSION COMPATIBILITY
 	try {
+		/* GENERATE THE SAME pBIP IS IMPOSSIBLE BECAUSE OF THE RANDOMNESS OF THE PSEUDOMNEMONIC GENERATION
 		const controlTranslatorA = new controlTranslator( {mnemonic, pseudoMnemonic} );
 		const controlpBIP = controlTranslatorA.getEncodedPseudoBIP(true);
+		if (controlpBIP !== pBIP) { throw new Error('Cannot encode the controlpBIP !'); }
 		const controlTranslatorB = new Translator( {pBIP: controlpBIP, pseudoMnemonic, BIPTables: BIPTables, version: settings.version} );
-		if (controlTranslatorB.translateMnemonic('string') !== mnemonicStr) { throw new Error('Decoded mnemonic is different from the original one !'); }
+		if (controlTranslatorB.translateMnemonic('string') !== mnemonicStr) { throw new Error('Decoded mnemonic is different from the original one !'); }*/
 	
 		const controlTranslatorC = new controlTranslator( {pBIP, pseudoMnemonic} );
 		if (controlTranslatorC.translateMnemonic('string') !== mnemonicStr) { throw new Error('Decoded mnemonic is different from the original one !'); }
@@ -187,6 +190,7 @@ function countSimilaritiesBetweenLanguages(bip = 'BIP-0039', language1, language
 	}
 	return similarities.length;
 }
+//#endregion
 
 //#region LOADING SETTINGS && BIP TABLES && lastBuild
 function loadSettings() {

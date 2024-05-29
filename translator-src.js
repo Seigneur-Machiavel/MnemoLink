@@ -70,12 +70,12 @@ class Translator {
 		return false;
 	}
 	#isInitialized() {
-		//try {
+		try {
 			if (!this.initialized) { this.#init(); }
 			if (this.initialized) { return true; }
-		//} catch (error) {
+		} catch (error) {
 			//console.error(error);
-		//}
+		}
 		return false;
 	}
 	#mnemonicContainsDuplicates(mnemonic = []) {
