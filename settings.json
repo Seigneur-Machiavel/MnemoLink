@@ -13,6 +13,7 @@
     "BIPtables": {
         "_comment": "list of BIPs to be in the final file - numeric keys should be 4 digits long, with leading zeros",
         "BIP-0039": {
+            "officialName": "bip39",
             "languages": {
                 "chinesetraditional": "chinese_traditional",
                 "czech": "czech",

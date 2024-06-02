@@ -1,5 +1,10 @@
 const fs = require('fs');
 const path = require('path');
+
+const officialBIPs = {
+	"BIP-0039": require('./bip39 3.1.0.js')
+}
+
 const Translator = require('./translator-src.js');
 let controlTranslator = false;
 if (fs.existsSync('lastBuildControl.js')) {
@@ -7,6 +12,8 @@ if (fs.existsSync('lastBuildControl.js')) {
 }
 
 const BIPTables = {};
+const BIPTablesToHardcode = {};
+const BIPOfficialNames = {};
 const settings = loadSettings();
 if (!settings) { console.error('Settings could not be loaded'); return; }
 let lastUpdateProgress = -1;
@@ -212,13 +219,36 @@ function loadSettings() {
 		}
 
 		const languages = Object.keys(languagesObject);
+		BIPOfficialNames[BIPName] = settingsLoaded.BIPtables[BIPName].officialName;
+		const officialWordlists = officialBIPs[BIPName].wordlists;
+		const officialLanguages = Object.keys(officialWordlists);
 		for (let j = 0; j < languages.length; j++) {
 			const language = languages[j];
 			const fileName = languagesObject[language];
-			const wordsList = arrayFromTxtList(path.join(folderPath, fileName + '.txt'));
-			if (!wordsList) { return false; }
+			const wordsListFromSettings = arrayFromTxtList(path.join(folderPath, fileName + '.txt'));
+			if (!wordsListFromSettings) { return false; }
 			if (BIPTables[BIPName] === undefined) { BIPTables[BIPName] = {}; }
-			BIPTables[BIPName][language] = wordsList;
+			BIPTables[BIPName][language] = wordsListFromSettings;
+
+			if (BIPTablesToHardcode[BIPName] === undefined) { BIPTablesToHardcode[BIPName] = {}; }
+			BIPTablesToHardcode[BIPName][language] = wordsListFromSettings; // overriden if the language is in the official BIP list
+
+			// Check if the language is in the offical BIP list
+			// - if yes, override the words list with the official name for lightening the translator
+			const officialLanguageStr = settingsLoaded.BIPtables[BIPName].languages[language];
+			if (!officialLanguages.includes(officialLanguageStr)) { continue; }
+
+			for (let k = 0; k < wordsListFromSettings.length; k++) {
+				const wordA = wordsListFromSettings[k];
+				const wordB = officialWordlists[officialLanguageStr][k];
+				if (wordA !== wordB) { 
+					console.error(`The ${BIPName} ${language} words list is different from the official one`);
+					continue;
+				}
+				if (k === wordsListFromSettings.length - 1) { 
+					BIPTablesToHardcode[BIPName][language] = { officialLanguageStr: officialLanguageStr };
+				}
+			}
 		}
 	}
 
@@ -270,11 +300,13 @@ function isMultipleOf1024(number) {
 function exportTranslator(logs = true) {
 	try {
 		const srcFile = fs.readFileSync('translator-src.js', 'utf8');
-		const BIPTablesStr = JSON.stringify(BIPTables, null, 4);
+		const BIPTablesStr = JSON.stringify(BIPTablesToHardcode, null, 4);
 		const versionStr = JSON.stringify(settings.version);
+		const BIPOfficialNamesStr = JSON.stringify(BIPOfficialNames, null, 4);
 	
 		let output = srcFile.replace('const BIPTablesHardcoded = {};', `const BIPTablesHardcoded = ${BIPTablesStr};`);
 		output = output.replace('const versionHardcoded = [];', `const versionHardcoded = ${versionStr};`);
+		output = output.replace('const const BIPOfficialNames = {};', `const BIPOfficialNames = ${BIPOfficialNamesStr};`);
 		const lastBuildControlFile = output;
 
 		// add export to the class Translator and remove the end of the file containing "module.exports = Translator;"

@@ -1,4 +1,9 @@
+if (false) { // CODE NEVER REACHED, SHOWS THE IMPORTS FOR DOCUMENTATION PURPOSES
+	const bip39 = require('./bip39 3.1.0.js');
+}
+
 const BIPTablesHardcoded = {};
+const BIPOfficialNames = {};
 const versionHardcoded = [];
 const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
@@ -45,13 +50,13 @@ class Translator {
 
 		if (typeof this.params.pseudoMnemonic !== 'string' && typeof this.params.pseudoMnemonic !== 'object') { console.error('pseudoMnemonic is not a string or an array'); return false; }
 		this.pseudo.mnemonic = typeof this.params.pseudoMnemonic === 'string' ? this.params.pseudoMnemonic.split(' ') : this.params.pseudoMnemonic;
-		if (this.#mnemonicContainsDuplicates(this.pseudo.mnemonic)) { console.error('pseudoMnemonic contains duplicates'); this.error = 'invalid pseudoMnemonic'; return false; }
+		if (this.mnemonicContainsDuplicates(this.pseudo.mnemonic)) { console.error('pseudoMnemonic contains duplicates'); this.error = 'invalid pseudoMnemonic'; return false; }
 		
 		if (this.params.mnemonic && this.pseudo.mnemonic.length > 0) {
 			if (typeof this.params.mnemonic !== 'string' && typeof this.params.mnemonic !== 'object') { console.error('mnemonic is not a string or an array'); return false; }
 			
 			this.origin.mnemonic = typeof this.params.mnemonic === 'string' ? this.params.mnemonic.split(' ') : this.params.mnemonic;
-			if (this.#mnemonicContainsDuplicates(this.origin.mnemonic)) { console.error('mnemonic contains duplicates'); this.error = 'invalid mnemonic'; return false; }
+			if (this.mnemonicContainsDuplicates(this.origin.mnemonic)) { console.error('mnemonic contains duplicates'); this.error = 'invalid mnemonic'; return false; }
 
 			if (!this.#detectMnemonicsLanguage()) { console.error('detectMnemonicsLanguage() failed'); return false; }
 
@@ -78,7 +83,7 @@ class Translator {
 		}
 		return false;
 	}
-	#mnemonicContainsDuplicates(mnemonic = []) {
+	mnemonicContainsDuplicates(mnemonic = []) {
 		const controlArray = [];
 		for (let i = 0; i < mnemonic.length; i++) {
 			const word = mnemonic[i];
@@ -414,12 +419,13 @@ class Translator {
 		const BipCode = this.pBIP.split('BIP')[1].substring(0, 4);
 		const detectedBip = "BIP-" + BipCode;
 		const detectedLanguage = this.pBIP.split('BIP')[0];
-		const detectionSuccess = !(this.BIPTables[detectedBip] === undefined && this.BIPTables[detectedBip][detectedLanguage] === undefined);
+
+		const detectionSuccess = this.getWordsTable(detectedBip, detectedLanguage) !== false;
 		if (detectionSuccess) {
 			// console.info(`language detected: ${detectedLanguage} | ${detectedBip}`);
 			this.origin.language = detectedLanguage;
 			this.origin.bip = detectedBip;
-			this.origin.BIPTable = this.BIPTables[detectedBip][detectedLanguage];
+			this.origin.BIPTable = this.getWordsTable(detectedBip, detectedLanguage);
 		}
 
 		// DECODING THE TABLE
@@ -566,7 +572,8 @@ class Translator {
 			for (let j = 0; j < languages.length; j++) {
 				currentSearch.foundWords = [];
 				currentSearch.language = languages[j];
-				const wordsTable = this.BIPTables[currentSearch.bip][currentSearch.language];
+				const wordsTable = this.getWordsTable(currentSearch.bip, currentSearch.language);
+				if (!wordsTable) { console.error('wordsTable not found'); return false; }
 
 				for (let k = 0; k < mnemonic.length; k++) {
 					currentSearch.word = mnemonic[k];
@@ -589,7 +596,8 @@ class Translator {
 		if (bip === '' || language === '') { console.error(`BIP and/or language not found for the mnemonic ! Best result -> ${bestSearch.bip} | ${bestSearch.language} | words found: ${bestSearch.foundWords.length} | missing word: ${bestSearch.word}`);  return false; }
 
 		/** @type {string[]} */
-		const resultWordsTable = this.BIPTables[bip][language];
+		const resultWordsTable = this.getWordsTable(bip, language);
+		if (!resultWordsTable) { console.error('wordsTable not found'); return false; }
 		return { bip, language, wordsTable: resultWordsTable };
 	}
 	getAvailableLanguages(bip = 'BIP-0039') {
@@ -600,9 +608,7 @@ class Translator {
 		return languages;
 	}
 	getSuggestions(partialWord = '', bip = 'BIP-0039', language = 'english') {
-		const BIP = this.BIPTables[bip];
-		if (!BIP) { console.error('BIP not found'); return false; }
-		const wordsTable = BIP[language];
+		const wordsTable = this.getWordsTable(bip, language);
 		if (!wordsTable) { console.error('wordsTable not found'); return false; }
 	
 		const suggestions = [];
@@ -613,8 +619,36 @@ class Translator {
 
 		return suggestions;
 	}
-}
+	#removeNonAlphabeticChars(str) {
+		return str.replace(/[^a-zA-Z]/g, '');
+	}
+	getWordsTable(bip = 'BIP-0039', language = 'english') {
+		const BIP = this.BIPTables[bip];
+		if (!BIP) { console.error('BIP not found'); return false; }
 
+		const wordsTable = BIP[this.#removeNonAlphabeticChars(language)];
+		if (!wordsTable) { console.error('wordsTable not found'); return false; }
+
+		if (wordsTable.officialLanguageStr === undefined) {
+			return wordsTable;
+		} else {
+			// trying to get the wordsTable (wordsList) from the window object - Require bundle : bip39.js
+			const officialName = BIPOfficialNames[bip];
+			if (!officialName) { console.error('officialName not found'); return false; }
+
+			const bipLib = window[officialName]
+			if (!bipLib) { console.error('bipLib not found'); return false; }
+
+			const wordsLists = bipLib.wordlists;
+			if (!wordsLists) { console.error('wordlists not found'); return false; }
+
+			const wordsList = wordsLists[wordsTable.officialLanguageStr];
+			if (!wordsList) { console.error('wordsList not found'); return false; }
+
+			return wordsList;
+		}
+	}
+}
 
 /* CODE RELEASED ONLY WHEN EXPORTED --- DONT USE "//" or "/*" COMMENTS IN THIS SECTION !!! ---
 */
