@@ -141,7 +141,7 @@ function singleTest(mnemonic, pseudoMnemonic, logs = true) {
 		const controlTranslatorB = new Translator( {pBIP: controlpBIP, pseudoMnemonic, BIPTables: BIPTables, version: settings.version} );
 		if (controlTranslatorB.translateMnemonic('string') !== mnemonicStr) { throw new Error('Decoded mnemonic is different from the original one !'); }*/
 	
-		const controlTranslatorC = new controlTranslator( {pBIP, pseudoMnemonic} );
+		const controlTranslatorC = new controlTranslator( {pBIP, pseudoMnemonic, officialBIPs} );
 		if (controlTranslatorC.translateMnemonic('string') !== mnemonicStr) { throw new Error('Decoded mnemonic is different from the original one !'); }
 	} catch (error) {
 		result.needVersionUpgrade = true;
@@ -306,7 +306,7 @@ function exportTranslator(logs = true) {
 	
 		let output = srcFile.replace('const BIPTablesHardcoded = {};', `const BIPTablesHardcoded = ${BIPTablesStr};`);
 		output = output.replace('const versionHardcoded = [];', `const versionHardcoded = ${versionStr};`);
-		output = output.replace('const const BIPOfficialNames = {};', `const BIPOfficialNames = ${BIPOfficialNamesStr};`);
+		output = output.replace('const BIPOfficialNamesHardcoded = {};', `const BIPOfficialNamesHardcoded = ${BIPOfficialNamesStr};`);
 		const lastBuildControlFile = output;
 
 		// add export to the class Translator and remove the end of the file containing "module.exports = Translator;"

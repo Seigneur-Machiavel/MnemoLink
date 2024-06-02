@@ -33,7 +33,9 @@ const BIPTablesHardcoded = {
         }
     }
 };
-const BIPOfficialNames = {};
+const BIPOfficialNamesHardcoded = {
+    "BIP-0039": "bip39"
+};
 const versionHardcoded = [0,2];
 const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
@@ -47,9 +49,11 @@ const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxy
  * @param {string} params.pBIP - The pseudo BIP
  */
 export class Translator {
-	constructor(params = { mnemonic: null, pseudoMnemonic: null, pBIP: null, BIPTables: null, version: null}) {
+	constructor(params = { mnemonic: null, pseudoMnemonic: null, pBIP: null, BIPTables: null, version: null, officialBIPs: null}) {
 		this.authorizedMnemonicLengths = [12, 24];
+		this.officialBIPs = {}; // Only used when file called as "lastBuildControl.js"
 		this.BIPTables = BIPTablesHardcoded;
+		this.BIPOfficialNames = BIPOfficialNamesHardcoded;
 		this.version = versionHardcoded;
 		this.initialized = false;
 		this.params = params;
@@ -75,6 +79,7 @@ export class Translator {
 	}
 
 	#init() {
+		if (this.params.officialBIPs) { this.officialBIPs = this.params.officialBIPs; }
 		if (this.params.BIPTables) { this.BIPTables = this.params.BIPTables; }
 		if (this.params.version) { this.version = this.params.version; }
 
@@ -663,10 +668,7 @@ export class Translator {
 			return wordsTable;
 		} else {
 			// trying to get the wordsTable (wordsList) from the window object - Require bundle : bip39.js
-			const officialName = BIPOfficialNames[bip];
-			if (!officialName) { console.error('officialName not found'); return false; }
-
-			const bipLib = window[officialName]
+			const bipLib = this.#getExternalBipLib(bip);
 			if (!bipLib) { console.error('bipLib not found'); return false; }
 
 			const wordsLists = bipLib.wordlists;
@@ -677,6 +679,24 @@ export class Translator {
 
 			return wordsList;
 		}
+	}
+	#getExternalBipLib(bip = 'BIP-0039') {
+		// code only used while translator builder run this file as "lastBuildControl.js"
+		const translatorBuilderLib = this.officialBIPs[bip];
+		if (translatorBuilderLib) { return translatorBuilderLib; }
+
+		// trying to get the wordsList from the window object - Require bundle : bip39.js
+		try {
+			const officialName = this.BIPOfficialNames[bip];
+			if (!officialName) { console.error('officialName not found'); return false; }
+
+			const windowLib = window[officialName]
+			if (!windowLib) { return false; }
+
+			return windowLib;
+		} catch (error) { 
+			return false 
+		};
 	}
 }
 
