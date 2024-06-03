@@ -45,6 +45,13 @@ class Translator {
 		}
 		this.error = '';
 	}
+	
+	test(officialBIPs) {
+		this.officialBIPs = officialBIPs;
+		const bip = this.#getExternalBipLib('BIP-0039');
+		const pbkdf2 = bip.pbkdf2
+		console.log('pbkdf2', pbkdf2);
+	}
 
 	#init() {
 		if (this.params.officialBIPs) { this.officialBIPs = this.params.officialBIPs; }
@@ -53,13 +60,13 @@ class Translator {
 
 		if (typeof this.params.pseudoMnemonic !== 'string' && typeof this.params.pseudoMnemonic !== 'object') { console.error('pseudoMnemonic is not a string or an array'); return false; }
 		this.pseudo.mnemonic = typeof this.params.pseudoMnemonic === 'string' ? this.params.pseudoMnemonic.split(' ') : this.params.pseudoMnemonic;
-		if (this.mnemonicContainsDuplicates(this.pseudo.mnemonic)) { console.error('pseudoMnemonic contains duplicates'); this.error = 'invalid pseudoMnemonic'; return false; }
+		//if (this.mnemonicContainsDuplicates(this.pseudo.mnemonic)) { console.error('pseudoMnemonic contains duplicates'); this.error = 'invalid pseudoMnemonic'; return false; }
 		
 		if (this.params.mnemonic && this.pseudo.mnemonic.length > 0) {
 			if (typeof this.params.mnemonic !== 'string' && typeof this.params.mnemonic !== 'object') { console.error('mnemonic is not a string or an array'); return false; }
 			
 			this.origin.mnemonic = typeof this.params.mnemonic === 'string' ? this.params.mnemonic.split(' ') : this.params.mnemonic;
-			if (this.mnemonicContainsDuplicates(this.origin.mnemonic)) { console.error('mnemonic contains duplicates'); this.error = 'invalid mnemonic'; return false; }
+			//if (this.mnemonicContainsDuplicates(this.origin.mnemonic)) { console.error('mnemonic contains duplicates'); this.error = 'invalid mnemonic'; return false; }
 
 			if (!this.#detectMnemonicsLanguage()) { console.error('detectMnemonicsLanguage() failed'); return false; }
 

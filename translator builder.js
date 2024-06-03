@@ -18,17 +18,31 @@ const settings = loadSettings();
 if (!settings) { console.error('Settings could not be loaded'); return; }
 let lastUpdateProgress = -1;
 
-// SOLO TEST -> Used for coding only
-/*
-const mnemonic12en = "abandon able industry connect town stay such ribbon return cabbage bus spy";
-const mnemonic12fr = "abaisser abandon abdiquer abeille abolir aborder aboutir aboyer abrasif abreuver abriter abroger";
-const mnemonic24en = "abandon able industry connect town stay such ribbon return cabbage bus spy glue goat goddess gold good goose gorilla gospel gossip govern gown grab";
-const pseudoMnemonic12fr = "abaisser abandon abdiquer abeille abolir aborder aboutir aboyer abrasif abreuver abriter abroger";
-const mnemonic_ = ["odtud","ortel","rozum","puberta","pacient","glejt","rubrika","jindy","hejkal","nesoulad","lehkost","procento","romaneto","cirkus","bankomat","losos","manko","oproti","omladina","znamenat","mazurka","diplom","tehdy","azyl"]
-const pseudoMnemonic_ = ["舍","刀","享","制","央","厘","只","悲","棒","菜","燕","漆"]
-const singleTestResult = singleTest(mnemonic_, pseudoMnemonic_);
-return true;
-*/
+// CUSTOM TEST -> Used for coding only
+const toto = new Translator();
+toto.test( officialBIPs );
+
+const customTestMnemonics = [
+	{ 	
+		mnemonic: ["abandon","able","industry","connect","town","stay","such","ribbon","return","cabbage","bus","spy"],
+		pseudoMnemonic: ["abaisser","abandon","abdiquer","abeille","abolir","aborder","aboutir","aboyer","abrasif","abreuver","abriter","abroger"]
+	},
+	{
+		mnemonic: ["abandon","abandon","industry","connect","town","stay","such","ribbon","return","cabbage","bus","spy"],
+		pseudoMnemonic: ["abaisser","abandon","abdiquer","abeille","abeille","aborder","aboutir","aboyer","abrasif","abreuver","abriter","abroger"]
+	},
+];
+for (let i = 0; i < customTestMnemonics.length; i++) {
+	const mnemonic_ = customTestMnemonics[i].mnemonic;
+	const pseudoMnemonic_ = customTestMnemonics[i].pseudoMnemonic;
+	const singleTestResult = singleTest(mnemonic_, pseudoMnemonic_);
+	if (!singleTestResult.success) {
+		console.error(`Custom test ${i} failed`);
+		console.error(`mnemonic: ${mnemonic_}`);
+		console.error(`pseudoMnemonic: ${pseudoMnemonic_}`);
+		return;
+	}
+}
 
 // MULTI TEST -> Used to control the validity of the translator before exporting it
 const testResult = testLoop(settings.testIterations || 100, 'random', 'random', [12, 24], true, false);
