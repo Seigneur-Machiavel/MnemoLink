@@ -37,7 +37,7 @@ const BIPTablesHardcoded = {
 const BIPOfficialNamesHardcoded = {
     "BIP-0039": "bip39"
 };
-const versionHardcoded = [0,1];
+const versionHardcoded = [0,3];
 const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const saltStrLength = 4; // need to be a multiple of 2
 
@@ -50,7 +50,7 @@ const saltStrLength = 4; // need to be a multiple of 2
  * @param {string|string[]} params.pseudoMnemonic - The pseudo mnemonic
  * @param {string} params.pBIP - The pseudo BIP
  */
-class Translator {
+export class Translator {
 	constructor(params = { mnemonic: null, pseudoMnemonic: null, BIPTables: null, version: null, officialBIPs: null}) {
 		this.minMnemonicLength = 12;
 		this.cryptoLib = null;
@@ -153,10 +153,9 @@ class Translator {
 	#getBIPTableFromMnemonic(mnemonicArray = []) {
 		let bip = '';
 		let language = '';
-		let wordsTable = [];
 
 		const BIPs = Object.keys(this.BIPTables);
-		const currentSearch = { bip: '', language: '', wordsTable: [], foundWords: [], word: ''};
+		const currentSearch = { bip: '', language: '', foundWords: [], word: ''};
 		let bestSearch = { bip: '', language: '', foundWords: [], word: ''};
 
 		for (let i = 0; i < BIPs.length; i++) {
@@ -166,19 +165,18 @@ class Translator {
 			for (let j = 0; j < languages.length; j++) {
 				currentSearch.foundWords = [];
 				currentSearch.language = languages[j];
-				currentSearch.wordsTable = this.getWordsTable(currentSearch.bip, currentSearch.language);
+				const wordsTable = this.BIPTables[currentSearch.bip][currentSearch.language];
 
 				for (let k = 0; k < mnemonicArray.length; k++) {
 					currentSearch.word = mnemonicArray[k];
 
-					if (!currentSearch.wordsTable.includes(currentSearch.word)) { break; }
+					if (!wordsTable.includes(currentSearch.word)) { break; }
 					currentSearch.foundWords.push(currentSearch.word);
 					if (k < mnemonicArray.length - 1) { continue; }
 
 					if (bip !== '' || language !== '') { console.error('Multiple BIPs and/or languages found for the mnemonic'); return false; }
 					bip = currentSearch.bip;
 					language = currentSearch.language;
-					wordsTable = currentSearch.wordsTable;
 				}
 
 				if (bestSearch.foundWords.length < currentSearch.foundWords.length) {
@@ -190,7 +188,9 @@ class Translator {
 		//if (bip === '' || language === '') { console.error(`BIP and/or language not found for the mnemonic ! Best result -> ${bestSearch.bip} | ${bestSearch.language} | words found: ${bestSearch.foundWords.length} | missing word: ${bestSearch.word}`);  return false; }
 		if (bip === '' || language === '') { return false; }
 
-		return { bip, language, wordsTable };
+		/** @type {string[]} */
+		const resultWordsTable = this.BIPTables[bip][language];
+		return { bip, language, wordsTable: resultWordsTable };
 	}
 
 	#getOriginPrefix() {
@@ -526,5 +526,3 @@ class Translator {
 /* CODE RELEASED ONLY WHEN EXPORTED --- DONT USE "//" or "/*" COMMENTS IN THIS SECTION !!! ---
 */
 
-//END --- ANY CODE AFTER THIS LINE WILL BE REMOVED DURING EXPORT, SHOULD BE USE FOR TESTING ONLY ---
-module.exports = Translator;

@@ -18,58 +18,58 @@ const settings = loadSettings();
 if (!settings) { console.error('Settings could not be loaded'); return; }
 let lastUpdateProgress = -1;
 
-// CUSTOM TEST -> Used for coding only
-const toto = new Translator();
-toto.test( officialBIPs );
-
-const customTestMnemonics = [
-	{ 	
-		mnemonic: ["abandon","able","industry","connect","town","stay","such","ribbon","return","cabbage","bus","spy"],
-		pseudoMnemonic: ["abaisser","abandon","abdiquer","abeille","abolir","aborder","aboutir","aboyer","abrasif","abreuver","abriter","abroger"]
-	},
-	{
-		mnemonic: ["abandon","abandon","industry","connect","town","stay","such","ribbon","return","cabbage","bus","spy"],
-		pseudoMnemonic: ["abaisser","abandon","abdiquer","abeille","abeille","aborder","aboutir","aboyer","abrasif","abreuver","abriter","abroger"]
-	},
-];
-for (let i = 0; i < customTestMnemonics.length; i++) {
-	const mnemonic_ = customTestMnemonics[i].mnemonic;
-	const pseudoMnemonic_ = customTestMnemonics[i].pseudoMnemonic;
-	const singleTestResult = singleTest(mnemonic_, pseudoMnemonic_);
-	if (!singleTestResult.success) {
-		console.error(`Custom test ${i} failed`);
-		console.error(`mnemonic: ${mnemonic_}`);
-		console.error(`pseudoMnemonic: ${pseudoMnemonic_}`);
-		return;
-	}
-}
-
-// MULTI TEST -> Used to control the validity of the translator before exporting it
-const testResult = testLoop(settings.testIterations || 100, 'random', 'random', [12, 24], true, false);
-if (testResult.success === testResult.iterations) {
-	console.log('All tests passed successfully, exporting translator...');
-	if (testResult.needVersionUpgrade) {
-		const currentVersion = settings.version[0] + '.' + settings.version[1];
-		const newVersion = settings.version[1] + 1 < 4095 ? [settings.version[0], settings.version[1] + 1] : [settings.version[0] + 1, 0];
-		settings.version = newVersion;
-		console.log(`Version upgraded from: ${currentVersion} to: ${settings.version[0]}.${settings.version[1]}`);
+async function main() {
+	// CUSTOM TEST -> Used for coding only
+	const customTestMnemonics = [
+		{ 	
+			mnemonic: ["abandon","able","industry","connect","town","stay","such","ribbon","return","cabbage","bus","spy"],
+			pseudoMnemonic: ["abaisser","abandon","abdiquer","abeille","abolir","aborder","aboutir","aboyer","abrasif","abreuver","abriter","abroger"]
+		},
+		{
+			mnemonic: ["abandon","abandon","industry","connect","town","stay","such","ribbon","return","cabbage","bus","spy"],
+			pseudoMnemonic: ["abaisser","abandon","abdiquer","abeille","abeille","aborder","aboutir","aboyer","abrasif","abreuver","abriter","abroger"]
+		},
+	];
+	for (let i = 0; i < customTestMnemonics.length; i++) {
+		const mnemonic_ = customTestMnemonics[i].mnemonic;
+		const pseudoMnemonic_ = customTestMnemonics[i].pseudoMnemonic;
+		const singleTestResult = await singleTest(mnemonic_, pseudoMnemonic_);
+		if (!singleTestResult.success) {
+			console.error(`Custom test ${i} failed`);
+			console.error(`mnemonic: ${mnemonic_}`);
+			console.error(`pseudoMnemonic: ${pseudoMnemonic_}`);
+			return;
+		}
 	}
 
-	const exportSuccess = exportTranslator();
-	if (!exportSuccess) { console.error('Translator could not be exported'); return; }
+	// MULTI TEST -> Used to control the validity of the translator before exporting it
+	const testResult = await testLoop(settings.testIterations || 100, 'random', 'random', [12, 24], true, false);
+	if (testResult.success === testResult.iterations) {
+		 console.log('All tests passed successfully, exporting translator...');
+		if (testResult.needVersionUpgrade) {
+			const currentVersion = settings.version[0] + '.' + settings.version[1];
+			const newVersion = settings.version[1] + 1 < 4095 ? [settings.version[0], settings.version[1] + 1] : [settings.version[0] + 1, 0];
+			settings.version = newVersion;
+			console.log(`Version upgraded from: ${currentVersion} to: ${settings.version[0]}.${settings.version[1]}`);
+		}
 
-	const settingSaved = saveSettingsInFile(settings);
-	if (!settingSaved) { console.error('Settings could not be saved'); return; }
-	console.log('Settings.json saved successfully');
-} else {
-	console.error('Some tests failed:');
-	testResult.failureInfos.forEach((info) => {
-		console.log(JSON.stringify(info));
-	});
-}
+		const exportSuccess = exportTranslator();
+		if (!exportSuccess) { console.error('Translator could not be exported'); return; }
+
+		const settingSaved = saveSettingsInFile(settings);
+		if (!settingSaved) { console.error('Settings could not be saved'); return; }
+		console.log('Settings.json saved successfully');
+	} else {
+		console.error('Some tests failed:');
+		testResult.failureInfos.forEach((info) => {
+			console.log(JSON.stringify(info));
+		});
+	}
+};
+main();
 
 //#region TEST FUNCTIONS
-function testLoop(iterations = 100, language = "random", pseudoLanguage = "random", mnemonicLengths = [12, 24], autoVersionUpgrade = true, logs = true) {
+async function testLoop(iterations = 100, language = "random", pseudoLanguage = "random", mnemonicLengths = [12, 24], autoVersionUpgrade = true, logs = true) {
 	lastUpdateProgress = -1;
 	let success = 0;
 	let failure = 0;
@@ -82,11 +82,12 @@ function testLoop(iterations = 100, language = "random", pseudoLanguage = "rando
 		const mnemonic = gen1.wordsList;
 		const pseudoMnemonic = gen2.wordsList;
 		
-		const result = singleTest(mnemonic, pseudoMnemonic, logs);
+		const result = await singleTest(mnemonic, pseudoMnemonic, logs);
 		if (result.success === true) { 
 			success++;
 			if (result.needVersionUpgrade) { needVersionUpgrade = true; }
-		} else { 
+		} else {
+			if (logs && result.reason) { console.error(result.reason) };
 			failureInfos.push({
 				reason: result.reason,
 				mnemonic: gen1,
@@ -119,18 +120,61 @@ function updateProgressBar(current, total) {
  * @param {string|string[]} pseudoMnemonic
  * @returns {boolean}
  */
-function singleTest(mnemonic, pseudoMnemonic, logs = true) {
+async function singleTest(mnemonic, pseudoMnemonic, logs = true) {
+	const result = { success: false, needVersionUpgrade: false, reason: '' };
+	if (!mnemonic || !pseudoMnemonic) { result.reason = 'mnemonic or pseudoMnemonic is undefined'; return result; }
+	const mnemonicStr = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
+	if (logs) { console.log(`\nTesting with mnemonic: ${mnemonicStr}\n`) };
+
+	const translatorA = new Translator( {mnemonic, pseudoMnemonic, BIPTables, version: settings.version, officialBIPs} );
+	const mnemoLink = await translatorA.encryptMnemonic();
+	if (!mnemoLink) { result.reason = 'encryptMnemonic() failed'; return result; }
+	
+	if (logs) { console.log(`Encrypted mnemonic: ${mnemoLink}`) };
+
+	const translatorB = new Translator( {pseudoMnemonic, BIPTables, version: settings.version, officialBIPs} );
+	const decryptedMnemonicStr = await translatorB.decryptMnemoLink(mnemoLink);
+	if (!decryptedMnemonicStr) { result.reason = 'translateMnemonic() failed'; return result; }
+	if (logs) { console.log(`Decoded mnemonic: ${decryptedMnemonicStr}`) };
+
+	// Check if the decoded mnemonic is the same as the original one
+	if (mnemonicStr !== decryptedMnemonicStr) { 
+		if (logs) { console.error('Decoded mnemonic is different from the original one !') };
+		result.reason = 'Decoded mnemonic is different from the original one'; 
+		return result; 
+	} else {
+		result.success = true;
+	}
+
+	if (!controlTranslator) { return result; }
+
+	// CONTROL VERSION COMPATIBILITY
+	try {
+		const controlTranslatorA = new controlTranslator( {mnemonic, pseudoMnemonic, officialBIPs} );
+		const controlMnemoLink = await controlTranslatorA.encryptMnemonic();
+		if (controlMnemoLink !== controlMnemoLink) { throw new Error('VERSIONNING CONTROL => Cannot encode the controlpBIP !'); }
+	
+		const controlTranslatorB = new controlTranslator( {pseudoMnemonic, officialBIPs} );
+		const controlDecryptedMnemonicStr = await controlTranslatorB.decryptMnemoLink(controlMnemoLink);
+		if (controlDecryptedMnemonicStr !== mnemonicStr) { throw new Error('VERSIONNING CONTROL => Decoded mnemonic is different from the original one !'); }
+	} catch (error) {
+		result.needVersionUpgrade = true;
+	}
+
+	return result;
+}
+/*function singleTest(mnemonic, pseudoMnemonic, logs = true) { // DEPPRECIATED
 	const result = { success: false, needVersionUpgrade: false, reason: '' };
 	if (!mnemonic || !pseudoMnemonic) { console.error('mnemonic or pseudoMnemonic is undefined'); result.reason = 'mnemonic or pseudoMnemonic is undefined'; return result; }
 	const mnemonicStr = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
 	if (logs) { console.log(`\nTesting with mnemonic: ${mnemonicStr}\n`) };
 
-	const translatorA = new Translator( {mnemonic, pseudoMnemonic, BIPTables: BIPTables, version: settings.version} );
+	const translatorA = new Translator( {mnemonic, pseudoMnemonic, BIPTables, version: settings.version, officialBIPs} );
 	const pBIP = translatorA.getEncodedPseudoBIP(true);
 	if (!pBIP) { console.error('getEncodedPseudoBIP() failed !'); result.reason = 'getEncodedPseudoBIP() failed'; return result; }
 	if (logs) { console.log(pBIP) };
 
-	const translatorB = new Translator( {pBIP, pseudoMnemonic, BIPTables: BIPTables, version: settings.version} );
+	const translatorB = new Translator( {pBIP, pseudoMnemonic, BIPTables, version: settings.version, officialBIPs} );
 	const decodedMnemonic = translatorB.translateMnemonic('string'); // output: 'array' or 'string'
 	if (!decodedMnemonic) { console.error('translateMnemonic() failed !'); result.reason = 'translateMnemonic() failed'; return result; }
 	if (logs) { console.log(`Decoded mnemonic: ${decodedMnemonic}`) };
@@ -148,13 +192,6 @@ function singleTest(mnemonic, pseudoMnemonic, logs = true) {
 
 	// CONTROL VERSION COMPATIBILITY
 	try {
-		/* GENERATE THE SAME pBIP IS IMPOSSIBLE BECAUSE OF THE RANDOMNESS OF THE PSEUDOMNEMONIC GENERATION
-		const controlTranslatorA = new controlTranslator( {mnemonic, pseudoMnemonic} );
-		const controlpBIP = controlTranslatorA.getEncodedPseudoBIP(true);
-		if (controlpBIP !== pBIP) { throw new Error('Cannot encode the controlpBIP !'); }
-		const controlTranslatorB = new Translator( {pBIP: controlpBIP, pseudoMnemonic, BIPTables: BIPTables, version: settings.version} );
-		if (controlTranslatorB.translateMnemonic('string') !== mnemonicStr) { throw new Error('Decoded mnemonic is different from the original one !'); }*/
-	
 		const controlTranslatorC = new controlTranslator( {pBIP, pseudoMnemonic, officialBIPs} );
 		if (controlTranslatorC.translateMnemonic('string') !== mnemonicStr) { throw new Error('Decoded mnemonic is different from the original one !'); }
 	} catch (error) {
@@ -162,7 +199,7 @@ function singleTest(mnemonic, pseudoMnemonic, logs = true) {
 	}
 
 	return result;
-}
+}*/
 function generateMnemonic(length = 12, bip = "BIP-0039", language = "random") {
 	if (!BIPTables[bip]) { console.error(`BIP ${bip} not found`); return false; }
 

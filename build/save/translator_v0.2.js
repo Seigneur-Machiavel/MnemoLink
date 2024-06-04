@@ -1,6 +1,7 @@
 if (false) { // CODE NEVER REACHED, SHOWS THE IMPORTS FOR DOCUMENTATION PURPOSES
 	const bip39 = require('./bip39 3.1.0.js');
 }
+//bip39.mnemonicToSeedSync('basket actual', 'a password')
 
 const BIPTablesHardcoded = {
     "BIP-0039": {
@@ -51,6 +52,7 @@ const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxy
 export class Translator {
 	constructor(params = { mnemonic: null, pseudoMnemonic: null, pBIP: null, BIPTables: null, version: null, officialBIPs: null}) {
 		this.authorizedMnemonicLengths = [12, 24];
+		this.cryptoLib = null;
 		this.officialBIPs = {}; // Only used when file called as "lastBuildControl.js"
 		this.BIPTables = BIPTablesHardcoded;
 		this.BIPOfficialNames = BIPOfficialNamesHardcoded;
@@ -79,31 +81,26 @@ export class Translator {
 	}
 
 	#init() {
+		if (this.cryptoLib === null && !this.#getCryptoLib()) { console.error('Unable to get the crypto library'); return false; }
 		if (this.params.officialBIPs) { this.officialBIPs = this.params.officialBIPs; }
 		if (this.params.BIPTables) { this.BIPTables = this.params.BIPTables; }
 		if (this.params.version) { this.version = this.params.version; }
 
 		if (typeof this.params.pseudoMnemonic !== 'string' && typeof this.params.pseudoMnemonic !== 'object') { console.error('pseudoMnemonic is not a string or an array'); return false; }
 		this.pseudo.mnemonic = typeof this.params.pseudoMnemonic === 'string' ? this.params.pseudoMnemonic.split(' ') : this.params.pseudoMnemonic;
-		if (this.mnemonicContainsDuplicates(this.pseudo.mnemonic)) { console.error('pseudoMnemonic contains duplicates'); this.error = 'invalid pseudoMnemonic'; return false; }
 		
 		if (this.params.mnemonic && this.pseudo.mnemonic.length > 0) {
 			if (typeof this.params.mnemonic !== 'string' && typeof this.params.mnemonic !== 'object') { console.error('mnemonic is not a string or an array'); return false; }
 			
 			this.origin.mnemonic = typeof this.params.mnemonic === 'string' ? this.params.mnemonic.split(' ') : this.params.mnemonic;
-			if (this.mnemonicContainsDuplicates(this.origin.mnemonic)) { console.error('mnemonic contains duplicates'); this.error = 'invalid mnemonic'; return false; }
 
 			if (!this.#detectMnemonicsLanguage()) { console.error('detectMnemonicsLanguage() failed'); return false; }
 
-			if (!this.#genPseudoBipTable()) { console.error('#genPseudoBipTable() failed'); return false; }
 			this.initialized = true;
-		} else if (this.params.pBIP && this.pseudo.mnemonic.length > 0) {
+		} else if (this.pseudo.mnemonic.length > 0) {
 			if (!typeof this.params.pBIP === 'string') { console.error('pBIP is not a string'); return false; }
 			if (!this.#detectMnemonicsLanguage()) { console.error('detectMnemonicsLanguage() failed'); return false; }
-			
-			this.pBIP = this.params.pBIP;
 
-			if (!this.#decodeTable()) { console.info('#decodeTable() failed'); return false; }
 			this.initialized = true;
 		}
 
@@ -407,11 +404,7 @@ export class Translator {
 		const buffer = new Uint32Array(1);
 	
 		// Fill the buffer with a secure random number - manage himself browser compatibility
-		try {
-			window.crypto.getRandomValues(buffer);
-		} catch (e) {
-			crypto.getRandomValues(buffer);
-		}
+		this.cryptoLib.getRandomValues(buffer);
 	
 		// Calculate a range of numbers
 		const range = max - min + 1;
@@ -532,6 +525,196 @@ export class Translator {
 		if (wordsTable.length !== 2048 && wordsTable.length !== 4096) { console.error('wordsTable length is not 2048 or 4096'); return false }
 
 		return true;
+	}
+
+	// cryto
+	#getCryptoLib() {
+		const buffer = new Uint32Array(1);
+		try {
+			window.crypto.getRandomValues(buffer);
+			this.cryptoLib = window.crypto;
+			return true;
+		} catch (e) {
+		}
+		try {
+			crypto.getRandomValues(buffer);
+			this.cryptoLib = crypto;
+			return true;
+		} catch (error) {
+			
+		}
+		return false;
+	}
+	/**
+	 * Convert mnemonic to base64 normalized seed
+	 * - base64 is used as numeric basis to index the words
+	 */
+	#encodeMnemonic(mnemonicArray, resultLength = 24) {
+		if (!this.#isInitialized()) { console.error('Translator not initialized'); return false; }
+		if (mnemonicArray.length < 12 || mnemonicArray.length > 24) { console.error('mnemonicArray length is not 12 or 24'); return false; }
+
+		const BIPTable = this.#getBIPTableFromMnemonic(mnemonicArray);
+		if (!BIPTable) { console.error('Unable to detect the BIP and language of the mnemonic'); return false; }
+		
+		const indexTable = [];
+		for (let i = 0; i < resultLength; i++) {
+			const word = mnemonicArray[i];
+			if (word === undefined) { indexTable.push(3965); continue; } // => out of the BIP list
+			const wordIndex = BIPTable.wordsTable.indexOf(word);
+			if (wordIndex === -1) { console.error(`Word not found in BIPTable: ${word}`); return false; }
+
+			indexTable.push(wordIndex);
+		}
+
+		if (indexTable.length !== resultLength) { console.error(`indexTable length is not ${resultLength}`); return false; }
+
+		let encodedMnemonic = '';
+		for (let i = 0; i < indexTable.length; i++) {
+			const wordIndex = indexTable[i];
+			const encodedIndex = this.#encode(wordIndex);
+			encodedMnemonic += encodedIndex;
+		}
+
+		return encodedMnemonic;
+	}
+	/**
+	 * Convert base64 normalized seed to mnemonic
+	 * - base64 is used as numeric basis to index the words
+	 */
+	#decodeMnemonic(encodedMnemonic, bip = 'BIP-0039', language = 'english') {
+		if (!this.#isInitialized()) { console.error('Translator not initialized'); return false; }
+		if (!this.origin.mnemonic)
+		if (encodedMnemonic.length !== 48) { console.error('encodedMnemonic length is not 24 or 48'); return false; }
+
+		const indexTable = [];
+		for (let i = 0; i < encodedMnemonic.length; i += 2) {
+			const encodedNumber = encodedMnemonic.slice(i, i + 2);
+			const decodedNumber = this.#decode(encodedNumber);
+			indexTable.push(decodedNumber);
+		}
+
+		if (indexTable.length !== 24) { console.error('indexTable length is not 24'); return false; }
+
+		const wordsTable = this.getWordsTable(bip, language);
+		if (!wordsTable) { console.error('BIPTable not found'); return false; }
+
+		let mnemonic = [];
+		for (let i = 0; i < indexTable.length; i++) {
+			const wordIndex = indexTable[i];
+			if (wordIndex > 2048) { continue; } // Skip the words that are out of the BIP list
+
+			const word = wordsTable[wordIndex];
+			if (!word) { console.error('unable to find the word in the BIP table'); return false; }
+			mnemonic.push(word);
+		}
+
+		const mnemonicStr = mnemonic.join(' ');
+		return mnemonicStr;
+	}
+	async encryptMnemonic() {
+		if (!this.#isInitialized()) { console.error('Translator not initialized'); return false; }
+		
+		const encodedPseudoMnemonicBase64Str = this.#encodeMnemonic(this.pseudo.mnemonic, 24);
+		const encodedMnemonicBase64Str = this.#encodeMnemonic(this.origin.mnemonic, 24);
+		const key = await this.#deriveK(encodedPseudoMnemonicBase64Str);
+		const encryptedMnemonicStr = await this.#encryptText(encodedMnemonicBase64Str, key);
+
+		// control validity
+		const controlEncodedMnemonicBase64Str = await this.#decryptText(encryptedMnemonicStr, key);
+		const decodedMnemonicStr = this.#decodeMnemonic(controlEncodedMnemonicBase64Str);
+		const isValid = this.origin.mnemonic.join(' ') === decodedMnemonicStr;
+		if (!isValid) { 
+			console.error('Decrypted mnemonic is not valid'); return false; }
+
+		return encryptedMnemonicStr;
+	}
+	async decryptMnemonic(encryptedMnemonic = '') {
+		if (!this.#isInitialized()) { console.error('Translator not initialized'); return false; }
+
+		const encodedPseudoMnemonicBase64Str = this.#encodeMnemonic(this.pseudo.mnemonic, 24);
+		const key = await this.#deriveK(encodedPseudoMnemonicBase64Str);
+		const decryptedMnemonicStr = await this.#decryptText(encryptedMnemonic, key);
+		if (!decryptedMnemonicStr) { console.error('decryptedMnemonicStr is empty'); return false; }
+
+		const decodedMnemonic = this.#decodeMnemonic(decryptedMnemonicStr);
+		if (!decodedMnemonic) { console.error('decodedMnemonic is empty'); return false; }
+
+		return decodedMnemonic;
+	}
+	async #deriveK(pseudoMnemonic) {
+		const salt = new Uint16Array(this.version);
+		const iterations = 100000 + this.version[1];
+		const keyMaterial = await this.cryptoLib.subtle.importKey(
+			"raw",
+			new TextEncoder().encode(pseudoMnemonic),
+			{ name: "PBKDF2" },
+			false,
+			["deriveKey"]
+		);
+	
+		return this.cryptoLib.subtle.deriveKey(
+			{
+				name: "PBKDF2",
+				salt: new TextEncoder().encode(salt),
+				iterations: iterations,
+				hash: "SHA-256"
+			},
+			keyMaterial,
+			{ name: "AES-GCM", length: 256 },
+			false,
+			["encrypt", "decrypt"]
+		);
+	}
+	#encodeBase64(data) {
+		// Node.js
+		if (typeof Buffer !== 'undefined') {
+			return Buffer.from(data).toString('base64');
+		}
+		// Navigator
+		let binaryString = '';
+		const bytes = new Uint8Array(data);
+		const len = bytes.byteLength;
+		for (let i = 0; i < len; i++) {
+			binaryString += String.fromCharCode(bytes[i]);
+		}
+		return window.btoa(binaryString);
+	}
+	#decodeBase64(base64) {
+		// Node.js
+		if (typeof Buffer !== 'undefined') {
+			return Buffer.from(base64, 'base64');
+		}
+		// Navigator
+		const binaryString = window.atob(base64);
+		const len = binaryString.length;
+		const bytes = new Uint8Array(len);
+		for (let i = 0; i < len; i++) {
+			bytes[i] = binaryString.charCodeAt(i);
+		}
+		return bytes;
+	}
+	async #encryptText(str, key, iv = new Uint8Array(16)) { // iv = this.cryptoLib.getRandomValues(new Uint8Array(16)); -> Will not use random IV for now
+		const encryptedContent = await this.cryptoLib.subtle.encrypt(
+			{ name: "AES-GCM", iv: iv },
+			key,
+			new TextEncoder().encode(str)
+		);
+
+		const encryptedBase64 = this.#encodeBase64(encryptedContent);
+
+		return encryptedBase64
+	}
+	async #decryptText(str, key, iv = new Uint8Array(16)) { // iv = this.cryptoLib.getRandomValues(new Uint8Array(16)); -> Will not use random IV for now
+		const strUnit8Array = this.#decodeBase64(str);
+		const decryptedContent = await this.cryptoLib.subtle.decrypt(
+			{ name: "AES-GCM", iv: new Uint8Array(iv) },
+			key,
+			strUnit8Array
+		);
+
+		const decryptedText = new TextDecoder().decode(decryptedContent);
+	
+		return decryptedText;
 	}
 
 	/**
