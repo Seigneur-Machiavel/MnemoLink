@@ -37,20 +37,21 @@ const BIPTablesHardcoded = {
 const BIPOfficialNamesHardcoded = {
     "BIP-0039": "bip39"
 };
-const versionHardcoded = [0,3];
+const versionHardcoded = [0,1];
 const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const saltStrLength = 4; // need to be a multiple of 2
 
 /**
- * Class Translator
+ * Class MnemoLinker
  * - Used to translate a mnemonic to a pseudo mnemonic and vice versa
- * @param {Object} BIPTables - The BIP tables
- * @param {Object} params - The parameters of the translator
+ * @param {Object} params
  * @param {string|string[]} params.mnemonic - The original mnemonic
  * @param {string|string[]} params.pseudoMnemonic - The pseudo mnemonic
- * @param {string} params.pBIP - The pseudo BIP
+ * @param {Object} BIPTables - The BIP tables used only by the builder!
+ * @param {string} params.version - The version of the table used only by the builder!
+ * @param {Object} params.officialBIPs - The official BIPs used only by the builder!
  */
-export class Translator {
+export class MnemoLinker {
 	constructor(params = { mnemonic: null, pseudoMnemonic: null, BIPTables: null, version: null, officialBIPs: null}) {
 		this.minMnemonicLength = 12;
 		this.cryptoLib = null;
@@ -153,9 +154,10 @@ export class Translator {
 	#getBIPTableFromMnemonic(mnemonicArray = []) {
 		let bip = '';
 		let language = '';
+		let wordsTable = [];
 
 		const BIPs = Object.keys(this.BIPTables);
-		const currentSearch = { bip: '', language: '', foundWords: [], word: ''};
+		const currentSearch = { bip: '', language: '', wordsTable: [], foundWords: [], word: ''};
 		let bestSearch = { bip: '', language: '', foundWords: [], word: ''};
 
 		for (let i = 0; i < BIPs.length; i++) {
@@ -165,18 +167,19 @@ export class Translator {
 			for (let j = 0; j < languages.length; j++) {
 				currentSearch.foundWords = [];
 				currentSearch.language = languages[j];
-				const wordsTable = this.BIPTables[currentSearch.bip][currentSearch.language];
+				currentSearch.wordsTable = this.getWordsTable(currentSearch.bip, currentSearch.language);
 
 				for (let k = 0; k < mnemonicArray.length; k++) {
 					currentSearch.word = mnemonicArray[k];
 
-					if (!wordsTable.includes(currentSearch.word)) { break; }
+					if (!currentSearch.wordsTable.includes(currentSearch.word)) { break; }
 					currentSearch.foundWords.push(currentSearch.word);
 					if (k < mnemonicArray.length - 1) { continue; }
 
 					if (bip !== '' || language !== '') { console.error('Multiple BIPs and/or languages found for the mnemonic'); return false; }
 					bip = currentSearch.bip;
 					language = currentSearch.language;
+					wordsTable = currentSearch.wordsTable;
 				}
 
 				if (bestSearch.foundWords.length < currentSearch.foundWords.length) {
@@ -188,9 +191,7 @@ export class Translator {
 		//if (bip === '' || language === '') { console.error(`BIP and/or language not found for the mnemonic ! Best result -> ${bestSearch.bip} | ${bestSearch.language} | words found: ${bestSearch.foundWords.length} | missing word: ${bestSearch.word}`);  return false; }
 		if (bip === '' || language === '') { return false; }
 
-		/** @type {string[]} */
-		const resultWordsTable = this.BIPTables[bip][language];
-		return { bip, language, wordsTable: resultWordsTable };
+		return { bip, language, wordsTable };
 	}
 
 	#getOriginPrefix() {
@@ -271,7 +272,7 @@ export class Translator {
 	 * - base64 is used as numeric basis to index the words
 	 */
 	#encodeMnemonic(mnemonicArray, resultLength = 24) {
-		if (!this.#isInitialized()) { console.error('Translator not initialized'); return false; }
+		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 		if (mnemonicArray.length < this.minMnemonicLength || mnemonicArray.length > 24) { console.error('mnemonicArray length is out of range'); return false; }
 
 		const BIPTable = this.#getBIPTableFromMnemonic(mnemonicArray);
@@ -303,7 +304,7 @@ export class Translator {
 	 * - base64 is used as numeric basis to index the words
 	 */
 	#decodeMnemonic(encodedMnemonic, bip = 'BIP-0039', language = 'english') {
-		if (!this.#isInitialized()) { console.error('Translator not initialized'); return false; }
+		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 		if (!this.origin.mnemonic)
 		if (encodedMnemonic.length !== 48) { console.error('encodedMnemonic length is not 24 or 48'); return false; }
 
@@ -425,7 +426,7 @@ export class Translator {
 		return result;
 	}
 	#getExternalBipLib(bip = 'BIP-0039') {
-		// code only used while translator builder run this file as "lastBuildControl.js"
+		// code only used while MnemoLinker builder run this file as "lastBuildControl.js"
 		const builderLib = this.officialBIPs[bip];
 		if (builderLib) { return builderLib; }
 
@@ -445,7 +446,7 @@ export class Translator {
 
 	// PUBLIC METHODS
 	async encryptMnemonic() {
-		if (!this.#isInitialized()) { console.error('Translator not initialized'); return false; }
+		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 		
 		const salt = this.#generateSalt();
 		const encodedPseudoMnemonicBase64Str = this.#encodeMnemonic(this.pseudo.mnemonic, 24);
@@ -463,7 +464,7 @@ export class Translator {
 		return originPrefix + encryptedMnemonicStr + salt.saltBase64Str + versionSuffix;
 	}
 	async decryptMnemoLink(mnemoLink = '') {
-		if (!this.#isInitialized()) { console.error('Translator not initialized'); return false; }
+		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 		const { encryptedMnemonic, bip, language, saltUnit16Array } = this.#dissectMnemoLink(mnemoLink);
 
 		const encodedPseudoMnemonicBase64Str = this.#encodeMnemonic(this.pseudo.mnemonic, 24);

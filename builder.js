@@ -5,7 +5,7 @@ const officialBIPs = {
 	"BIP-0039": require('./bip39 3.1.0.js')
 }
 
-const MnemoLinker = require('./MnemoMinker-src.js');
+const MnemoLinker = require('./MnemoLinker-src.js');
 let controlMnemoLinker = false;
 if (fs.existsSync('lastBuildControl.js')) {
 	controlMnemoLinker = require('./lastBuildControl.js');
