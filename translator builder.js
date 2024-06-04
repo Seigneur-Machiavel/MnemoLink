@@ -5,10 +5,10 @@ const officialBIPs = {
 	"BIP-0039": require('./bip39 3.1.0.js')
 }
 
-const Translator = require('./translator-src.js');
-let controlTranslator = false;
+const MnemoLinker = require('./MnemoMinker-src.js');
+let controlMnemoLinker = false;
 if (fs.existsSync('lastBuildControl.js')) {
-	controlTranslator = require('./lastBuildControl.js');
+	controlMnemoLinker = require('./lastBuildControl.js');
 }
 
 const BIPTables = {};
@@ -42,10 +42,10 @@ async function main() {
 		}
 	}
 
-	// MULTI TEST -> Used to control the validity of the translator before exporting it
+	// MULTI TEST -> Used to control the validity of the MnemoLinker before exporting it
 	const testResult = await testLoop(settings.testIterations || 100, 'random', 'random', [12, 24], true, false);
 	if (testResult.success === testResult.iterations) {
-		 console.log('All tests passed successfully, exporting translator...');
+		 console.log('All tests passed successfully, exporting MnemoLinker...');
 		if (testResult.needVersionUpgrade) {
 			const currentVersion = settings.version[0] + '.' + settings.version[1];
 			const newVersion = settings.version[1] + 1 < 4095 ? [settings.version[0], settings.version[1] + 1] : [settings.version[0] + 1, 0];
@@ -53,8 +53,8 @@ async function main() {
 			console.log(`Version upgraded from: ${currentVersion} to: ${settings.version[0]}.${settings.version[1]}`);
 		}
 
-		const exportSuccess = exportTranslator();
-		if (!exportSuccess) { console.error('Translator could not be exported'); return; }
+		const exportSuccess = exportMnemoLinker();
+		if (!exportSuccess) { console.error('MnemoLinker could not be exported'); return; }
 
 		const settingSaved = saveSettingsInFile(settings);
 		if (!settingSaved) { console.error('Settings could not be saved'); return; }
@@ -126,14 +126,14 @@ async function singleTest(mnemonic, pseudoMnemonic, logs = true) {
 	const mnemonicStr = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
 	if (logs) { console.log(`\nTesting with mnemonic: ${mnemonicStr}\n`) };
 
-	const translatorA = new Translator( {mnemonic, pseudoMnemonic, BIPTables, version: settings.version, officialBIPs} );
-	const mnemoLink = await translatorA.encryptMnemonic();
+	const MnemoLinkerA = new MnemoLinker( {mnemonic, pseudoMnemonic, BIPTables, version: settings.version, officialBIPs} );
+	const mnemoLink = await MnemoLinkerA.encryptMnemonic();
 	if (!mnemoLink) { result.reason = 'encryptMnemonic() failed'; return result; }
 	
-	if (logs) { console.log(`Encrypted mnemonic: ${mnemoLink}`) };
+	if (logs) { console.log(`mnemoLink: ${mnemoLink}`) };
 
-	const translatorB = new Translator( {pseudoMnemonic, BIPTables, version: settings.version, officialBIPs} );
-	const decryptedMnemonicStr = await translatorB.decryptMnemoLink(mnemoLink);
+	const MnemoLinkerB = new MnemoLinker( {pseudoMnemonic, BIPTables, version: settings.version, officialBIPs} );
+	const decryptedMnemonicStr = await MnemoLinkerB.decryptMnemoLink(mnemoLink);
 	if (!decryptedMnemonicStr) { result.reason = 'translateMnemonic() failed'; return result; }
 	if (logs) { console.log(`Decoded mnemonic: ${decryptedMnemonicStr}`) };
 
@@ -146,16 +146,16 @@ async function singleTest(mnemonic, pseudoMnemonic, logs = true) {
 		result.success = true;
 	}
 
-	if (!controlTranslator) { return result; }
+	if (!controlMnemoLinker) { return result; }
 
 	// CONTROL VERSION COMPATIBILITY
 	try {
-		const controlTranslatorA = new controlTranslator( {mnemonic, pseudoMnemonic, officialBIPs} );
-		const controlMnemoLink = await controlTranslatorA.encryptMnemonic();
+		const controlMnemoLinkerA = new controlMnemoLinker( {mnemonic, pseudoMnemonic, officialBIPs} );
+		const controlMnemoLink = await controlMnemoLinkerA.encryptMnemonic();
 		if (controlMnemoLink !== controlMnemoLink) { throw new Error('VERSIONNING CONTROL => Cannot encode the controlpBIP !'); }
 	
-		const controlTranslatorB = new controlTranslator( {pseudoMnemonic, officialBIPs} );
-		const controlDecryptedMnemonicStr = await controlTranslatorB.decryptMnemoLink(controlMnemoLink);
+		const controlMnemoLinkerB = new controlMnemoLinker( {pseudoMnemonic, officialBIPs} );
+		const controlDecryptedMnemonicStr = await controlMnemoLinkerB.decryptMnemoLink(controlMnemoLink);
 		if (controlDecryptedMnemonicStr !== mnemonicStr) { throw new Error('VERSIONNING CONTROL => Decoded mnemonic is different from the original one !'); }
 	} catch (error) {
 		result.needVersionUpgrade = true;
@@ -163,43 +163,6 @@ async function singleTest(mnemonic, pseudoMnemonic, logs = true) {
 
 	return result;
 }
-/*function singleTest(mnemonic, pseudoMnemonic, logs = true) { // DEPPRECIATED
-	const result = { success: false, needVersionUpgrade: false, reason: '' };
-	if (!mnemonic || !pseudoMnemonic) { console.error('mnemonic or pseudoMnemonic is undefined'); result.reason = 'mnemonic or pseudoMnemonic is undefined'; return result; }
-	const mnemonicStr = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
-	if (logs) { console.log(`\nTesting with mnemonic: ${mnemonicStr}\n`) };
-
-	const translatorA = new Translator( {mnemonic, pseudoMnemonic, BIPTables, version: settings.version, officialBIPs} );
-	const pBIP = translatorA.getEncodedPseudoBIP(true);
-	if (!pBIP) { console.error('getEncodedPseudoBIP() failed !'); result.reason = 'getEncodedPseudoBIP() failed'; return result; }
-	if (logs) { console.log(pBIP) };
-
-	const translatorB = new Translator( {pBIP, pseudoMnemonic, BIPTables, version: settings.version, officialBIPs} );
-	const decodedMnemonic = translatorB.translateMnemonic('string'); // output: 'array' or 'string'
-	if (!decodedMnemonic) { console.error('translateMnemonic() failed !'); result.reason = 'translateMnemonic() failed'; return result; }
-	if (logs) { console.log(`Decoded mnemonic: ${decodedMnemonic}`) };
-
-	// Check if the decoded mnemonic is the same as the original one
-	if (mnemonicStr !== decodedMnemonic) { 
-		if (logs) { console.error('Decoded mnemonic is different from the original one !') };
-		result.reason = 'Decoded mnemonic is different from the original one'; 
-		return result; 
-	} else {
-		result.success = true;
-	}
-
-	if (!controlTranslator) { return result; }
-
-	// CONTROL VERSION COMPATIBILITY
-	try {
-		const controlTranslatorC = new controlTranslator( {pBIP, pseudoMnemonic, officialBIPs} );
-		if (controlTranslatorC.translateMnemonic('string') !== mnemonicStr) { throw new Error('Decoded mnemonic is different from the original one !'); }
-	} catch (error) {
-		result.needVersionUpgrade = true;
-	}
-
-	return result;
-}*/
 function generateMnemonic(length = 12, bip = "BIP-0039", language = "random") {
 	if (!BIPTables[bip]) { console.error(`BIP ${bip} not found`); return false; }
 
@@ -285,7 +248,7 @@ function loadSettings() {
 			BIPTablesToHardcode[BIPName][language] = wordsListFromSettings; // overriden if the language is in the official BIP list
 
 			// Check if the language is in the offical BIP list
-			// - if yes, override the words list with the official name for lightening the translator
+			// - if yes, override the words list with the official name for lightening the MnemoLinker
 			const officialLanguageStr = settingsLoaded.BIPtables[BIPName].languages[language];
 			if (!officialLanguages.includes(officialLanguageStr)) { continue; }
 
@@ -348,9 +311,9 @@ function isMultipleOf1024(number) {
 }
 //#endregion
 
-function exportTranslator(logs = true) {
+function exportMnemoLinker(logs = true) {
 	try {
-		const srcFile = fs.readFileSync('translator-src.js', 'utf8');
+		const srcFile = fs.readFileSync('MnemoLinker-src.js', 'utf8');
 		const BIPTablesStr = JSON.stringify(BIPTablesToHardcode, null, 4);
 		const versionStr = JSON.stringify(settings.version);
 		const BIPOfficialNamesStr = JSON.stringify(BIPOfficialNames, null, 4);
@@ -360,12 +323,12 @@ function exportTranslator(logs = true) {
 		output = output.replace('const BIPOfficialNamesHardcoded = {};', `const BIPOfficialNamesHardcoded = ${BIPOfficialNamesStr};`);
 		const lastBuildControlFile = output;
 
-		// add export to the class Translator and remove the end of the file containing "module.exports = Translator;"
-		output = output.replace('class Translator', 'export class Translator');
+		// add export to the class MnemoLinker and remove the end of the file containing "module.exports = MnemoLinker;"
+		output = output.replace('class MnemoLinker', 'export class MnemoLinker');
 		output = output.split('//END')[0];
 	
 		const folder = 'build';
-		const outputFileName = `translator_v${settings.version[0]}.${settings.version[1]}.js`;
+		const outputFileName = `MnemoLinker_v${settings.version[0]}.${settings.version[1]}.js`;
 		const outputPath = path.join(__dirname, folder, outputFileName);
 		const controlOutputPath = path.join(__dirname, 'lastBuildControl.js');
 	
@@ -373,14 +336,14 @@ function exportTranslator(logs = true) {
 		fs.writeFileSync(controlOutputPath, lastBuildControlFile);
 
 		if (logs) { 
-			console.log(`Translator exported to: ${outputPath}`); 
+			console.log(`MnemoLinker exported to: ${outputPath}`); 
 			console.log(`Last build control exported to: ${controlOutputPath}`);
 		}
 	
 		return true;
 	} catch (error) {
 		console.error(error);
-		if (logs) { console.error('Translator could not be exported'); }
+		if (logs) { console.error('MnemoLinker could not be exported'); }
 		return false;
 	}
 }

@@ -10,15 +10,16 @@ const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxy
 const saltStrLength = 4; // need to be a multiple of 2
 
 /**
- * Class Translator
+ * Class MnemoLinker
  * - Used to translate a mnemonic to a pseudo mnemonic and vice versa
- * @param {Object} BIPTables - The BIP tables
- * @param {Object} params - The parameters of the translator
+ * @param {Object} params
  * @param {string|string[]} params.mnemonic - The original mnemonic
  * @param {string|string[]} params.pseudoMnemonic - The pseudo mnemonic
- * @param {string} params.pBIP - The pseudo BIP
+ * @param {Object} BIPTables - The BIP tables used only by the builder!
+ * @param {string} params.version - The version of the table used only by the builder!
+ * @param {Object} params.officialBIPs - The official BIPs used only by the builder!
  */
-class Translator {
+class MnemoLinker {
 	constructor(params = { mnemonic: null, pseudoMnemonic: null, BIPTables: null, version: null, officialBIPs: null}) {
 		this.minMnemonicLength = 12;
 		this.cryptoLib = null;
@@ -239,7 +240,7 @@ class Translator {
 	 * - base64 is used as numeric basis to index the words
 	 */
 	#encodeMnemonic(mnemonicArray, resultLength = 24) {
-		if (!this.#isInitialized()) { console.error('Translator not initialized'); return false; }
+		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 		if (mnemonicArray.length < this.minMnemonicLength || mnemonicArray.length > 24) { console.error('mnemonicArray length is out of range'); return false; }
 
 		const BIPTable = this.#getBIPTableFromMnemonic(mnemonicArray);
@@ -271,7 +272,7 @@ class Translator {
 	 * - base64 is used as numeric basis to index the words
 	 */
 	#decodeMnemonic(encodedMnemonic, bip = 'BIP-0039', language = 'english') {
-		if (!this.#isInitialized()) { console.error('Translator not initialized'); return false; }
+		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 		if (!this.origin.mnemonic)
 		if (encodedMnemonic.length !== 48) { console.error('encodedMnemonic length is not 24 or 48'); return false; }
 
@@ -393,7 +394,7 @@ class Translator {
 		return result;
 	}
 	#getExternalBipLib(bip = 'BIP-0039') {
-		// code only used while translator builder run this file as "lastBuildControl.js"
+		// code only used while MnemoLinker builder run this file as "lastBuildControl.js"
 		const builderLib = this.officialBIPs[bip];
 		if (builderLib) { return builderLib; }
 
@@ -413,7 +414,7 @@ class Translator {
 
 	// PUBLIC METHODS
 	async encryptMnemonic() {
-		if (!this.#isInitialized()) { console.error('Translator not initialized'); return false; }
+		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 		
 		const salt = this.#generateSalt();
 		const encodedPseudoMnemonicBase64Str = this.#encodeMnemonic(this.pseudo.mnemonic, 24);
@@ -431,7 +432,7 @@ class Translator {
 		return originPrefix + encryptedMnemonicStr + salt.saltBase64Str + versionSuffix;
 	}
 	async decryptMnemoLink(mnemoLink = '') {
-		if (!this.#isInitialized()) { console.error('Translator not initialized'); return false; }
+		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 		const { encryptedMnemonic, bip, language, saltUnit16Array } = this.#dissectMnemoLink(mnemoLink);
 
 		const encodedPseudoMnemonicBase64Str = this.#encodeMnemonic(this.pseudo.mnemonic, 24);
@@ -495,4 +496,4 @@ class Translator {
 */
 
 //END --- ANY CODE AFTER THIS LINE WILL BE REMOVED DURING EXPORT, SHOULD BE USE FOR TESTING ONLY ---
-module.exports = Translator;
+module.exports = MnemoLinker;
