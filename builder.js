@@ -30,7 +30,9 @@ async function main() {
 			pseudoMnemonic: ["abaisser","abandon","abdiquer","abeille","abeille","aborder","aboutir","aboyer","abrasif","abreuver","abriter","abroger"]
 		},
 	];
+	let singleTestTimings = [];
 	for (let i = 0; i < customTestMnemonics.length; i++) {
+		const startTimestamp = Date.now();
 		const mnemonic_ = customTestMnemonics[i].mnemonic;
 		const pseudoMnemonic_ = customTestMnemonics[i].pseudoMnemonic;
 		const singleTestResult = await singleTest(mnemonic_, pseudoMnemonic_);
@@ -40,12 +42,17 @@ async function main() {
 			console.error(`pseudoMnemonic: ${pseudoMnemonic_}`);
 			return;
 		}
+		const endTimestamp = Date.now();
+		singleTestTimings.push(endTimestamp - startTimestamp);
 	}
+	console.log(`Custom tests passed successfully in avg: ${singleTestTimings.reduce((a, b) => a + b, 0) / singleTestTimings.length}ms`);
 
 	// MULTI TEST -> Used to control the validity of the MnemoLinker before exporting it
 	const testResult = await testLoop(settings.testIterations || 100, 'random', 'random', [12, 24], true, false);
 	if (testResult.success === testResult.iterations) {
-		 console.log('All tests passed successfully, exporting MnemoLinker...');
+		console.log('-------------------------------------------------------');
+		console.log('All tests passed successfully, exporting MnemoLinker...');
+		console.log(`avg time: ${testResult.avgTime}ms`);
 		if (testResult.needVersionUpgrade) {
 			const currentVersion = settings.version[0] + '.' + settings.version[1];
 			const newVersion = settings.version[1] + 1 < 4095 ? [settings.version[0], settings.version[1] + 1] : [settings.version[0] + 1, 0];
@@ -74,6 +81,7 @@ async function testLoop(iterations = 100, language = "random", pseudoLanguage = 
 	let success = 0;
 	let failure = 0;
 	let needVersionUpgrade = false;
+	let singleTestTimings = [];
 	const failureInfos = [];
 	for (let i = 0; i < iterations; i++) {
 		const mnemonicLength = mnemonicLengths[ getRandomInt(0, mnemonicLengths.length - 1) ];
@@ -81,6 +89,7 @@ async function testLoop(iterations = 100, language = "random", pseudoLanguage = 
 		const gen2 = generateMnemonic(12, 'BIP-0039', pseudoLanguage);
 		const mnemonic = gen1.wordsList;
 		const pseudoMnemonic = gen2.wordsList;
+		const startTimestamp = Date.now();
 		
 		const result = await singleTest(mnemonic, pseudoMnemonic, logs);
 		if (result.success === true) { 
@@ -95,12 +104,14 @@ async function testLoop(iterations = 100, language = "random", pseudoLanguage = 
 			});
 			failure++;
 		}
-
+		const endTimestamp = Date.now();
+		singleTestTimings.push(endTimestamp - startTimestamp);
 		updateProgressBar(i + 1, iterations);
 	}
 	console.log(`\n\nSuccess: ${success} / Failure: ${failure}`);
+	const avgTime = singleTestTimings.reduce((a, b) => a + b, 0) / singleTestTimings.length;
 
-	return { success, failure, iterations, failureInfos, needVersionUpgrade };
+	return { success, failure, iterations, failureInfos, needVersionUpgrade, avgTime };
 }
 function updateProgressBar(current, total) {
     const length = 50;
@@ -163,7 +174,7 @@ async function singleTest(mnemonic, pseudoMnemonic, logs = true) {
 
 	return result;
 }
-function generateMnemonic(length = 12, bip = "BIP-0039", language = "random") {
+function generateMnemonic(length = 12, bip = "BIP-0039", language = "random") { // TESTING ONLY - INVALID MNEMONICS !
 	if (!BIPTables[bip]) { console.error(`BIP ${bip} not found`); return false; }
 
 	const BIPLanguages = Object.keys(BIPTables[bip]);
@@ -175,10 +186,7 @@ function generateMnemonic(length = 12, bip = "BIP-0039", language = "random") {
 	const BIPTable = BIPTables[bip][BIPlangague];
 	const mnemonic = [];
 	for (let i = 0; i < length; i++) {
-		let rnd = getRandomInt(0, BIPTable.length - 1);
-		while(mnemonic.includes(BIPTable[rnd])) {
-			rnd = getRandomInt(0, BIPTable.length - 1);
-		}
+		const rnd = getRandomInt(0, BIPTable.length - 1);
 		mnemonic.push(BIPTable[rnd]);
 	}
 

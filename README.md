@@ -1,4 +1,4 @@
-# MnemoShift: A Pseudo Mnemonic Generator
+# MnemoLinker: Generate a Master key, linked to others.
 
 
 ## Overview
