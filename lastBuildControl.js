@@ -378,7 +378,7 @@ class MnemoLinker {
 			["deriveKey"]
 		);
 	
-		return this.cryptoLib.subtle.deriveKey(
+		const derivedKey = await this.cryptoLib.subtle.deriveKey(
 			{
 				name: "PBKDF2",
 				salt: new TextEncoder().encode(salt),
@@ -390,6 +390,8 @@ class MnemoLinker {
 			false,
 			["encrypt", "decrypt"]
 		);
+
+		return derivedKey;
 	}
 	async #encryptText(str, key, iv = new Uint8Array(16)) { // iv = this.cryptoLib.getRandomValues(new Uint8Array(16)); -> Will not use random IV for now
 		const encryptedContent = await this.cryptoLib.subtle.encrypt(
