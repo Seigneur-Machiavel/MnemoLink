@@ -1404,6 +1404,9 @@ eHTML.modals.inputMnemonic.mnemonicGrid.addEventListener('input', (event) => {
 	const language = modal.randomizeBtn.classList[1];
 	const suggestions = emptyMnemoLinker.getSuggestions(value, bip, language);
 	if (!suggestions) { return; }
+
+	// USE 
+	// emptyMnemoLinker.getBIPTableFromMnemonic(mnemonic);
 	
 	const extracted = switchBtnsIfMnemonicGridIsFilled(modal.wrap.id);
 	if (suggestions.length === 1 && isWordInWordsList(suggestions[0], bip, language)) {

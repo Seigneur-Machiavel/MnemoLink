@@ -151,48 +151,6 @@ class MnemoLinker {
 		
 		return true;
 	}
-	getBIPTableFromMnemonic(mnemonicArray = []) {
-		let bip = '';
-		let language = '';
-		let wordsTable = [];
-
-		const BIPs = Object.keys(this.BIPTables);
-		const currentSearch = { bip: '', language: '', wordsTable: [], foundWords: [], word: ''};
-		let bestSearch = { bip: '', language: '', foundWords: [], word: ''};
-
-		for (let i = 0; i < BIPs.length; i++) {
-			currentSearch.bip = BIPs[i];
-			const languages = Object.keys(this.BIPTables[currentSearch.bip]);
-
-			for (let j = 0; j < languages.length; j++) {
-				currentSearch.foundWords = [];
-				currentSearch.language = languages[j];
-				currentSearch.wordsTable = this.getWordsTable(currentSearch.bip, currentSearch.language);
-
-				for (let k = 0; k < mnemonicArray.length; k++) {
-					currentSearch.word = mnemonicArray[k];
-
-					if (!currentSearch.wordsTable.includes(currentSearch.word)) { break; }
-					currentSearch.foundWords.push(currentSearch.word);
-					if (k < mnemonicArray.length - 1) { continue; }
-
-					if (bip !== '' || language !== '') { console.error('Multiple BIPs and/or languages found for the mnemonic'); return false; }
-					bip = currentSearch.bip;
-					language = currentSearch.language;
-					wordsTable = currentSearch.wordsTable;
-				}
-
-				if (bestSearch.foundWords.length < currentSearch.foundWords.length) {
-					bestSearch = Object.assign({}, currentSearch);
-				}
-			}
-		}
-
-		//if (bip === '' || language === '') { console.error(`BIP and/or language not found for the mnemonic ! Best result -> ${bestSearch.bip} | ${bestSearch.language} | words found: ${bestSearch.foundWords.length} | missing word: ${bestSearch.word}`);  return false; }
-		if (bip === '' || language === '') { return false; }
-
-		return { bip, language, wordsTable };
-	}
 
 	#getOriginPrefix() {
 		if (this.origin.bip === '') { console.error('#getOriginPrefix(): bip is empty'); return false; }
@@ -523,6 +481,48 @@ class MnemoLinker {
 
 			return wordsList;
 		}
+	}
+	getBIPTableFromMnemonic(mnemonicArray = []) {
+		let bip = '';
+		let language = '';
+		let wordsTable = [];
+
+		const BIPs = Object.keys(this.BIPTables);
+		const currentSearch = { bip: '', language: '', wordsTable: [], foundWords: [], word: ''};
+		let bestSearch = { bip: '', language: '', foundWords: [], word: ''};
+
+		for (let i = 0; i < BIPs.length; i++) {
+			currentSearch.bip = BIPs[i];
+			const languages = Object.keys(this.BIPTables[currentSearch.bip]);
+
+			for (let j = 0; j < languages.length; j++) {
+				currentSearch.foundWords = [];
+				currentSearch.language = languages[j];
+				currentSearch.wordsTable = this.getWordsTable(currentSearch.bip, currentSearch.language);
+
+				for (let k = 0; k < mnemonicArray.length; k++) {
+					currentSearch.word = mnemonicArray[k];
+
+					if (!currentSearch.wordsTable.includes(currentSearch.word)) { break; }
+					currentSearch.foundWords.push(currentSearch.word);
+					if (k < mnemonicArray.length - 1) { continue; }
+
+					if (bip !== '' || language !== '') { console.error('Multiple BIPs and/or languages found for the mnemonic'); return false; }
+					bip = currentSearch.bip;
+					language = currentSearch.language;
+					wordsTable = currentSearch.wordsTable;
+				}
+
+				if (bestSearch.foundWords.length < currentSearch.foundWords.length) {
+					bestSearch = Object.assign({}, currentSearch);
+				}
+			}
+		}
+
+		//if (bip === '' || language === '') { console.error(`BIP and/or language not found for the mnemonic ! Best result -> ${bestSearch.bip} | ${bestSearch.language} | words found: ${bestSearch.foundWords.length} | missing word: ${bestSearch.word}`);  return false; }
+		if (bip === '' || language === '') { return false; }
+
+		return { bip, language, wordsTable };
 	}
 }
 
