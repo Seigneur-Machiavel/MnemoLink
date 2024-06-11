@@ -335,7 +335,7 @@ function exportMnemoLinker(logs = true) {
 		output = output.replace('class MnemoLinker', 'export class MnemoLinker');
 		output = output.split('//END')[0];
 	
-		const folder = 'build';
+		const folder = 'builds';
 		const outputFileName = `MnemoLinker_v${settings.version[0]}.${settings.version[1]}.js`;
 		const outputPath = path.join(__dirname, folder, outputFileName);
 		const controlOutputPath = path.join(__dirname, 'lastBuildControl.js');

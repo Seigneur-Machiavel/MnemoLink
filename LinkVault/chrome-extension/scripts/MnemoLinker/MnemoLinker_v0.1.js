@@ -51,7 +51,7 @@ const saltStrLength = 4; // need to be a multiple of 2
  * @param {string} params.version - The version of the table used only by the builder!
  * @param {Object} params.officialBIPs - The official BIPs used only by the builder!
  */
-class MnemoLinker {
+export class MnemoLinker {
 	constructor(params = { mnemonic: null, pseudoMnemonic: null, BIPTables: null, version: null, officialBIPs: null}) {
 		this.minMnemonicLength = 12;
 		this.cryptoLib = null;
@@ -529,5 +529,3 @@ class MnemoLinker {
 /* CODE RELEASED ONLY WHEN EXPORTED --- DONT USE "//" or "/*" COMMENTS IN THIS SECTION !!! ---
 */
 
-//END --- ANY CODE AFTER THIS LINE WILL BE REMOVED DURING EXPORT, SHOULD BE USE FOR TESTING ONLY ---
-module.exports = MnemoLinker;

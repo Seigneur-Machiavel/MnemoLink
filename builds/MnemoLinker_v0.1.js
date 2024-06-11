@@ -133,7 +133,7 @@ export class MnemoLinker {
 	}
 	#detectMnemonicsLanguage() {
 		// DETECT THE BIP AND LANGUAGE OF THE MNEMONICS
-		const originBIPTable = this.#getBIPTableFromMnemonic(this.origin.mnemonic);
+		const originBIPTable = this.getBIPTableFromMnemonic(this.origin.mnemonic);
 		if (originBIPTable) {
 			// SET THE ORIGIN BIP TABLES
 			this.origin.BIPTable = originBIPTable.wordsTable;
@@ -141,7 +141,7 @@ export class MnemoLinker {
 			this.origin.language = originBIPTable.language;
 		}
 
-		const pseudoBIPTable = this.#getBIPTableFromMnemonic(this.pseudo.mnemonic);
+		const pseudoBIPTable = this.getBIPTableFromMnemonic(this.pseudo.mnemonic);
 		if (pseudoBIPTable) {
 			// SET THE PSEUDO BIP TABLES
 			this.pseudo.BIPTable = pseudoBIPTable.wordsTable;
@@ -151,7 +151,7 @@ export class MnemoLinker {
 		
 		return true;
 	}
-	#getBIPTableFromMnemonic(mnemonicArray = []) {
+	getBIPTableFromMnemonic(mnemonicArray = []) {
 		let bip = '';
 		let language = '';
 		let wordsTable = [];
@@ -275,7 +275,7 @@ export class MnemoLinker {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 		if (mnemonicArray.length < this.minMnemonicLength || mnemonicArray.length > 24) { console.error('mnemonicArray length is out of range'); return false; }
 
-		const BIPTable = this.#getBIPTableFromMnemonic(mnemonicArray);
+		const BIPTable = this.getBIPTableFromMnemonic(mnemonicArray);
 		if (!BIPTable) { console.error('Unable to detect the BIP and language of the mnemonic'); return false; }
 		
 		const indexTable = [];
