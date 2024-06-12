@@ -295,19 +295,28 @@ function removeNonAlphabeticChars(str) {
 }
 function arrayFromTxtList(path) {
 	try {
-		const result = [];
 		const data = fs.readFileSync(path, 'utf8');
-		const lines = data.split('\r\n');
-	
-		for (let i = 0; i < lines.length; i++) {
-			const line = lines[i];
-			if (line === '' || line.length === 0) { continue; }
-			result.push(line);
-		}
-	
-		if (!isMultipleOf1024(result.length)) { console.error('wordsList length is not a multiple of 1024'); return false;}
 
-		return result;
+		function digestData(data, mode = 'windows') {
+			const res = [];
+			const lines = mode === 'windows' ? data.split('\r\n') : data.split('\n');
+		
+			for (let i = 0; i < lines.length; i++) {
+				const line = lines[i];
+				if (line === '' || line.length === 0) { continue; }
+				res.push(line);
+			}
+
+			return res;
+		}
+
+		const windowsData = digestData(data, 'windows');
+		const linuxData = digestData(data, 'linux');
+	
+		if (!isMultipleOf1024(windowsData.length) && !isMultipleOf1024(linuxData.length)) { console.error('wordsList length is not a multiple of 1024'); return false; }
+		const dataToUse = isMultipleOf1024(windowsData.length) ? windowsData : linuxData;
+
+		return dataToUse;
 	} catch (error) {
 		console.error(error);
 	}
