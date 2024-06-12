@@ -25,14 +25,6 @@ const cryptoLight = {
         
         return { key, hash, salt: this.salt, iv: this.iv, saltStr: this.bufferToHex(this.salt), ivStr: this.bufferToHex(this.iv) };
     },
-    bufferToHex(buffer) {
-        return Array.from(new Uint8Array(buffer))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
-    },
-    hexToBuffer(hex) {
-        return new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-    },
     async deriveK(str, iterations = 2000000) {
         if (this.salt === null) { return false; }
         const startTimestamp = Date.now();
@@ -62,6 +54,14 @@ const cryptoLight = {
 
         return derivedKey;
     },
+    bufferToHex(buffer) {
+        return Array.from(new Uint8Array(buffer))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+    },
+    hexToBuffer(hex) {
+        return new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+    },
     async encryptText(str) {
         if (!this.iv) { return false; }
 
@@ -76,13 +76,15 @@ const cryptoLight = {
     async decryptText(str) {
         if (!this.iv) { return false; }
         
+        const buffer = this.hexToBuffer(str);
         const decryptedContent = await window.crypto.subtle.decrypt(
             { name: "AES-GCM", iv: this.iv },
             this.key,
-            str
+            buffer
         );
 
-        return decryptedContent;
+        const dec = new TextDecoder();
+        return dec.decode(decryptedContent);
     },
     generateRandomSalt() {
         const saltUnit8Array = new Uint8Array(16);

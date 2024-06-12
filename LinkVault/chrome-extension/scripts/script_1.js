@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			const res = await cryptoLight.init(password, saltStr, ivStr);
 			if (!res.hash === hash) { console.error('Wrong password'); return; }
 
-			console.log(`Password hash: ${res.hash}`);
+			console.log(`Ready to decrypt !`);
 		});
     });
 });
@@ -40,44 +40,78 @@ class mnemonicObject {
 	getMnemonicStr() {
 		return this.mnemonic.join(' ');
 	}
+	getIndexedMnemonicStr() {
+		let mnemonicStr = "";
+		for (let i = 0; i < this.mnemonic.length; i++) {
+			mnemonicStr += `${i + 1}. ${this.mnemonic[i]}\n`;
+		}
+		return mnemonicStr;
+	}
 }
 class userDataClass {
 	constructor() {
 		/** @type {mnemonicObject[]} */
-		this.mnemonics = {};
+		this.encryptedMnemonicsStr = {};
+		this.preferences = {
+			darkMode: false,
+		};
 	}
-	setMnemonic(label, mnemonic = new mnemonicObject()) {
-		this.mnemonics[label] = mnemonic;
+	async setMnemonicAsEncrypted(label, mnemonicStr = "") {
+		const mnemonicStrEncrypted = await this.#encryptMnemonicForLocalStorage(mnemonicStr);
+		if (!mnemonicStrEncrypted) { return false; }
+
+		this.encryptedMnemonicsStr[label] = mnemonicStrEncrypted;
+		return true;
 	}
 	clearMnemonic(label) {
-		this.mnemonics[label] = new mnemonicObject();
+		delete this.encryptedMnemonicsStr[label];
 	}
-	getMnemonicObject(label) {
-		if (!this.mnemonics[label]) { return false; }
-		return this.mnemonics[label];
+
+	async #encryptMnemonicForLocalStorage(mnemonicStr = "") {
+		const buffer = await cryptoLight.encryptText(mnemonicStr);
+		if (!buffer) { return false; }
+
+		return cryptoLight.bufferToHex(buffer);
 	}
-	getMnemonicArray(label) {
-		if (!this.mnemonics[label]) { return false; }
-		return this.mnemonics[label].mnemonic;
-	}
-	getMnemonicStr(label) {
-		if (!this.mnemonics[label]) { return false; }
-		return this.mnemonics[label].getMnemonicStr();
-	}
-	getIndexedMnemonicStr(label) {
-		if (!this.isMnemonicFilled(label)) { return false; }
-		const mnemonic = this.getMnemonicArray(label);
-		console.log(mnemonic);
-		let mnemonicStr = "";
-		for (let i = 0; i < mnemonic.length; i++) {
-			const word = mnemonic[i]; console.log(word);
-			mnemonicStr += `${i + 1}. ${word}\n`;
-		}
+	async #decryptMnemonicFromLocalStorage(mnemonicStrEncrypted = "") {
+		const mnemonicStr = await cryptoLight.decryptText(mnemonicStrEncrypted);
+		if (!mnemonicStr) { return false; }
+
 		return mnemonicStr;
 	}
+	async getMnemonicArray(label) {
+		if (!this.encryptedMnemonicsStr[label]) { return false; }
+		const mnemonicStr = await this.#decryptMnemonicFromLocalStorage(this.encryptedMnemonicsStr[label]);
+		if (!mnemonicStr) { return false; }
+
+		return mnemonicStr.split(' ');
+	}
+	async getMnemonicStr(label) {
+		if (!this.encryptedMnemonicsStr[label]) { return false; }
+		const mnemonicStr = await this.#decryptMnemonicFromLocalStorage(this.encryptedMnemonicsStr[label]);
+		if (!mnemonicStr) { return false; }
+
+		return mnemonicStr;
+	}
+	async getIndexedMnemonicStr(label) {
+		if (!this.isMnemonicFilled(label)) { return false; }
+		const mnemonicStrDecrypted = await this.#decryptMnemonicFromLocalStorage(this.encryptedMnemonicsStr[label]);
+		if (!mnemonicStrDecrypted) { return false; }
+
+		const mnemonicArray = mnemonicStrDecrypted.split(' ');
+		
+		let mnemonicStr = "";
+		for (let i = 0; i < mnemonicArray.length; i++) {
+			mnemonicStr += `${i + 1}. ${mnemonicArray[i]}\n`;
+		}
+
+		return mnemonicStr;
+	}
+	getListOfMnemonics() {
+		return Object.keys(this.encryptedMnemonicsStr);
+	}
 	isMnemonicFilled(label) {
-		if (!this.mnemonics[label]) { return false; }
-		if (!this.mnemonics[label].isFilled()) { return false; }
+		if (!this.encryptedMnemonicsStr[label]) { return false; }
 		return true;
 	}
 }
@@ -154,13 +188,73 @@ const tempData = {
 let MnemoLinker = null;
 /** @type {MnemoLinker} */
 let emptyMnemoLinker = null;
-(async () => {
-	MnemoLinker = await window.MnemoLinker["v" + settings.mnemoLinkerVersion];
-	emptyMnemoLinker = new MnemoLinker();
-})();
 //#endregion
 
-//#region - PRELOAD FUNCTIONS - ( They need to be created before html elements who use them )
+//#region - STORAGE FUNCTIONS
+const save = {
+	logs: true,
+	all() {
+		const saveFunctions = Object.keys(save).filter((key) => key !== "all" && key !== "logs");
+		saveFunctions.forEach((func) => { save[func](); });
+	},
+	userEncryptedMnemonicsStr() {
+		const data = userData.encryptedMnemonicsStr;
+		storeDataLocally('encryptedMnemonicsStr', data, save.logs);
+	},
+	userPreferences() {
+		const data = userData.preferences;
+		storeDataLocally('preferences', data, save.logs);
+	}
+}
+const load = {
+	logs: true,
+	all() {
+		const loadFunctions = Object.keys(load).filter((key) => key !== "all" && key !== "logs");
+		loadFunctions.forEach((func) => { load[func](); });
+	},
+	userEncryptedMnemonicsStr() {
+		getDataLocally('encryptedMnemonicsStr').then((data) => {
+			const logMsg = !data ? 'No encryptedMnemonicsStr found !' : 'EncryptedMnemonicsStr loaded !';
+			if (load.logs) { console.log(logMsg); }
+			if (!data) { return; }
+
+			userData.encryptedMnemonicsStr = data;
+		});
+	},
+	userPreferences() {
+		getDataLocally('preferences').then((data) => {
+			const logMsg = !data ? 'No preferences found !' : 'Preferences loaded !';
+			if (load.logs) { console.log(logMsg); }
+			if (!data) { return; }
+
+			userData.preferences = data;
+		});
+	}
+}
+function storeDataLocally(key = "toto", data, logs = false) {
+	try {
+		chrome.storage.local.set({ [key]: data }, function(result) {
+			console.log(result);
+			if (logs) { console.log(`${key} stored, data: ${data}`); }
+		});
+	} catch (error) {
+		if (logs) { console.error(`Error while storing ${key}, data: ${data}`); }
+	}
+}
+async function getDataLocally(key = "toto") {
+	const fromStorage = await chrome.storage.local.get([key])
+	if (!fromStorage[key]) { return false; }
+	return fromStorage[key];
+}
+//#endregion
+
+//#region - PRELOAD FUNCTIONS
+async function asyncInitLoad() {
+	load.all();
+
+	MnemoLinker = await window.MnemoLinker["v" + settings.mnemoLinkerVersion];
+	emptyMnemoLinker = new MnemoLinker();
+}; asyncInitLoad(); // auto execute
 function toggleDarkMode(element) {
 	if (element.checked) {
 		document.body.classList.add('dark-mode');
@@ -187,8 +281,7 @@ const eHTML = {
 			wrap : document.getElementById('masterMnemonicModalWrap'),
 			element: document.getElementById('masterMnemonicModalWrap').getElementsByClassName('modal')[0],
 			/*bipList : document.getElementById('masterMnemonicModalWrap').getElementsByClassName('optionsList')[0],
-			languageList : document.getElementById('masterMnemonicModalWrap').getElementsByClassName('optionsList')[1],
-			lengthList : document.getElementById('masterMnemonicModalWrap').getElementsByClassName('optionsList')[2],*/
+			languageList : document.getElementById('masterMnemonicModalWrap').getElementsByClassName('optionsList')[1],*/
 			previousLanguageBtn : document.getElementById('masterMnemonicModalWrap').getElementsByClassName('arrowButton')[0],
 			randomizeBtn : document.getElementById('masterMnemonicModalWrap').getElementsByClassName('languageSelectionBtn')[0],
 			nextLanguageBtn : document.getElementById('masterMnemonicModalWrap').getElementsByClassName('arrowButton')[1],
@@ -310,16 +403,16 @@ function cryptoRnd(min, max) {
 
 	return Math.floor(randomValue * (max - min + 1) + min);
 }
-async function randomizeMasterMnemonic(asPlaceholder = false) {
+async function randomizeMnemonic(modal = eHTML.modals.inputMasterMnemonic, asPlaceholder = false) {
 	const mnemonic = [];
 	const bip = "BIP-0039";
-	const language = eHTML.modals.inputMasterMnemonic.randomizeBtn.classList[1];
+	const language = modal.randomizeBtn.classList[1];
 	const wordsList = emptyMnemoLinker.getWordsTable(bip, language);
 	if (!wordsList) { return; }
 
-	eHTML.modals.inputMasterMnemonic.mnemonicGrid.classList.add('busy');
+	modal.mnemonicGrid.classList.add('busy');
 
-	const mnemonicGridInputs = eHTML.modals.inputMasterMnemonic.mnemonicGridInputs;
+	const mnemonicGridInputs = modal.mnemonicGridInputs;
 	mnemonicGridInputs.forEach((input) => { input.value = ""; input.placeholder = "";  });
 
 	for (let i = 0; i < mnemonicGridInputs.length; i++) {
@@ -340,7 +433,7 @@ async function randomizeMasterMnemonic(asPlaceholder = false) {
 
 	tempData.init();
 	tempData.rndMnemonic = mnemonic;
-	eHTML.modals.inputMasterMnemonic.mnemonicGrid.classList.remove('busy');
+	modal.mnemonicGrid.classList.remove('busy');
 }
 function getRandomWord(wordsList = []) {
 	const wordsListLength = wordsList.length;
@@ -813,6 +906,10 @@ function openModal(modalName = '') {
 	});
 }
 function closeModal() {
+	// clear inputs
+	initMnemonicInputs(eHTML.modals.inputMasterMnemonic.mnemonicGridInputs);
+	initMnemonicInputs(eHTML.modals.inputMnemonic.mnemonicGridInputs);
+
 	const modalsWrap = eHTML.modals.wrap;
 	if (modalsWrap.classList.contains('fold')) { return false; }
 	modalsWrap.classList.add('fold');
@@ -1200,11 +1297,13 @@ document.addEventListener('click', (event) => {
 centerScreenBtn.addEventListener('click', async (event) => {
 	if (!userData.isMnemonicFilled('master')) {
 		openModal('inputMasterMnemonic');
-		await randomizeMasterMnemonic(true);
+		await randomizeMnemonic(eHTML.modals.inputMasterMnemonic, true);
 		eHTML.modals.inputMasterMnemonic.mnemonicGridInputs[0].focus();
 		return;
 	}
 
+	// if master mnemonic is already filled
+	toggleDashboard();
 });
 // MODAL : MASTER MNEMONIC
 eHTML.modals.wrap.addEventListener('click', (event) => {
@@ -1221,9 +1320,9 @@ eHTML.modals.inputMasterMnemonic.previousLanguageBtn.addEventListener('click', a
 	if (!previousLanguage) { console.error('previousLanguage not found'); return; }
 
 	languageBtn.classList = `languageSelectionBtn ${previousLanguage}`;
-	await randomizeMasterMnemonic(true);
+	await randomizeMnemonic(eHTML.modals.inputMasterMnemonic, true);
 	switchBtnsIfMnemonicGridIsFilled(eHTML.modals.inputMasterMnemonic.wrap.id);
-	userData.clearMnemonic('master');
+	tempData.init();
 	eHTML.modals.inputMasterMnemonic.mnemonicGridInputs[0].focus();
 });
 eHTML.modals.inputMasterMnemonic.nextLanguageBtn.addEventListener('click', async (event) => {
@@ -1237,14 +1336,14 @@ eHTML.modals.inputMasterMnemonic.nextLanguageBtn.addEventListener('click', async
 	if (!nextLanguage) { console.error('nextLanguage not found'); return; }
 
 	languageBtn.classList = `languageSelectionBtn ${nextLanguage}`;
-	await randomizeMasterMnemonic(true);
+	await randomizeMnemonic(eHTML.modals.inputMasterMnemonic, true);
 	switchBtnsIfMnemonicGridIsFilled(eHTML.modals.inputMasterMnemonic.wrap.id);
-	userData.clearMnemonic('master');
+	tempData.init();
 	eHTML.modals.inputMasterMnemonic.mnemonicGridInputs[0].focus();
 });
 eHTML.modals.inputMasterMnemonic.randomizeBtn.addEventListener('click', async (event) => {
 	if (eHTML.modals.inputMasterMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
-	await randomizeMasterMnemonic(false);
+	await randomizeMnemonic(eHTML.modals.inputMasterMnemonic, false);
 	actualizeScore();
 	eHTML.modals.inputMasterMnemonic.mnemonicGridInputs[0].focus();
 
@@ -1344,17 +1443,20 @@ eHTML.modals.inputMasterMnemonic.mnemonicGrid.addEventListener('click', (event) 
 });
 eHTML.modals.inputMasterMnemonic.copyMnemonicBtn.addEventListener('click', (event) => {
 	if (eHTML.modals.inputMasterMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
-	const mnemonicStr = userData.getIndexedMnemonicStr('master');
+	//const indexedMnemonicStr = tempData.mnemonic.getIndexedMnemonicStr();
+	//if (!indexedMnemonicStr) { return; }
+	const mnemonicStr = tempData.mnemonic.getMnemonicStr();
 	if (!mnemonicStr) { return; }
+
 	navigator.clipboard.writeText(mnemonicStr);
 	modalInfo(eHTML.modals.inputMasterMnemonic, 'Mnemonic copied to clipboard');
 });
 eHTML.modals.inputMasterMnemonic.downloadMnemonicBtn.addEventListener('click', (event) => {
 	if (eHTML.modals.inputMasterMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
-	const mnemonicStr = userData.getIndexedMnemonicStr('master');
-	if (!mnemonicStr) { return; }
+	const indexedMnemonicStr = tempData.mnemonic.getIndexedMnemonicStr();
+	if (!indexedMnemonicStr) { return; }
 	
-	const blob = new Blob([mnemonicStr], { type: "text/plain" });
+	const blob = new Blob([indexedMnemonicStr], { type: "text/plain" });
 	const url = URL.createObjectURL(blob);
 	const a = document.createElement('a');
 	a.href = url;
@@ -1366,17 +1468,23 @@ eHTML.modals.inputMasterMnemonic.downloadMnemonicBtn.addEventListener('click', (
 		URL.revokeObjectURL(url);
 	}, 0);
 });
-eHTML.modals.inputMasterMnemonic.confirmBtn.addEventListener('click', (event) => {
+eHTML.modals.inputMasterMnemonic.confirmBtn.addEventListener('click', async (event) => {
+	if (eHTML.modals.inputMasterMnemonic.confirmBtn.classList.contains('busy')) { return; }
 	if (eHTML.modals.inputMasterMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
 	if (eHTML.modals.inputMasterMnemonic.confirmBtn.classList.contains('disabled')) { return; }
 
-	const mnemonic = tempData.mnemonic;
+	const mnemonic = tempData.mnemonic.getMnemonicStr();
 	if (!mnemonic) { console.error('mnemonic not found'); return; }
 
-	userData.setMnemonic('master', mnemonic);
+	eHTML.modals.inputMasterMnemonic.confirmBtn.classList.add('busy');
+
+	await userData.setMnemonicAsEncrypted('master', mnemonic);
+	save.userEncryptedMnemonicsStr();
 	tempData.init();
 	
 	closeModal();
+
+	eHTML.modals.inputMasterMnemonic.confirmBtn.classList.remove('busy');
 });
 // MODAL : INPUT MNEMONIC - used to add a new mnemonic or show an existing one
 eHTML.modals.inputMnemonic.wrap.addEventListener('click', (event) => {
@@ -1384,9 +1492,7 @@ eHTML.modals.inputMnemonic.wrap.addEventListener('click', (event) => {
 });
 eHTML.modals.inputMnemonic.randomizeBtn.addEventListener('click', async (event) => {
 	if (eHTML.modals.inputMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
-	await randomizeMnemonic(false);
-	actualizeScore();
-	eHTML.modals.inputMnemonic.mnemonicGridInputs[0].focus();
+	await randomizeMnemonic(eHTML.modals.inputMnemonic, false);
 
 	const extracted = switchBtnsIfMnemonicGridIsFilled(eHTML.modals.inputMnemonic.wrap.id);
 	if (!extracted || !extracted.allWordsAreValid) { return; }
@@ -1400,24 +1506,24 @@ eHTML.modals.inputMnemonic.mnemonicGrid.addEventListener('input', (event) => {
 	const value = input.value.replace(/[^a-zA-Z]/g, '').toLowerCase();
 	event.target.value = value;
 	
-	const bip = "BIP-0039";
-	const language = modal.randomizeBtn.classList[1];
+	let bip = "BIP-0039";
+	let language = modal.randomizeBtn.classList[1];
+
+	// try to find the language
+	const extracted = switchBtnsIfMnemonicGridIsFilled(modal.wrap.id);
+	if (extracted && extracted.mnemonic.mnemonic.length > 2) {
+		const extractedMnemonic = extracted.mnemonic.mnemonic;
+		if (!extracted.allWordsAreValid && extractedMnemonic.length > 1) {
+			const result = emptyMnemoLinker.getBIPTableFromMnemonic(extracted.mnemonic.mnemonic);
+			if (result) {
+				console.log(`language is probably ${result.language}`);
+				modal.randomizeBtn.classList[1] = result.language;
+			}
+		}
+	}
+
 	const suggestions = emptyMnemoLinker.getSuggestions(value, bip, language);
 	if (!suggestions) { return; }
-
-	// USE 
-	// emptyMnemoLinker.getBIPTableFromMnemonic(mnemonic);
-	
-	const extracted = switchBtnsIfMnemonicGridIsFilled(modal.wrap.id);
-	if (suggestions.length === 1 && isWordInWordsList(suggestions[0], bip, language)) {
-		event.target.value = suggestions[0];
-		deleteExistingSuggestionsHTML();
-		input.classList.add('random');
-		actualizeScore();
-		if (extracted && extracted.allWordsAreValid) { tempData.mnemonic = extracted.mnemonic; return; }
-		focusNextInput(input);
-		return;
-	}
 
 	function createSuggestionsHTML() {
 		const newElmnt = document.createElement('div');
@@ -1426,7 +1532,6 @@ eHTML.modals.inputMnemonic.mnemonicGrid.addEventListener('input', (event) => {
 
 		newElmnt.addEventListener('mouseover', (event) => {
 			if (!event.target.classList.contains('suggestion')) { return; }
-			//console.log(event.target.innerText);
 
 			const activeSuggestion = newElmnt.getElementsByClassName('active')[0];
 			if (activeSuggestion) { activeSuggestion.classList.remove('active'); }
@@ -1443,7 +1548,6 @@ eHTML.modals.inputMnemonic.mnemonicGrid.addEventListener('input', (event) => {
 
 			deleteExistingSuggestionsHTML();
 			if (tempData.rndMnemonic.includes(input.value)) { input.classList.add('random'); } else { input.classList.remove('random'); }
-			actualizeScore()
 			if (switchBtnsIfMnemonicGridIsFilled(modal.wrap.id)) { return; }
 			focusNextInput(input);
 			return;
