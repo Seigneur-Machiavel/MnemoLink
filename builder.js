@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const officialBIPs = {
 	"BIP-0039": require('./bip39 3.1.0.js')

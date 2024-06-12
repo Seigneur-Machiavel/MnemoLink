@@ -123,6 +123,7 @@ export class MnemoLinker {
 		} catch (e) {
 		}
 		try {
+			const crypto = require('crypto');
 			crypto.getRandomValues(buffer);
 			this.cryptoLib = crypto;
 			return true;
