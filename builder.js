@@ -348,13 +348,19 @@ function exportMnemoLinker(logs = true) {
 		const folder = 'builds';
 		const outputFileName = `MnemoLinker_v${settings.version[0]}.${settings.version[1]}.js`;
 		const outputPath = path.join(__dirname, folder, outputFileName);
+
+		const outputExtensionFolder = 'LinkVault/chrome-extension/scripts/MnemoLinker'
+		const outputExtensionPath = path.join(__dirname, outputExtensionFolder, outputFileName);
+
 		const controlOutputPath = path.join(__dirname, 'lastBuildControl.js');
 	
 		fs.writeFileSync(outputPath, output);
+		fs.writeFileSync(outputExtensionPath, output);
 		fs.writeFileSync(controlOutputPath, lastBuildControlFile);
 
 		if (logs) { 
-			console.log(`MnemoLinker exported to: ${outputPath}`); 
+			console.log(`MnemoLinker exported to: ${outputPath}`);
+			console.log(`MnemoLinker exported to: ${outputExtensionPath}`);
 			console.log(`Last build control exported to: ${controlOutputPath}`);
 		}
 	

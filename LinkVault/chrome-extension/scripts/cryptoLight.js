@@ -1,37 +1,43 @@
 const cryptoLight = {
     /** @type {Crypto} */
     key: null,
-    /** @type {Uint18rray} */
+    /** @type {Uint8Array} */
     salt: null,
     /** @type {Uint8Array} */
     iv: null,
 
     hash: '',
 
-    async init(passwordStr, saltStr = null, ivStr = null) {
-        this.salt = saltStr ? this.hexToBuffer(saltStr) : this.generateRandomSalt();
-        this.iv = ivStr ? this.hexToBuffer(ivStr) : this.generateRandomIV();
+    async init(passwordStr, saltBase64 = null, ivBase64 = null) {
+        this.salt = saltBase64 ? this.base64ToUint8Array(saltBase64) : this.generateRandomSalt();
+        this.iv = ivBase64 ? this.base64ToUint8Array(ivBase64) : this.generateRandomIV();
+        console.log(`Salt.length: ${this.salt.length}, IV.length: ${this.iv.length}`)
 
         const key = await this.deriveK(passwordStr, 2000000);
         if (!key) { console.error('Key derivation failed'); return false; } else { this.key = key; }
 
-        const hashedBuffer = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(passwordStr));
-        const hashed = this.bufferToHex(hashedBuffer);
 
-        const hashBuffer = await this.encryptText(hashed);
-        const hash = this.bufferToHex(hashBuffer);
+        const buffer = new TextEncoder().encode(passwordStr);
+        const hashedBuffer = await window.crypto.subtle.digest('SHA-256', buffer);
+        const hashed = this.uint8ArrayToBase64(new Uint8Array(hashedBuffer));
+        const hash = await this.encryptText(hashed);
 
         this.hash = hash;
+        const decodedSalt = this.uint8ArrayToBase64(this.salt);
+        const decodedIV = this.uint8ArrayToBase64(this.iv);
+        //if (decodedSalt !== saltBase64) { console.info('Salt mismatch'); }
+        //if (decodedIV !== ivBase64) { console.info('IV mismatch'); }
         
-        return { key, hash, salt: this.salt, iv: this.iv, saltStr: this.bufferToHex(this.salt), ivStr: this.bufferToHex(this.iv) };
+        return { key, hash, salt: this.salt, iv: this.iv, saltBase64: decodedSalt, ivBase64: decodedIV };
     },
     async deriveK(str, iterations = 2000000) {
         if (this.salt === null) { return false; }
         const startTimestamp = Date.now();
 
+        const buffer = new TextEncoder().encode(str);
         const keyMaterial = await window.crypto.subtle.importKey(
             "raw",
-            new TextEncoder().encode(str),
+            buffer,
             { name: "PBKDF2" },
             false,
             ["deriveKey"]
@@ -40,7 +46,7 @@ const cryptoLight = {
         const derivedKey = await window.crypto.subtle.deriveKey(
             {
                 name: "PBKDF2",
-                salt: new TextEncoder().encode(this.salt),
+                salt: this.salt,
                 iterations: iterations,
                 hash: "SHA-256"
             },
@@ -54,37 +60,48 @@ const cryptoLight = {
 
         return derivedKey;
     },
-    bufferToHex(buffer) {
-        return Array.from(new Uint8Array(buffer))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
+    uint8ArrayToBase64(uint8Array) {
+        // Convertit le Uint8Array en chaîne de caractères binaires
+        const binaryString = String.fromCharCode.apply(null, uint8Array);
+        // Encode la chaîne binaire en Base64
+        return btoa(binaryString);
     },
-    hexToBuffer(hex) {
-        return new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+    base64ToUint8Array(base64) {
+        // Décode la chaîne Base64 en chaîne de caractères binaires
+        const binaryString = atob(base64);
+        // Convertit la chaîne binaire en Uint8Array
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
     },
     async encryptText(str) {
         if (!this.iv) { return false; }
 
+        const buffer = new TextEncoder().encode(str);
         const encryptedContent = await window.crypto.subtle.encrypt(
             { name: "AES-GCM", iv: this.iv },
             this.key,
-            new TextEncoder().encode(str)
+            buffer
         );
 
-        return encryptedContent
+        const encryptedContentBase64 = this.uint8ArrayToBase64(new Uint8Array(encryptedContent));
+        return encryptedContentBase64;
     },
-    async decryptText(str) {
+    async decryptText(base64) {
         if (!this.iv) { return false; }
         
-        const buffer = this.hexToBuffer(str);
+        const buffer = this.base64ToUint8Array(base64);
         const decryptedContent = await window.crypto.subtle.decrypt(
             { name: "AES-GCM", iv: this.iv },
             this.key,
             buffer
         );
 
-        const dec = new TextDecoder();
-        return dec.decode(decryptedContent);
+        const decryptedContentStr = new TextDecoder().decode(new Uint8Array(decryptedContent));
+        return decryptedContentStr;
     },
     generateRandomSalt() {
         const saltUnit8Array = new Uint8Array(16);

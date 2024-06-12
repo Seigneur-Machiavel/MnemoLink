@@ -235,7 +235,7 @@ class MnemoLinker {
 		if (mnemonicArray.length < this.minMnemonicLength || mnemonicArray.length > 24) { console.error('mnemonicArray length is out of range'); return false; }
 
 		const BIPTable = this.getBIPTableFromMnemonic(mnemonicArray);
-		if (!BIPTable) { console.error('Unable to detect the BIP and language of the mnemonic'); return false; }
+		if (!BIPTable.bip) { console.error('Unable to detect the BIP and language of the mnemonic'); return false; }
 		
 		const indexTable = [];
 		for (let i = 0; i < resultLength; i++) {
@@ -508,7 +508,7 @@ class MnemoLinker {
 					currentSearch.foundWords.push(currentSearch.word);
 					if (k < mnemonicArray.length - 1) { continue; }
 
-					if (bip !== '' || language !== '') { console.error('Multiple BIPs and/or languages found for the mnemonic'); return false; }
+					if (bip !== '' || language !== '') { console.error('Multiple BIPs and/or languages found for the mnemonic'); return { bestLanguage: bestSearch.language }; }
 					bip = currentSearch.bip;
 					language = currentSearch.language;
 					wordsTable = currentSearch.wordsTable;
@@ -521,9 +521,9 @@ class MnemoLinker {
 		}
 
 		//if (bip === '' || language === '') { console.error(`BIP and/or language not found for the mnemonic ! Best result -> ${bestSearch.bip} | ${bestSearch.language} | words found: ${bestSearch.foundWords.length} | missing word: ${bestSearch.word}`);  return false; }
-		if (bip === '' || language === '') { return false; }
+		if (bip === '' || language === '') { return { bestLanguage: bestSearch.language }; }
 
-		return { bip, language, wordsTable };
+		return { bip, language, wordsTable, bestLanguage: bestSearch.language };
 	}
 }
 

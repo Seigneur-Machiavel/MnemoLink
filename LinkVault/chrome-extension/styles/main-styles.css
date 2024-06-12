@@ -173,7 +173,59 @@ button {
     width: 26vh;
     /*background-color: #ff9200;*/
 }
-
+.mnemolink {
+    pointer-events: all;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 1vh;
+}
+.leftDecoration {
+    position: absolute;
+    background-color: var(--text-color);
+    width: 20%;
+    height: 100%;
+    transform: translateX(-28%) skewX(-28deg);
+}
+.deleteBtn {
+    position: absolute;
+    right: 0.2vh;
+    width: 1vh;
+    height: 1vh;
+    /* background-color: blue;*/
+}
+.mnemolinkInput {
+    cursor: pointer;
+    text-indent: 5vh;
+    border-style: inset;
+    border-width: .6vh;
+    border-radius: 1vh;
+    /* background-color: var(--background-color); */
+}
+.mnemolinkInput:focus {
+    cursor: text;
+}
+#linkNewMnemonicBtnWrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 1vh;
+}
+#linkNewMnemonicBtn {
+    pointer-events: all;
+    cursor: pointer;
+    text-align: center;
+    filter: invert(1);
+    background-color: var(--background-color-light);
+    border-radius: 50%;
+    padding: 0 2vh .4vh 2vh;
+    font-size: 4vh;
+    transition: filter 0.12s ease-in-out;
+}
+#linkNewMnemonicBtn:hover {
+    filter: invert(0);
+}
+    
 #centerScreenBtnWrap {
     position: fixed;
     top: 50%;
@@ -190,7 +242,7 @@ button {
     width: 100%;
 }
 
-#mnemolinksWrap {
+#mnemolinksBubblesContainer {
     position: fixed;
     top: 50%;
     left: 50%;
@@ -259,6 +311,7 @@ button {
     justify-content: center;
     align-items: center;
     border-top: #8a8a8a36 solid 1px;
+    margin-top: 2vh;
 }
 .horizontalButtonsList button {
     background-color: transparent;
@@ -406,15 +459,6 @@ button {
     padding: 14px 30px;
     margin: 16px 0;
     height: auto;
-}
-.horizontalButtonsList {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-.horizontalButtonsList button {
-    margin: 10px 10px;
-    min-width: 30%;
 }
 .formButton {
     position: relative;

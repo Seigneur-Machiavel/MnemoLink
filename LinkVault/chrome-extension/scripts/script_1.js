@@ -4,6 +4,7 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
 	const bip39 = require("./bip39-3.1.0.js");
 	const { MnemoLinker } = require("./MnemoLinker/MnemoLinker_v0.1.js");
 	const { cryptoLight } = require("./cryptoLight.js");
+
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -12,8 +13,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!password) { return; }
 		
 		chrome.storage.local.get(['hashedPassword'], async function(result) {
-			const { hash, saltStr, ivStr } = result.hashedPassword;
-			const res = await cryptoLight.init(password, saltStr, ivStr);
+			const { hash, saltBase64, ivBase64 } = result.hashedPassword;
+			const res = await cryptoLight.init(password, saltBase64, ivBase64);
 			if (!res.hash === hash) { console.error('Wrong password'); return; }
 
 			console.log(`Ready to decrypt !`);
@@ -21,11 +22,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-//const isExtension = window.location.href.includes('localhost') ? false : true;
-//console.log("isExtension", isExtension);
 const urlprefix = ""
 // Dont forget to use the "urlprefix" while fetching, example :
 // .src = `${urlprefix}sprites/cloud`
+
 //#region - CLASSES
 class mnemonicObject {
 	constructor(mnemonic = [], bip = "BIP-0039", language = "english") {
@@ -50,52 +50,40 @@ class mnemonicObject {
 }
 class userDataClass {
 	constructor() {
-		/** @type {mnemonicObject[]} */
-		this.encryptedMnemonicsStr = {};
+		this.encryptedMasterMnemonicsStr = "";
+		this.encryptedMnemoLinksStr = {};
 		this.preferences = {
 			darkMode: false,
 		};
 	}
-	async setMnemonicAsEncrypted(label, mnemonicStr = "") {
-		const mnemonicStrEncrypted = await this.#encryptMnemonicForLocalStorage(mnemonicStr);
+	// Master Mnemonic
+	async setMnemonicAsEncrypted(mnemonicStr = "") {
+		const mnemonicStrEncrypted = await this.#encrypStringWithPassword(mnemonicStr);
 		if (!mnemonicStrEncrypted) { return false; }
 
-		this.encryptedMnemonicsStr[label] = mnemonicStrEncrypted;
+		this.encryptedMasterMnemonicsStr = mnemonicStrEncrypted;
 		return true;
 	}
-	clearMnemonic(label) {
-		delete this.encryptedMnemonicsStr[label];
-	}
+	clearMasterMnemonic() { this.encryptedMasterMnemonicsStr = ""; }
+	async getMasterMnemonicArray() {
+		if (!this.isMasterMnemonicFilled()) { return false; }
 
-	async #encryptMnemonicForLocalStorage(mnemonicStr = "") {
-		const buffer = await cryptoLight.encryptText(mnemonicStr);
-		if (!buffer) { return false; }
-
-		return cryptoLight.bufferToHex(buffer);
-	}
-	async #decryptMnemonicFromLocalStorage(mnemonicStrEncrypted = "") {
-		const mnemonicStr = await cryptoLight.decryptText(mnemonicStrEncrypted);
-		if (!mnemonicStr) { return false; }
-
-		return mnemonicStr;
-	}
-	async getMnemonicArray(label) {
-		if (!this.encryptedMnemonicsStr[label]) { return false; }
-		const mnemonicStr = await this.#decryptMnemonicFromLocalStorage(this.encryptedMnemonicsStr[label]);
+		const mnemonicStr = await this.#decryptStringWithPassword(this.encryptedMasterMnemonicsStr);
 		if (!mnemonicStr) { return false; }
 
 		return mnemonicStr.split(' ');
 	}
-	async getMnemonicStr(label) {
-		if (!this.encryptedMnemonicsStr[label]) { return false; }
-		const mnemonicStr = await this.#decryptMnemonicFromLocalStorage(this.encryptedMnemonicsStr[label]);
+	async getMasterMnemonicStr() {
+		if (!this.isMasterMnemonicFilled()) { return false; }
+
+		const mnemonicStr = await this.#decryptStringWithPassword(this.encryptedMasterMnemonicsStr);
 		if (!mnemonicStr) { return false; }
 
 		return mnemonicStr;
 	}
-	async getIndexedMnemonicStr(label) {
-		if (!this.isMnemonicFilled(label)) { return false; }
-		const mnemonicStrDecrypted = await this.#decryptMnemonicFromLocalStorage(this.encryptedMnemonicsStr[label]);
+	async getIndexedMasterMnemonicStr() {
+		if (!this.isMasterMnemonicFilled()) { return false; }
+		const mnemonicStrDecrypted = await this.#decryptStringWithPassword(this.encryptedMasterMnemonicsStr);
 		if (!mnemonicStrDecrypted) { return false; }
 
 		const mnemonicArray = mnemonicStrDecrypted.split(' ');
@@ -107,12 +95,31 @@ class userDataClass {
 
 		return mnemonicStr;
 	}
-	getListOfMnemonics() {
-		return Object.keys(this.encryptedMnemonicsStr);
+	isMasterMnemonicFilled() { return this.encryptedMasterMnemonicsStr === "" ? false : true; }
+	// MnemoLinks
+	addMnemoLink(mnemoLink, label = '') {
+		if (label === '') { label = `key${Object.keys(this.encryptedMnemoLinksStr).length + 1}`; }
+		this.encryptedMnemoLinksStr[label] = mnemoLink;
 	}
-	isMnemonicFilled(label) {
-		if (!this.encryptedMnemonicsStr[label]) { return false; }
-		return true;
+	removeMnemoLink(label) {
+		if (!this.encryptedMnemoLinksStr[label]) { return false; }
+		delete this.encryptedMnemoLinksStr[label];
+	}
+	getListOfMnemoLinks() {
+		return Object.keys(this.encryptedMnemoLinksStr);
+	}
+	// Crypto -> local storage
+	async #encrypStringWithPassword(str = "") {
+		const encryptedStr = await cryptoLight.encryptText(str);
+		if (!encryptedStr) { return false; }
+
+		return encryptedStr;
+	}
+	async #decryptStringWithPassword(encryptedStr = "") {
+		const str = await cryptoLight.decryptText(encryptedStr);
+		if (!str) { return false; }
+
+		return str;
 	}
 }
 class userInfoClass {
@@ -152,10 +159,15 @@ class userInfoClass {
 		}
 		return mnemonicStr;
 	}
-}
+} // DEPRECATED
 //#endregion
 
 //#region - VARIABLES
+/** @type {MnemoLinker} */
+let MnemoLinkerLastest = null;
+/** @type {MnemoLinker} */
+let emptyMnemoLinker = null;
+
 const skipper = {form1Control: true, form2Control: true} // TO MODIFY
 const settings = {
 	mnemoLinkerVersion: window.MnemoLinker.latestVersion,
@@ -164,6 +176,7 @@ const settings = {
 	nbOfWordsToCheck: 3,
 	delayBeetweenChar: 10,
 	fastFillMode: true,
+	saveLogs: true,
 }
 const parkour = { // TO MODIFY
 	currentForm: -1,
@@ -185,87 +198,6 @@ const tempData = {
 		this.mnemonic = new mnemonicObject();
 	}
 };
-let MnemoLinker = null;
-/** @type {MnemoLinker} */
-let emptyMnemoLinker = null;
-//#endregion
-
-//#region - STORAGE FUNCTIONS
-const save = {
-	logs: true,
-	all() {
-		const saveFunctions = Object.keys(save).filter((key) => key !== "all" && key !== "logs");
-		saveFunctions.forEach((func) => { save[func](); });
-	},
-	userEncryptedMnemonicsStr() {
-		const data = userData.encryptedMnemonicsStr;
-		storeDataLocally('encryptedMnemonicsStr', data, save.logs);
-	},
-	userPreferences() {
-		const data = userData.preferences;
-		storeDataLocally('preferences', data, save.logs);
-	}
-}
-const load = {
-	logs: true,
-	all() {
-		const loadFunctions = Object.keys(load).filter((key) => key !== "all" && key !== "logs");
-		loadFunctions.forEach((func) => { load[func](); });
-	},
-	userEncryptedMnemonicsStr() {
-		getDataLocally('encryptedMnemonicsStr').then((data) => {
-			const logMsg = !data ? 'No encryptedMnemonicsStr found !' : 'EncryptedMnemonicsStr loaded !';
-			if (load.logs) { console.log(logMsg); }
-			if (!data) { return; }
-
-			userData.encryptedMnemonicsStr = data;
-		});
-	},
-	userPreferences() {
-		getDataLocally('preferences').then((data) => {
-			const logMsg = !data ? 'No preferences found !' : 'Preferences loaded !';
-			if (load.logs) { console.log(logMsg); }
-			if (!data) { return; }
-
-			userData.preferences = data;
-		});
-	}
-}
-function storeDataLocally(key = "toto", data, logs = false) {
-	try {
-		chrome.storage.local.set({ [key]: data }, function(result) {
-			console.log(result);
-			if (logs) { console.log(`${key} stored, data: ${data}`); }
-		});
-	} catch (error) {
-		if (logs) { console.error(`Error while storing ${key}, data: ${data}`); }
-	}
-}
-async function getDataLocally(key = "toto") {
-	const fromStorage = await chrome.storage.local.get([key])
-	if (!fromStorage[key]) { return false; }
-	return fromStorage[key];
-}
-//#endregion
-
-//#region - PRELOAD FUNCTIONS
-async function asyncInitLoad() {
-	load.all();
-
-	MnemoLinker = await window.MnemoLinker["v" + settings.mnemoLinkerVersion];
-	emptyMnemoLinker = new MnemoLinker();
-}; asyncInitLoad(); // auto execute
-function toggleDarkMode(element) {
-	if (element.checked) {
-		document.body.classList.add('dark-mode');
-		document.getElementById('dashboard').classList.add('invertColors');
-	} else {
-		document.body.classList.remove('dark-mode');
-		document.getElementById('dashboard').classList.remove('invertColors');
-	}
-}
-//#endregion
-
 const eHTML = {
 	toggleDarkModeButton: document.getElementById('dark-mode-toggle'),
 	footerVersion: document.getElementById('footerVersion'),
@@ -273,7 +205,7 @@ const eHTML = {
 		element: document.getElementById('dashboard'),
 		centerScreenBtn: document.getElementById('centerScreenBtn'),
 		mnemolinksList: document.getElementById('mnemolinksList'),
-		mnemolinksWrap: document.getElementById('mnemolinksWrap'),
+		mnemolinksBubblesContainer: document.getElementById('mnemolinksBubblesContainer'),
 	},
 	modals: {
 		wrap: document.getElementsByClassName('modalsWrap')[0],
@@ -358,6 +290,99 @@ const eHTML = {
 	]
 }
 eHTML.footerVersion.innerText = "v" + window.MnemoLinker.latestVersion;
+//#endregion
+
+//#region - STORAGE FUNCTIONS
+const save = {
+	logs: settings.saveLogs,
+	async all() {
+		const saveFunctions = Object.keys(save).filter((key) => key !== "all" && key !== "logs");
+		for (let i = 0; i < saveFunctions.length; i++) {
+			const functionName = saveFunctions[i];
+			await save[functionName](); // can be promises all, but actually fast.
+		}
+	},
+	async userEncryptedMnemonicsStr() {
+		const masterMnemonicStr = userData.encryptedMasterMnemonicsStr;
+		await storeDataLocally('encryptedMasterMnemonicsStr', masterMnemonicStr, save.logs);
+	},
+	async userMnemoLinks() {
+		const data = userData.encryptedMnemoLinksStr;
+		await storeDataLocally('encryptedMnemoLinksStr', data, save.logs);
+	},
+	async userPreferences() {
+		const data = userData.preferences;
+		await storeDataLocally('preferences', data, save.logs);
+	}
+}
+const load = {
+	logs: true,
+	async all() {
+		const loadFunctions = Object.keys(load).filter((key) => key !== "all" && key !== "logs");
+		for (let i = 0; i < loadFunctions.length; i++) {
+			const functionName = loadFunctions[i];
+			await load[functionName](); // can be promises all, but actually fast.
+		}
+	},
+	async userEncryptedMnemonicsStr() {
+		const data = await getDataLocally('encryptedMasterMnemonicsStr')
+		const logMsg = !data ? 'No encryptedMasterMnemonicsStr found !' : 'encryptedMasterMnemonicsStr loaded !';
+		if (load.logs) { console.log(logMsg); }
+		if (!data) { return; }
+
+		userData.encryptedMasterMnemonicsStr = data;
+	},
+	async userMnemoLinks() {
+		const data = await getDataLocally('encryptedMnemoLinksStr')
+		const logMsg = !data ? 'No encryptedMnemoLinksStr found !' : 'encryptedMnemoLinksStr loaded !';
+		if (load.logs) { console.log(logMsg); }
+		if (!data) { return; }
+
+		userData.encryptedMnemoLinksStr = data;
+	},
+	async userPreferences() {
+		const data = await getDataLocally('preferences')
+		const logMsg = !data ? 'No preferences found !' : 'Preferences loaded !';
+		if (load.logs) { console.log(logMsg); }
+		if (!data) { return; }
+
+		userData.preferences = data;
+	}
+}
+async function storeDataLocally(key = "toto", data, logs = false) {
+	try {
+		const result = await chrome.storage.local.set({ [key]: data })
+		console.log(result);
+		if (logs) { console.log(`${key} stored, data: ${JSON.stringify(data)}`); }
+	} catch (error) {
+		if (logs) { console.error(`Error while storing ${key}, data: ${data}`); }
+	}
+}
+async function getDataLocally(key = "toto") {
+	const fromStorage = await chrome.storage.local.get([key])
+	if (!fromStorage[key]) { return false; }
+	return fromStorage[key];
+}
+//#endregion
+
+//#region - PRELOAD FUNCTIONS
+async function asyncInitLoad() {
+	await load.all();
+	fillMnemoLinkList();
+
+	MnemoLinkerLastest = await window.MnemoLinker["v" + window.MnemoLinker.latestVersion];
+	emptyMnemoLinker = new MnemoLinkerLastest();
+}; asyncInitLoad(); // auto execute
+function toggleDarkMode(element) {
+	if (element.checked) {
+		document.body.classList.add('dark-mode');
+		document.getElementById('dashboard').classList.add('invertColors');
+	} else {
+		document.body.classList.remove('dark-mode');
+		document.getElementById('dashboard').classList.remove('invertColors');
+	}
+}
+//#endregion
 
 //#region - WELCOME ANIMATIONS
 /*const textWrapper = document.querySelector('.ml3');
@@ -381,9 +406,6 @@ setTimeout(() => {
 //#endregion
 
 //#region - SIMPLE FUNCTIONS
-function remplaceMnemoLinkerScript(version = "0.1") {
-	
-}
 function generateBIP39Mnemonic(mnemonicLength = 12, language = "english") {
 	const entropy = mnemonicLength === 12 ? 128 : 256;
 
@@ -468,15 +490,6 @@ function actualizeScore() {
 
 	setScoreUI(finalScore);
 }
-function setScoreUI (score = 100) {
-	const modal = eHTML.modals.inputMasterMnemonic;
-	modal.scoreBarFill.style.width = `${Math.round(score)}%`;
-	modal.scoreLabel.innerText = `${score.toFixed(2)}%`;
-
-	// glitch / checking effect
-	modal.scoreBarFill.classList.add('glitch');
-	setTimeout(() => { modal.scoreBarFill.classList.remove('glitch'); }, 500);
-}
 function isWordInWordsList(word, bip, language) {
 	const wordsList = emptyMnemoLinker.getWordsTable(bip, language);
 	if (!wordsList) { return false; }
@@ -495,485 +508,6 @@ function focusNextInput(inputElement) {
 		}
 	}
 	return;
-}
-// OLD FUNCTIONS - WILL BE DELETED
-// form2: pseudo mnemonic specific functions
-async function controlMnemonic() {
-	if (skipper.form1Control) { return true; }
-
-	await clearMnemonicInputs(eHTML.forms[2].mnemonicGridInputs);
-	eHTML.forms[2].mnemonicGridInputs.forEach((input) => { input.classList.remove('disabled') });
-
-	parkour["step2"].controllingMnemonic = true;
-	const nbOfWordsToCheck = settings.nbOfWordsToCheck;
-	let controlledWordsIndex = [];
-
-	while(controlledWordsIndex.length < nbOfWordsToCheck) {
-		const wordIndex = rnd(0, userInfo.mnemonic.length - 1);
-		if (controlledWordsIndex.includes(wordIndex)) { continue; }
-
-		const correspondingInput = eHTML.forms[2].mnemonicGridInputs[wordIndex];
-		correspondingInput.placeholder = "???";
-		correspondingInput.readOnly = false;
-		correspondingInput.focus();
-
-		while (parkour.currentForm === 1 && !userInfo.mnemonic.includes(correspondingInput.value)) {
-			await new Promise(r => setTimeout(r, 100));
-			if (!parkour["step2"].controllingMnemonic) { console.log('controlMnemonic aborted'); return false; }
-		}
-		if (parkour.currentForm !== 1) { console.log('controlMnemonic aborted'); return false; }
-
-		controlledWordsIndex.push(wordIndex);
-		correspondingInput.value = "";
-		correspondingInput.placeholder = "✓";
-		correspondingInput.readOnly = true;
-		deleteExistingSuggestionsHTML();
-	}
-
-	parkour["step2"].controllingMnemonic = false;
-	parkour["step2"].controlledMnemonic = true;
-	return true;
-}
-function setPseudoMnemonicOptionsList() {
-	// BIP LIST
-	const defaultBip = settings.defaultBip;
-	userInfo.pseudoMnemonicBip = defaultBip;
-	// const bipList = eHTML.forms[1].bipList;
-
-	// LANGUAGE LIST
-	const languages = emptyMnemoLinker.getAvailableLanguages();
-	const languageList = eHTML.forms[1].languageList;
-	languageList.innerHTML = "";
-	for (let i = 0; i < languages.length; i++) {
-		const language = languages[i];
-		const newElmnt = document.createElement('option');
-		newElmnt.value = language;
-		newElmnt.innerText = language;
-		languageList.appendChild(newElmnt);
-	}
-
-	const defaultLanguage = settings.defaultLanguage;
-	const defaultLanguageIndex = languages.indexOf(defaultLanguage);
-	languageList.selectedIndex = defaultLanguageIndex;
-	userInfo.pseudoMnemonicLanguage = defaultLanguage;
-
-	// LENGTH LIST
-	const lengthList = eHTML.forms[1].lengthList;
-	lengthList.innerHTML = "";
-	// const authorizedLengths = userInfo.mnemonic.length === 12 ? [12] : [12, 24];
-	const authorizedLengths = [12];
-	for (let i = 0; i < authorizedLengths.length; i++) {
-		const length = authorizedLengths[i];
-		const newElmnt = document.createElement('option');
-		newElmnt.value = length;
-		newElmnt.innerText = `${length} words`;
-		lengthList.appendChild(newElmnt);
-	}
-
-	lengthList.selectedIndex = 0;
-	setMnemonicInputsVisibility(eHTML.forms[1].mnemonicGrid, authorizedLengths[0]);
-}
-function isWordInPseudoWordsList(word) {
-	const bip = userInfo.pseudoMnemonicBip;
-	const language = userInfo.pseudoMnemonicLanguage;
-	const wordsList = emptyMnemoLinker.getWordsTable(bip, language);
-	if (!wordsList) { return false; }
-
-	return wordsList.includes(word);
-}
-/*function focusNextInput(inputElement) {
-	const mnemonicGrid = input.parentElement.parentElement;
-	const mnemonicGridInputs = mnemonicGrid.querySelectorAll('input');
-	for (let i = 0; i < mnemonicGridInputs.length; i++) {
-		const input = mnemonicGridInputs[i];
-		if (input === inputElement) {
-			const nextInput = mnemonicGridInputs[i + 1];
-			if (nextInput) { nextInput.focus(); }
-			break;
-		}
-	}
-	return;
-}*/
-function getPseudoMnemonicFromInputs() {
-	const wordsList = emptyMnemoLinker.getWordsTable(userInfo.pseudoMnemonicBip, userInfo.pseudoMnemonicLanguage);
-	if (!wordsList) { return; }
-
-	const result = { allWordsAreValid: true, mnemonic: [], mnemonicStr: "", nbOfRandomWords: 0 };
-	const mnemonic = [];
-	for (let i = 0; i < eHTML.forms[1].mnemonicGridInputs.length; i++) {
-		const input = eHTML.forms[1].mnemonicGridInputs[i];
-		if (input.parentElement.classList.contains('hidden')) { continue; }
-
-		const isRandom = input.classList.contains('random');
-		if (isRandom) { result.nbOfRandomWords++; }
-		
-		mnemonic.push(input.value);
-	};
-
-	// check if all words are included in the words list
-	for (let i = 0; i < mnemonic.length; i++) {
-		if (!wordsList.includes(mnemonic[i])) { result.allWordsAreValid = false; break; }
-	}
-
-	result.mnemonic = mnemonic;
-	result.mnemonicStr = mnemonic.join(' ');
-	return result;
-}
-function getRandomUniqueWord(wordsList = [], mnemonic = []) {
-	const wordsListLength = wordsList.length;
-	if (wordsListLength === 0) { return; }
-
-	let remainingAttempts = 100;
-	let rnd = cryptoRnd(0, wordsListLength - 1);
-	let rndWord = wordsList[rnd];
-	while (mnemonic.includes(rndWord)) {
-		rnd = cryptoRnd(0, wordsListLength - 1);
-		rndWord = wordsList[rnd];
-		remainingAttempts--;
-		if (remainingAttempts === 0) { console.error('No unique word found !'); return false; }
-	}
-
-	return rndWord;
-}
-async function randomizePseudoMnemonic(desiredLength, asPlaceholder = false) {
-	eHTML.forms[1].mnemonicGrid.classList.add('busy');
-	parkour.step1.rndButtonsPressed = 0;
-
-	const bip = userInfo.pseudoMnemonicBip;
-	const language = userInfo.pseudoMnemonicLanguage;
-	const wordsList = emptyMnemoLinker.getWordsTable(bip, language);
-	if (!wordsList) { return; }
-
-	eHTML.forms[1].mnemonicGridInputs.forEach((input) => { input.value = ""; input.placeholder = "";  });
-
-	const mnemonic = [];
-	for (let i = 0; i < desiredLength; i++) {
-		const input = eHTML.forms[1].mnemonicGridInputs[i];
-		const rndWord = getRandomUniqueWord(wordsList, userInfo.pseudoMnemonic);
-		mnemonic.push(rndWord);
-		for (let j = 0; j < rndWord.length; j++) {
-			/*const rndFakeChar = rnd(0, 5);
-			// add fake char and remove it (from a to z, lowercase only) -> just a visual effect
-			for (let k = 0; k < rndFakeChar; k++) {
-				const fakeChar = String.fromCharCode(rnd(97, 122));
-				if (asPlaceholder) { input.placeholder += fakeChar; } else { input.value += fakeChar; };
-				await new Promise(r => setTimeout(r, settings.delayBeetweenChar));
-				if (asPlaceholder) { input.placeholder = input.placeholder.slice(0, -1); } else { input.value = input.value.slice(0, -1); };
-			}*/
-
-			input.placeholder += rndWord.charAt(j);
-			if (!asPlaceholder) { input.value += rndWord.charAt(j); };
-			const delay = settings.delayBeetweenChar;
-			const timeOutRnd = rnd(0, delay);
-			await new Promise(r => setTimeout(r, timeOutRnd));
-		}
-		input.classList.add('random');
-	};
-
-	parkour.step1.rndMnemonic = mnemonic;
-	switchContinueBtnIfPseudoMnemonicIsControlled();
-	actualizeScore();
-	eHTML.forms[1].mnemonicGrid.classList.remove('busy');
-}
-function switchContinueBtnIfPseudoMnemonicIsControlled() {
-	const continueBtn = eHTML.forms[1].continueBtn;
-	const copyBtn = eHTML.forms[1].copyMnemonicBtn;
-	const downloadBtn = eHTML.forms[1].downloadMnemonicBtn;
-	const mnemonicFromInputs = getPseudoMnemonicFromInputs();
-
-	if (!mnemonicFromInputs.allWordsAreValid || !userInfo.setPseudoMnemonic(mnemonicFromInputs.mnemonic)) {
-		continueBtn.classList.add('disabled');
-		copyBtn.classList.add('crushed');
-		downloadBtn.classList.add('crushed');
-		return false; 
-	}
-
-	
-	continueBtn.classList.remove('disabled');
-	copyBtn.classList.remove('crushed');
-	downloadBtn.classList.remove('crushed');
-
-	copyBtn.focus();
-
-	return true;
-}
-async function controlPseudoMnemonic() {
-	if (skipper.form2Control) { return true; }
-
-	await clearMnemonicInputs(eHTML.forms[1].mnemonicGridInputs);
-	eHTML.forms[1].mnemonicGridInputs.forEach((input) => { input.classList.remove('disabled') });
-
-	parkour["step1"].controllingMnemonic = true;
-	const nbOfWordsToCheck = settings.nbOfWordsToCheck;
-	let controlledWordsIndex = [];
-
-	while(controlledWordsIndex.length < nbOfWordsToCheck) {
-		const wordIndex = rnd(0, userInfo.pseudoMnemonic.length - 1);
-		if (controlledWordsIndex.includes(wordIndex)) { continue; }
-		
-		const correspondingInput = eHTML.forms[1].mnemonicGridInputs[wordIndex];
-		correspondingInput.placeholder = "???";
-		correspondingInput.readOnly = false;
-		correspondingInput.focus();
-
-		while (parkour.currentForm === 2 && !userInfo.pseudoMnemonic.includes(correspondingInput.value)) {
-			await new Promise(r => setTimeout(r, 100));
-			if (!parkour["step1"].controllingMnemonic) { console.log('controlPseudoMnemonic aborted'); return false; }
-		}
-		if (parkour.currentForm !== 2) { console.log('controlPseudoMnemonic aborted'); return false; }
-
-		controlledWordsIndex.push(wordIndex);
-		correspondingInput.value = "";
-		correspondingInput.placeholder = "✓";
-		correspondingInput.readOnly = true;
-		deleteExistingSuggestionsHTML();
-	}
-
-	parkour["step1"].controllingMnemonic = false;
-	parkour["step1"].controlledMnemonic = true;
-	return true;
-}
-/*function actualizeScore() {
-	const mnemonicGridInputs = eHTML.forms[1].mnemonicGridInputs;
-	let nbOfRandomWords = 0;
-	let nbOfWords = 0;
-	for (let i = 0; i < mnemonicGridInputs.length; i++) {
-		const input = mnemonicGridInputs[i];
-		if (mnemonicGridInputs[i].value === "") { continue; }
-		nbOfWords++;
-		
-		if (input.classList.contains('random')) { nbOfRandomWords++; }
-	}
-	if (nbOfWords === 0) { return; }
-	
-	// score will decrease more and more for each word choosen by the user
-	const numberOfWordsInTheList = 2048;
-	const maxEntropy = nbOfWords * Math.log2(numberOfWordsInTheList);
-	const currentEntropy = nbOfRandomWords * Math.log2(numberOfWordsInTheList);
-	const score = (currentEntropy / maxEntropy) * 100;
-	
-	// use of "random word" buttons will slightly decrease the score
-	const rndButtonsPressed = parkour.step1.rndButtonsPressed;
-	const scoreDecrease = Math.pow(rndButtonsPressed, 2) / (nbOfWords * 1000);
-	const finalScore = score - scoreDecrease < 0 ? 0 : score - scoreDecrease;
-
-	setScoreUI(finalScore);
-}*/
-/*function setScoreUI (score = 100) {
-	eHTML.forms[1].scoreBarFill.style.width = `${Math.round(score)}%`;
-	eHTML.forms[1].scoreLabel.innerText = `${score.toFixed(2)}%`;
-
-	// glitch / checking effect
-	eHTML.forms[1].scoreBarFill.classList.add('glitch');
-	setTimeout(() => { eHTML.forms[1].scoreBarFill.classList.remove('glitch'); }, 500);
-}*/
-// form3: MnemoLink specific functions
-async function fillMnemoLinkText(mnemoLinkStr = '', initDelay = 500, animationDuration = 2500) {
-	const mnemoLinkStrElmnt = eHTML.forms[3].mnemoLinkStr;
-	const mnemoLinkWrapElmnt = eHTML.forms[3].mnemoLinkWrap;
-
-	const mixingOperations = 6;
-	const durations = {
-		delay: animationDuration * 0.2,
-		mixDuration: animationDuration * 0.5,
-		showDuration: animationDuration * 0.3,
-		mixing: animationDuration * 0.7 / mixingOperations
-	};
-	const wordsListA = emptyMnemoLinker.getWordsTable(userInfo.mnemonicBip, userInfo.mnemonicLanguage);
-	const wordsListB = emptyMnemoLinker.getWordsTable(userInfo.pseudoMnemonicBip, userInfo.pseudoMnemonicLanguage);
-	mnemoLinkStrElmnt.innerText = wordsListA.join(' ');
-
-	await new Promise(r => setTimeout(r, initDelay));
-	
-	setTimeout(() => {
-		anime({
-			targets: mnemoLinkWrapElmnt,
-			width: '0%',
-			opacity: .6,
-			duration: durations.mixDuration,
-			easing: 'easeInOutQuad',
-			complete: () => {
-				anime({
-					targets: mnemoLinkWrapElmnt,
-					width: '100%',
-					opacity: 1,
-					duration: durations.showDuration,
-					easing: 'easeInOutQuad',
-				});
-			}
-		});
-	}, durations.delay);
-
-	function genMixedWordsList() {
-		const desiredLength = wordsListA.length;
-		const mixedWordsList = [];
-		for (let i = 0; i < desiredLength; i++) {
-			const list = rnd(0, 1) === 0 ? wordsListA : wordsListB;
-			const rndIndex = rnd(0, list.length - 1);
-			mixedWordsList.push(list[rndIndex]);
-		}
-		return mixedWordsList;
-	}
-
-	for (let i = 0; i < mixingOperations; i++) {
-		const mixedWordsList = genMixedWordsList();
-		mnemoLinkStrElmnt.innerText = mixedWordsList.join(' ');
-		await new Promise(r => setTimeout(r, durations.mixing));
-	}
-
-	mnemoLinkStrElmnt.innerText = mnemoLinkStr;
-
-	await new Promise(r => setTimeout(r, durations.mixDuration - initDelay > 0 ? durations.mixDuration - initDelay : 0));
-
-	return true;
-}
-function switchMnemoLinkButtons() {
-	const copyBtn = eHTML.forms[3].copyMnemoLinkBtn;
-	const downloadBtn = eHTML.forms[3].downloadMnemoLinkBtn;
-	//const inscribeBtn = eHTML.forms[3].inscribeBtn;
-
-	copyBtn.classList.remove('crushed');
-	downloadBtn.classList.remove('crushed');
-
-	copyBtn.focus();
-
-	return true;
-}
-//#endregion
-
-//#region - UX FUNCTIONS
-function toggleDashboard() {
-	const dashboard = eHTML.dashboard.element;
-	if (dashboard.classList.contains('open')) { 
-		dashboard.classList.remove('open');
-	} else {
-		dashboard.classList.add('open');
-	}
-}
-function positionMnemoLinks() {
-	//const radius = 150; // Rayon du cercle imaginaire
-	const radius = window.innerHeight / 3;
-	const mnemolinksWrap = eHTML.dashboard.mnemolinksWrap;
-	const center_x = mnemolinksWrap.offsetWidth / 2;
-	const center_y = mnemolinksWrap.offsetHeight / 2;
-	const mnemoLinks = mnemolinksWrap.querySelectorAll('.mnemolinkBubble');
-  
-	mnemoLinks.forEach(function(mnemoLink, index) {
-		const width = mnemoLink.offsetWidth;
-		const total = mnemoLinks.length;
-		const angle = (index / total) * (2 * Math.PI); // Angle for each element
-		
-		const x = center_x + radius * Math.cos(angle) - (width / 2);
-		const y = center_y + radius * Math.sin(angle) - (width / 2);
-	
-		mnemoLink.style.left = x + 'px';
-		mnemoLink.style.top = y + 'px';
-	});
-}
-function openModal(modalName = '') {
-	const modals = eHTML.modals;
-	if (!modals.wrap.classList.contains('fold')) { return; }
-	modals.wrap.classList.remove('hidden');
-	modals.wrap.classList.remove('fold');
-
-	for (let modalKey in modals) {
-		if (modalKey === 'wrap') { continue; }
-		const modalWrap = modals[modalKey].wrap;
-		modalWrap.classList.add('hidden');
-		if (modalKey === modalName) { modalWrap.classList.remove('hidden'); }
-	}
-
-	const modalsWrap = eHTML.modals.wrap;
-	modalsWrap.style.transform = 'scaleX(0) scaleY(0) skewX(0deg)';
-	modalsWrap.style.opacity = 0;
-	modalsWrap.style.clipPath = 'circle(6% at 50% 50%)';
-
-	anime({
-		targets: modalsWrap,
-		//skewX: '1.2deg',
-		scaleX: 1,
-		scaleY: 1,
-		opacity: 1,
-		duration: 600,
-		easing: 'easeOutQuad',
-	});
-	anime({
-		targets: modalsWrap,
-		clipPath: 'circle(100% at 50% 50%)',
-		delay: 200,
-		duration: 800,
-		easing: 'easeOutQuad',
-	});
-}
-function closeModal() {
-	// clear inputs
-	initMnemonicInputs(eHTML.modals.inputMasterMnemonic.mnemonicGridInputs);
-	initMnemonicInputs(eHTML.modals.inputMnemonic.mnemonicGridInputs);
-
-	const modalsWrap = eHTML.modals.wrap;
-	if (modalsWrap.classList.contains('fold')) { return false; }
-	modalsWrap.classList.add('fold');
-
-	anime({
-		targets: modalsWrap,
-		clipPath: 'circle(6% at 50% 50%)',
-		duration: 600,
-		easing: 'easeOutQuad',
-	});
-	anime({
-		targets: modalsWrap,
-		scaleX: 0,
-		scaleY: 0,
-		opacity: 0,
-		duration: 800,
-		easing: 'easeOutQuad',
-		complete: () => {
-			if (!modalsWrap.classList.contains('fold')) { return; }
-
-			modalsWrap.classList.add('hidden');
-			const modals = eHTML.modals;
-			for (let modalKey in modals) {
-				if (modalKey === 'wrap') { continue; }
-				const modalWrap = modals[modalKey].wrap;
-				modalWrap.classList.add('hidden');
-			}
-		}
-	});
-}
-function setModalBottomButtonsState(modal = eHTML.modals.inputMasterMnemonic, ready = false) {
-	const confirmBtn = modal.confirmBtn;
-	const copyBtn = modal.copyMnemonicBtn;
-	const downloadBtn = modal.downloadMnemonicBtn;
-
-	if (!ready) {
-		confirmBtn.classList.add('disabled');
-		copyBtn.classList.add('crushed');
-		downloadBtn.classList.add('crushed');
-	} else {
-		confirmBtn.classList.remove('disabled');
-		copyBtn.classList.remove('crushed');
-		downloadBtn.classList.remove('crushed');
-	}
-}
-function switchBtnsIfMnemonicGridIsFilled(modalWrapID = "masterMnemonicModalWrap") {
-	const modals = Object.keys(eHTML.modals);
-	let modal = null;
-	for (let i = 0; i < modals.length; i++) {
-		if (!eHTML.modals[modals[i]]) { continue; }
-		if (!eHTML.modals[modals[i]].wrap) { continue; }
-		if (eHTML.modals[modals[i]].wrap.id === modalWrapID) { modal = eHTML.modals[modals[i]]; break; }
-	}
-	if (!modal) { console.error('switchBtnsIfMnemonicGridIsFilled: modal not found'); return; }
-
-	const extracted = extractMnemonicFromInputs(modal)
-
-	if (!extracted.allWordsAreValid) {
-		setModalBottomButtonsState(modal, false);
-		return false;
-	}
-
-	setModalBottomButtonsState(modal, true);
-	return extracted;
 }
 function extractMnemonicFromInputs(modal = eHTML.modals.inputMasterMnemonic) {
 	const mnemonicGridInputs = modal.mnemonicGridInputs;
@@ -1000,23 +534,9 @@ function extractMnemonicFromInputs(modal = eHTML.modals.inputMasterMnemonic) {
 
 	return result;
 }
-function deleteExistingSuggestionsHTML() {
-	const suggestionsHTMLs = document.getElementsByClassName('suggestions');
-	while (suggestionsHTMLs.length > 0) {
-		suggestionsHTMLs[0].remove();
-	}
-}
-function modalInfo(modal = eHTML.modals.inputMasterMnemonic, text, timeout = 5000) {
-	// reset bottom info
-	const infoElmnt = modal.bottomInfo;
+//#endregion
 
-	infoElmnt.innerText = text;
-
-	setTimeout(() => {
-		infoElmnt.innerText = "";
-	}, timeout);
-}
-// OLD FUNCTIONS - WILL BE DELETED
+//#region -  OLD FUNCTIONS - WILL BE DELETED
 function setActiveForm(formIndex) {
 	parkour.currentForm = formIndex;
 	const nbOfForms = eHTML.forms.length;
@@ -1218,6 +738,499 @@ function switchContinueBtnIfMnemonicIsControlled() {
 
 	return true;
 }
+// form2: pseudo mnemonic specific functions
+function setPseudoMnemonicOptionsList() {
+	// BIP LIST
+	const defaultBip = settings.defaultBip;
+	userInfo.pseudoMnemonicBip = defaultBip;
+	// const bipList = eHTML.forms[1].bipList;
+
+	// LANGUAGE LIST
+	const languages = emptyMnemoLinker.getAvailableLanguages();
+	const languageList = eHTML.forms[1].languageList;
+	languageList.innerHTML = "";
+	for (let i = 0; i < languages.length; i++) {
+		const language = languages[i];
+		const newElmnt = document.createElement('option');
+		newElmnt.value = language;
+		newElmnt.innerText = language;
+		languageList.appendChild(newElmnt);
+	}
+
+	const defaultLanguage = settings.defaultLanguage;
+	const defaultLanguageIndex = languages.indexOf(defaultLanguage);
+	languageList.selectedIndex = defaultLanguageIndex;
+	userInfo.pseudoMnemonicLanguage = defaultLanguage;
+
+	// LENGTH LIST
+	const lengthList = eHTML.forms[1].lengthList;
+	lengthList.innerHTML = "";
+	// const authorizedLengths = userInfo.mnemonic.length === 12 ? [12] : [12, 24];
+	const authorizedLengths = [12];
+	for (let i = 0; i < authorizedLengths.length; i++) {
+		const length = authorizedLengths[i];
+		const newElmnt = document.createElement('option');
+		newElmnt.value = length;
+		newElmnt.innerText = `${length} words`;
+		lengthList.appendChild(newElmnt);
+	}
+
+	lengthList.selectedIndex = 0;
+	setMnemonicInputsVisibility(eHTML.forms[1].mnemonicGrid, authorizedLengths[0]);
+}
+function isWordInPseudoWordsList(word) {
+	const bip = userInfo.pseudoMnemonicBip;
+	const language = userInfo.pseudoMnemonicLanguage;
+	const wordsList = emptyMnemoLinker.getWordsTable(bip, language);
+	if (!wordsList) { return false; }
+
+	return wordsList.includes(word);
+}
+/*function focusNextInput(inputElement) {
+	const mnemonicGrid = input.parentElement.parentElement;
+	const mnemonicGridInputs = mnemonicGrid.querySelectorAll('input');
+	for (let i = 0; i < mnemonicGridInputs.length; i++) {
+		const input = mnemonicGridInputs[i];
+		if (input === inputElement) {
+			const nextInput = mnemonicGridInputs[i + 1];
+			if (nextInput) { nextInput.focus(); }
+			break;
+		}
+	}
+	return;
+}*/
+function getPseudoMnemonicFromInputs() {
+	const wordsList = emptyMnemoLinker.getWordsTable(userInfo.pseudoMnemonicBip, userInfo.pseudoMnemonicLanguage);
+	if (!wordsList) { return; }
+
+	const result = { allWordsAreValid: true, mnemonic: [], mnemonicStr: "", nbOfRandomWords: 0 };
+	const mnemonic = [];
+	for (let i = 0; i < eHTML.forms[1].mnemonicGridInputs.length; i++) {
+		const input = eHTML.forms[1].mnemonicGridInputs[i];
+		if (input.parentElement.classList.contains('hidden')) { continue; }
+
+		const isRandom = input.classList.contains('random');
+		if (isRandom) { result.nbOfRandomWords++; }
+		
+		mnemonic.push(input.value);
+	};
+
+	// check if all words are included in the words list
+	for (let i = 0; i < mnemonic.length; i++) {
+		if (!wordsList.includes(mnemonic[i])) { result.allWordsAreValid = false; break; }
+	}
+
+	result.mnemonic = mnemonic;
+	result.mnemonicStr = mnemonic.join(' ');
+	return result;
+}
+function getRandomUniqueWord(wordsList = [], mnemonic = []) {
+	const wordsListLength = wordsList.length;
+	if (wordsListLength === 0) { return; }
+
+	let remainingAttempts = 100;
+	let rnd = cryptoRnd(0, wordsListLength - 1);
+	let rndWord = wordsList[rnd];
+	while (mnemonic.includes(rndWord)) {
+		rnd = cryptoRnd(0, wordsListLength - 1);
+		rndWord = wordsList[rnd];
+		remainingAttempts--;
+		if (remainingAttempts === 0) { console.error('No unique word found !'); return false; }
+	}
+
+	return rndWord;
+}
+async function randomizePseudoMnemonic(desiredLength, asPlaceholder = false) {
+	eHTML.forms[1].mnemonicGrid.classList.add('busy');
+	parkour.step1.rndButtonsPressed = 0;
+
+	const bip = userInfo.pseudoMnemonicBip;
+	const language = userInfo.pseudoMnemonicLanguage;
+	const wordsList = emptyMnemoLinker.getWordsTable(bip, language);
+	if (!wordsList) { return; }
+
+	eHTML.forms[1].mnemonicGridInputs.forEach((input) => { input.value = ""; input.placeholder = "";  });
+
+	const mnemonic = [];
+	for (let i = 0; i < desiredLength; i++) {
+		const input = eHTML.forms[1].mnemonicGridInputs[i];
+		const rndWord = getRandomUniqueWord(wordsList, userInfo.pseudoMnemonic);
+		mnemonic.push(rndWord);
+		for (let j = 0; j < rndWord.length; j++) {
+			/*const rndFakeChar = rnd(0, 5);
+			// add fake char and remove it (from a to z, lowercase only) -> just a visual effect
+			for (let k = 0; k < rndFakeChar; k++) {
+				const fakeChar = String.fromCharCode(rnd(97, 122));
+				if (asPlaceholder) { input.placeholder += fakeChar; } else { input.value += fakeChar; };
+				await new Promise(r => setTimeout(r, settings.delayBeetweenChar));
+				if (asPlaceholder) { input.placeholder = input.placeholder.slice(0, -1); } else { input.value = input.value.slice(0, -1); };
+			}*/
+
+			input.placeholder += rndWord.charAt(j);
+			if (!asPlaceholder) { input.value += rndWord.charAt(j); };
+			const delay = settings.delayBeetweenChar;
+			const timeOutRnd = rnd(0, delay);
+			await new Promise(r => setTimeout(r, timeOutRnd));
+		}
+		input.classList.add('random');
+	};
+
+	parkour.step1.rndMnemonic = mnemonic;
+	switchContinueBtnIfPseudoMnemonicIsControlled();
+	actualizeScore();
+	eHTML.forms[1].mnemonicGrid.classList.remove('busy');
+}
+function switchContinueBtnIfPseudoMnemonicIsControlled() {
+	const continueBtn = eHTML.forms[1].continueBtn;
+	const copyBtn = eHTML.forms[1].copyMnemonicBtn;
+	const downloadBtn = eHTML.forms[1].downloadMnemonicBtn;
+	const mnemonicFromInputs = getPseudoMnemonicFromInputs();
+
+	if (!mnemonicFromInputs.allWordsAreValid || !userInfo.setPseudoMnemonic(mnemonicFromInputs.mnemonic)) {
+		continueBtn.classList.add('disabled');
+		copyBtn.classList.add('crushed');
+		downloadBtn.classList.add('crushed');
+		return false; 
+	}
+
+	
+	continueBtn.classList.remove('disabled');
+	copyBtn.classList.remove('crushed');
+	downloadBtn.classList.remove('crushed');
+
+	copyBtn.focus();
+
+	return true;
+}
+async function controlPseudoMnemonic() {
+	if (skipper.form2Control) { return true; }
+
+	await clearMnemonicInputs(eHTML.forms[1].mnemonicGridInputs);
+	eHTML.forms[1].mnemonicGridInputs.forEach((input) => { input.classList.remove('disabled') });
+
+	parkour["step1"].controllingMnemonic = true;
+	const nbOfWordsToCheck = settings.nbOfWordsToCheck;
+	let controlledWordsIndex = [];
+
+	while(controlledWordsIndex.length < nbOfWordsToCheck) {
+		const wordIndex = rnd(0, userInfo.pseudoMnemonic.length - 1);
+		if (controlledWordsIndex.includes(wordIndex)) { continue; }
+		
+		const correspondingInput = eHTML.forms[1].mnemonicGridInputs[wordIndex];
+		correspondingInput.placeholder = "???";
+		correspondingInput.readOnly = false;
+		correspondingInput.focus();
+
+		while (parkour.currentForm === 2 && !userInfo.pseudoMnemonic.includes(correspondingInput.value)) {
+			await new Promise(r => setTimeout(r, 100));
+			if (!parkour["step1"].controllingMnemonic) { console.log('controlPseudoMnemonic aborted'); return false; }
+		}
+		if (parkour.currentForm !== 2) { console.log('controlPseudoMnemonic aborted'); return false; }
+
+		controlledWordsIndex.push(wordIndex);
+		correspondingInput.value = "";
+		correspondingInput.placeholder = "✓";
+		correspondingInput.readOnly = true;
+		deleteExistingSuggestionsHTML();
+	}
+
+	parkour["step1"].controllingMnemonic = false;
+	parkour["step1"].controlledMnemonic = true;
+	return true;
+}
+// form3: MnemoLink specific functions
+async function fillMnemoLinkText(mnemoLinkStr = '', initDelay = 500, animationDuration = 2500) {
+	const mnemoLinkStrElmnt = eHTML.forms[3].mnemoLinkStr;
+	const mnemoLinkWrapElmnt = eHTML.forms[3].mnemoLinkWrap;
+
+	const mixingOperations = 6;
+	const durations = {
+		delay: animationDuration * 0.2,
+		mixDuration: animationDuration * 0.5,
+		showDuration: animationDuration * 0.3,
+		mixing: animationDuration * 0.7 / mixingOperations
+	};
+	const wordsListA = emptyMnemoLinker.getWordsTable(userInfo.mnemonicBip, userInfo.mnemonicLanguage);
+	const wordsListB = emptyMnemoLinker.getWordsTable(userInfo.pseudoMnemonicBip, userInfo.pseudoMnemonicLanguage);
+	mnemoLinkStrElmnt.innerText = wordsListA.join(' ');
+
+	await new Promise(r => setTimeout(r, initDelay));
+	
+	setTimeout(() => {
+		anime({
+			targets: mnemoLinkWrapElmnt,
+			width: '0%',
+			opacity: .6,
+			duration: durations.mixDuration,
+			easing: 'easeInOutQuad',
+			complete: () => {
+				anime({
+					targets: mnemoLinkWrapElmnt,
+					width: '100%',
+					opacity: 1,
+					duration: durations.showDuration,
+					easing: 'easeInOutQuad',
+				});
+			}
+		});
+	}, durations.delay);
+
+	function genMixedWordsList() {
+		const desiredLength = wordsListA.length;
+		const mixedWordsList = [];
+		for (let i = 0; i < desiredLength; i++) {
+			const list = rnd(0, 1) === 0 ? wordsListA : wordsListB;
+			const rndIndex = rnd(0, list.length - 1);
+			mixedWordsList.push(list[rndIndex]);
+		}
+		return mixedWordsList;
+	}
+
+	for (let i = 0; i < mixingOperations; i++) {
+		const mixedWordsList = genMixedWordsList();
+		mnemoLinkStrElmnt.innerText = mixedWordsList.join(' ');
+		await new Promise(r => setTimeout(r, durations.mixing));
+	}
+
+	mnemoLinkStrElmnt.innerText = mnemoLinkStr;
+
+	await new Promise(r => setTimeout(r, durations.mixDuration - initDelay > 0 ? durations.mixDuration - initDelay : 0));
+
+	return true;
+}
+function switchMnemoLinkButtons() {
+	const copyBtn = eHTML.forms[3].copyMnemoLinkBtn;
+	const downloadBtn = eHTML.forms[3].downloadMnemoLinkBtn;
+	//const inscribeBtn = eHTML.forms[3].inscribeBtn;
+
+	copyBtn.classList.remove('crushed');
+	downloadBtn.classList.remove('crushed');
+
+	copyBtn.focus();
+
+	return true;
+}
+//#endregion
+
+//#region - UX FUNCTIONS
+function toggleDashboard() {
+	const dashboard = eHTML.dashboard.element;
+	if (dashboard.classList.contains('open')) { 
+		dashboard.classList.remove('open');
+	} else {
+		dashboard.classList.add('open');
+	}
+}
+function openModal(modalName = '') {
+	const modals = eHTML.modals;
+	if (!modals.wrap.classList.contains('fold')) { return; }
+	modals.wrap.classList.remove('hidden');
+	modals.wrap.classList.remove('fold');
+
+	for (let modalKey in modals) {
+		if (modalKey === 'wrap') { continue; }
+		const modalWrap = modals[modalKey].wrap;
+		modalWrap.classList.add('hidden');
+		if (modalKey === modalName) { modalWrap.classList.remove('hidden'); }
+	}
+
+	const modalsWrap = eHTML.modals.wrap;
+	modalsWrap.style.transform = 'scaleX(0) scaleY(0) skewX(0deg)';
+	modalsWrap.style.opacity = 0;
+	modalsWrap.style.clipPath = 'circle(6% at 50% 50%)';
+
+	anime({
+		targets: modalsWrap,
+		//skewX: '1.2deg',
+		scaleX: 1,
+		scaleY: 1,
+		opacity: 1,
+		duration: 600,
+		easing: 'easeOutQuad',
+		complete: () => {
+			if (modalName === 'inputMasterMnemonic' || modalName === 'inputMnemonic') {
+				eHTML.modals[modalName].mnemonicGridInputs[0].focus();
+			}
+		}
+	});
+	anime({
+		targets: modalsWrap,
+		clipPath: 'circle(100% at 50% 50%)',
+		delay: 200,
+		duration: 800,
+		easing: 'easeOutQuad',
+	});
+}
+function closeModal() {
+	// clear inputs
+	initMnemonicInputs(eHTML.modals.inputMasterMnemonic.mnemonicGridInputs);
+	initMnemonicInputs(eHTML.modals.inputMnemonic.mnemonicGridInputs);
+
+	const modalsWrap = eHTML.modals.wrap;
+	if (modalsWrap.classList.contains('fold')) { return false; }
+	modalsWrap.classList.add('fold');
+
+	anime({
+		targets: modalsWrap,
+		clipPath: 'circle(6% at 50% 50%)',
+		duration: 600,
+		easing: 'easeOutQuad',
+	});
+	anime({
+		targets: modalsWrap,
+		scaleX: 0,
+		scaleY: 0,
+		opacity: 0,
+		duration: 800,
+		easing: 'easeOutQuad',
+		complete: () => {
+			if (!modalsWrap.classList.contains('fold')) { return; }
+
+			modalsWrap.classList.add('hidden');
+			const modals = eHTML.modals;
+			for (let modalKey in modals) {
+				if (modalKey === 'wrap') { continue; }
+				const modalWrap = modals[modalKey].wrap;
+				modalWrap.classList.add('hidden');
+			}
+		}
+	});
+}
+function setScoreUI (score = 100) {
+	const modal = eHTML.modals.inputMasterMnemonic;
+	modal.scoreBarFill.style.width = `${Math.round(score)}%`;
+	modal.scoreLabel.innerText = `${score.toFixed(2)}%`;
+
+	// glitch / checking effect
+	modal.scoreBarFill.classList.add('glitch');
+	setTimeout(() => { modal.scoreBarFill.classList.remove('glitch'); }, 500);
+}
+function setModalBottomButtonsState(modal = eHTML.modals.inputMasterMnemonic, ready = false) {
+	const confirmBtn = modal.confirmBtn;
+	const copyBtn = modal.copyMnemonicBtn;
+	const downloadBtn = modal.downloadMnemonicBtn;
+
+	if (!ready) {
+		confirmBtn.classList.add('disabled');
+		copyBtn.classList.add('crushed');
+		downloadBtn.classList.add('crushed');
+	} else {
+		confirmBtn.classList.remove('disabled');
+		copyBtn.classList.remove('crushed');
+		downloadBtn.classList.remove('crushed');
+	}
+}
+function switchBtnsIfMnemonicGridIsFilled(modalWrapID = "masterMnemonicModalWrap") {
+	const modals = Object.keys(eHTML.modals);
+	let modal = null;
+	for (let i = 0; i < modals.length; i++) {
+		if (!eHTML.modals[modals[i]]) { continue; }
+		if (!eHTML.modals[modals[i]].wrap) { continue; }
+		if (eHTML.modals[modals[i]].wrap.id === modalWrapID) { modal = eHTML.modals[modals[i]]; break; }
+	}
+	if (!modal) { 
+		console.error('switchBtnsIfMnemonicGridIsFilled: modal not found');
+		return { allWordsAreValid: false, mnemonic: new mnemonicObject() };
+	}
+
+	const extracted = extractMnemonicFromInputs(modal)
+
+	if (!extracted.allWordsAreValid) {
+		setModalBottomButtonsState(modal, false);
+		return extracted;
+	}
+
+	setModalBottomButtonsState(modal, true);
+	return extracted;
+}
+function deleteExistingSuggestionsHTML() {
+	const suggestionsHTMLs = document.getElementsByClassName('suggestions');
+	while (suggestionsHTMLs.length > 0) {
+		suggestionsHTMLs[0].remove();
+	}
+}
+function modalInfo(modal = eHTML.modals.inputMasterMnemonic, text, timeout = 5000) {
+	// reset bottom info
+	const infoElmnt = modal.bottomInfo;
+
+	infoElmnt.innerText = text;
+
+	setTimeout(() => {
+		infoElmnt.innerText = "";
+	}, timeout);
+}
+function createMnemoLinkElement(label = 'key1') {
+	const newMnemoLink = document.createElement('div');
+	newMnemoLink.classList.add('mnemolink');
+	newMnemoLink.innerHTML = `
+		<div class="leftDecoration"></div>
+		<div class="deleteBtn"></div>
+		<input class="mnemolinkInput" value="key1"></input>
+	`;
+
+	const mnemolinkInput = newMnemoLink.getElementsByClassName('mnemolinkInput')[0];
+	mnemolinkInput.value = label;
+
+	return newMnemoLink;
+}
+function fillMnemoLinkList() {
+	eHTML.dashboard.mnemolinksList.innerHTML = ''
+
+	const monemoLinksLabels = userData.getListOfMnemoLinks();
+	for (let i = 0; i < monemoLinksLabels.length; i++) {
+		const label = monemoLinksLabels[i];
+		const element = createMnemoLinkElement(label);
+		eHTML.dashboard.mnemolinksList.appendChild(element);
+	}
+
+	const linkNewMnemonicBtnWrap = document.createElement('div');
+	linkNewMnemonicBtnWrap.id = "linkNewMnemonicBtnWrap";
+	linkNewMnemonicBtnWrap.innerHTML = '<div id="linkNewMnemonicBtn">+</div>';
+	eHTML.dashboard.mnemolinksList.appendChild(linkNewMnemonicBtnWrap);
+}
+function createMnemoLinkElement(label = 'key1') {
+	const newMnemoLink = document.createElement('div');
+	newMnemoLink.classList.add('mnemolink');
+	newMnemoLink.innerHTML = `
+		<div class="leftDecoration"></div>
+		<div class="deleteBtn"></div>
+		<input class="mnemolinkInput" value="key1"></input>
+	`;
+
+	const mnemolinkInput = newMnemoLink.getElementsByClassName('mnemolinkInput')[0];
+	mnemolinkInput.value = label;
+
+	return newMnemoLink;
+}
+/*function fillMnemoLinkBubblesWrap() {
+	const mnemolinksBubblesWrap = eHTML.dashboard.mnemolinksBubblesContainer.children[0];
+	const monemoLinksLabels = userData.getListOfMnemoLinks();
+	for (let i = 0; i < monemoLinksLabels.length; i++) {
+		const label = monemoLinksLabels[i];
+		const element = createMnemoLinkBubbleElement(label);
+		eHTML.dashboard.mnemolinksList.appendChild(element);
+	}
+}
+function positionMnemoLinkBubbles() {
+	//const radius = 150; // Rayon du cercle imaginaire
+	const radius = window.innerHeight / 3;
+	const mnemolinksBubblesContainer = eHTML.dashboard.mnemolinksBubblesContainer;
+	const center_x = mnemolinksBubblesContainer.offsetWidth / 2;
+	const center_y = mnemolinksBubblesContainer.offsetHeight / 2;
+	const mnemoLinks = mnemolinksBubblesContainer.querySelectorAll('.mnemolinkBubble');
+  
+	mnemoLinks.forEach(function(mnemoLink, index) {
+		const width = mnemoLink.offsetWidth;
+		const total = mnemoLinks.length;
+		const angle = (index / total) * (2 * Math.PI); // Angle for each element
+		
+		const x = center_x + radius * Math.cos(angle) - (width / 2);
+		const y = center_y + radius * Math.sin(angle) - (width / 2);
+	
+		mnemoLink.style.left = x + 'px';
+		mnemoLink.style.top = y + 'px';
+	});
+}*/
 //#endregion
 
 //#region - EVENT LISTENERS
@@ -1264,22 +1277,34 @@ document.addEventListener('keydown', (event) => {
 				break;
 			case 'Tab':
 			case 'Enter':
-				if (!activeSuggestion) { return; }
-				const input = activeSuggestion.parentElement.parentElement.getElementsByClassName('wordInput')[0];
-				if (!input) { return; }
+				/** @type {HTMLInputElement} */
+				let input = null;
+				try {
+					input = activeSuggestion.parentElement.parentElement.getElementsByClassName('wordInput')[0];
+				} catch (error) {
+					if (event.target.classList.contains('wordInput')) { input = event.target; }
+				};
+
+				if (input === null) { return; }
 				event.preventDefault();
+				const modalWrap = input.parentElement.parentElement.parentElement.parentElement.parentElement
+				if (!modalWrap || !modalWrap.id) { console.error('modalWrap not found'); return; }
+				
+				if (!activeSuggestion) {
+					if (switchBtnsIfMnemonicGridIsFilled(modalWrap.id).allWordsAreValid) { return; }
+					focusNextInput(input);
+					return; 
+				}
 
 				input.value = activeSuggestion.innerText;
 				deleteExistingSuggestionsHTML();
 				
-				const modalWrap = input.parentElement.parentElement.parentElement.parentElement.parentElement
-				if (!modalWrap || !modalWrap.id) { console.error('modalWrap not found'); return; }
 				if (modalWrap.id === eHTML.modals.inputMasterMnemonic.wrap.id) {
 					if (tempData.rndMnemonic.includes(input.value)) { input.classList.add('random'); } else { input.classList.remove('random'); }
 					actualizeScore();
 				}
 
-				if (switchBtnsIfMnemonicGridIsFilled(modalWrap.id)) { return; }
+				if (switchBtnsIfMnemonicGridIsFilled(modalWrap.id).allWordsAreValid) { return; }
 				focusNextInput(input);
 		
 				break;
@@ -1293,9 +1318,11 @@ document.addEventListener('click', (event) => {
 	if (event.target.classList.contains('suggestion')) { return; }
 	if (event.target.classList.contains('suggestions')) { return; }
 	deleteExistingSuggestionsHTML();
+
+	if (event.target.id === 'linkNewMnemonicBtn') { openModal('inputMnemonic'); }
 });
 centerScreenBtn.addEventListener('click', async (event) => {
-	if (!userData.isMnemonicFilled('master')) {
+	if (!userData.isMasterMnemonicFilled()) {
 		openModal('inputMasterMnemonic');
 		await randomizeMnemonic(eHTML.modals.inputMasterMnemonic, true);
 		eHTML.modals.inputMasterMnemonic.mnemonicGridInputs[0].focus();
@@ -1319,7 +1346,8 @@ eHTML.modals.inputMasterMnemonic.previousLanguageBtn.addEventListener('click', a
 	const previousLanguage = languages[previousLanguageIndex];
 	if (!previousLanguage) { console.error('previousLanguage not found'); return; }
 
-	languageBtn.classList = `languageSelectionBtn ${previousLanguage}`;
+	const initialClass = languageBtn.classList[0];
+	languageBtn.classList = `${initialClass} ${previousLanguage}`;
 	await randomizeMnemonic(eHTML.modals.inputMasterMnemonic, true);
 	switchBtnsIfMnemonicGridIsFilled(eHTML.modals.inputMasterMnemonic.wrap.id);
 	tempData.init();
@@ -1335,7 +1363,8 @@ eHTML.modals.inputMasterMnemonic.nextLanguageBtn.addEventListener('click', async
 	const nextLanguage = languages[nextLanguageIndex];
 	if (!nextLanguage) { console.error('nextLanguage not found'); return; }
 
-	languageBtn.classList = `languageSelectionBtn ${nextLanguage}`;
+	const initialClass = languageBtn.classList[0];
+	languageBtn.classList = `${initialClass} ${nextLanguage}`;
 	await randomizeMnemonic(eHTML.modals.inputMasterMnemonic, true);
 	switchBtnsIfMnemonicGridIsFilled(eHTML.modals.inputMasterMnemonic.wrap.id);
 	tempData.init();
@@ -1348,7 +1377,7 @@ eHTML.modals.inputMasterMnemonic.randomizeBtn.addEventListener('click', async (e
 	eHTML.modals.inputMasterMnemonic.mnemonicGridInputs[0].focus();
 
 	const extracted = switchBtnsIfMnemonicGridIsFilled(eHTML.modals.inputMasterMnemonic.wrap.id);
-	if (!extracted || !extracted.allWordsAreValid) { return; }
+	if (!extracted.allWordsAreValid) { return; }
 	tempData.mnemonic = extracted.mnemonic;
 });
 eHTML.modals.inputMasterMnemonic.mnemonicGrid.addEventListener('input', (event) => {
@@ -1356,7 +1385,8 @@ eHTML.modals.inputMasterMnemonic.mnemonicGrid.addEventListener('input', (event) 
 	
 	const modal = eHTML.modals.inputMasterMnemonic;
 	const input = event.target;
-	const value = input.value.replace(/[^a-zA-Z]/g, '').toLowerCase();
+	//const value = input.value.replace(/[^a-zA-Z]/g, '').toLowerCase();
+	const value = input.value.toLowerCase();
 	event.target.value = value;
 	
 	const bip = "BIP-0039";
@@ -1370,7 +1400,7 @@ eHTML.modals.inputMasterMnemonic.mnemonicGrid.addEventListener('input', (event) 
 		deleteExistingSuggestionsHTML();
 		input.classList.add('random');
 		actualizeScore();
-		if (extracted && extracted.allWordsAreValid) { tempData.mnemonic = extracted.mnemonic; return; }
+		if (extracted.allWordsAreValid) { tempData.mnemonic = extracted.mnemonic; return; }
 		focusNextInput(input);
 		return;
 	}
@@ -1400,7 +1430,7 @@ eHTML.modals.inputMasterMnemonic.mnemonicGrid.addEventListener('input', (event) 
 			deleteExistingSuggestionsHTML();
 			if (tempData.rndMnemonic.includes(input.value)) { input.classList.add('random'); } else { input.classList.remove('random'); }
 			actualizeScore()
-			if (switchBtnsIfMnemonicGridIsFilled(modal.wrap.id)) { return; }
+			if (switchBtnsIfMnemonicGridIsFilled(modal.wrap.id).allWordsAreValid) { return; }
 			focusNextInput(input);
 			return;
 		});
@@ -1438,7 +1468,7 @@ eHTML.modals.inputMasterMnemonic.mnemonicGrid.addEventListener('click', (event) 
 		actualizeScore();
 
 		const extracted = switchBtnsIfMnemonicGridIsFilled(eHTML.modals.inputMasterMnemonic.wrap.id);
-		if (extracted && extracted.allWordsAreValid) { tempData.mnemonic = extracted.mnemonic; }
+		if (extracted.allWordsAreValid) { tempData.mnemonic = extracted.mnemonic; }
 	}
 });
 eHTML.modals.inputMasterMnemonic.copyMnemonicBtn.addEventListener('click', (event) => {
@@ -1478,8 +1508,8 @@ eHTML.modals.inputMasterMnemonic.confirmBtn.addEventListener('click', async (eve
 
 	eHTML.modals.inputMasterMnemonic.confirmBtn.classList.add('busy');
 
-	await userData.setMnemonicAsEncrypted('master', mnemonic);
-	save.userEncryptedMnemonicsStr();
+	await userData.setMnemonicAsEncrypted(mnemonic);
+	await save.userEncryptedMnemonicsStr();
 	tempData.init();
 	
 	closeModal();
@@ -1490,12 +1520,36 @@ eHTML.modals.inputMasterMnemonic.confirmBtn.addEventListener('click', async (eve
 eHTML.modals.inputMnemonic.wrap.addEventListener('click', (event) => {
 	if (event.target === eHTML.modals.inputMnemonic.wrap) { closeModal(); }
 });
+eHTML.modals.inputMnemonic.nextLanguageBtn.addEventListener('click', async (event) => {
+	const languageBtn = eHTML.modals.inputMnemonic.randomizeBtn;
+	const languages = emptyMnemoLinker.getAvailableLanguages();
+	const currentLanguage = languageBtn.classList[1];
+	const currentLanguageIndex = languages.indexOf(currentLanguage);
+	const nextLanguageIndex = currentLanguageIndex === languages.length - 1 ? 0 : currentLanguageIndex + 1;
+	const nextLanguage = languages[nextLanguageIndex];
+	if (!nextLanguage) { console.error('nextLanguage not found'); return; }
+
+	const initialClass = languageBtn.classList[0];
+	languageBtn.classList = `${initialClass} ${nextLanguage}`;
+});
+eHTML.modals.inputMnemonic.previousLanguageBtn.addEventListener('click', async (event) => {
+	const languageBtn = eHTML.modals.inputMnemonic.randomizeBtn;
+	const languages = emptyMnemoLinker.getAvailableLanguages();
+	const currentLanguage = languageBtn.classList[1];
+	const currentLanguageIndex = languages.indexOf(currentLanguage);
+	const previousLanguageIndex = currentLanguageIndex === 0 ? languages.length - 1 : currentLanguageIndex - 1;
+	const previousLanguage = languages[previousLanguageIndex];
+	if (!previousLanguage) { console.error('previousLanguage not found'); return; }
+
+	const initialClass = languageBtn.classList[0];
+	languageBtn.classList = `${initialClass} ${previousLanguage}`;
+});
 eHTML.modals.inputMnemonic.randomizeBtn.addEventListener('click', async (event) => {
 	if (eHTML.modals.inputMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
 	await randomizeMnemonic(eHTML.modals.inputMnemonic, false);
 
 	const extracted = switchBtnsIfMnemonicGridIsFilled(eHTML.modals.inputMnemonic.wrap.id);
-	if (!extracted || !extracted.allWordsAreValid) { return; }
+	if (!extracted.allWordsAreValid) { return; }
 	tempData.mnemonic = extracted.mnemonic;
 });
 eHTML.modals.inputMnemonic.mnemonicGrid.addEventListener('input', (event) => {
@@ -1503,7 +1557,8 @@ eHTML.modals.inputMnemonic.mnemonicGrid.addEventListener('input', (event) => {
 	
 	const modal = eHTML.modals.inputMnemonic;
 	const input = event.target;
-	const value = input.value.replace(/[^a-zA-Z]/g, '').toLowerCase();
+	//const value = input.value.replace(/[^a-zA-Z]/g, '').toLowerCase();
+	const value = input.value.toLowerCase()
 	event.target.value = value;
 	
 	let bip = "BIP-0039";
@@ -1511,13 +1566,18 @@ eHTML.modals.inputMnemonic.mnemonicGrid.addEventListener('input', (event) => {
 
 	// try to find the language
 	const extracted = switchBtnsIfMnemonicGridIsFilled(modal.wrap.id);
-	if (extracted && extracted.mnemonic.mnemonic.length > 2) {
+	const nonEmptyWords = extracted.mnemonic.mnemonic.filter(word => word.length > 0);
+	if (nonEmptyWords.length > 2) {
 		const extractedMnemonic = extracted.mnemonic.mnemonic;
 		if (!extracted.allWordsAreValid && extractedMnemonic.length > 1) {
 			const result = emptyMnemoLinker.getBIPTableFromMnemonic(extracted.mnemonic.mnemonic);
-			if (result) {
-				console.log(`language is probably ${result.language}`);
-				modal.randomizeBtn.classList[1] = result.language;
+			const initialClass = modal.randomizeBtn.classList[0];
+			const detectedLanguage = result.language ? result.language : result.bestLanguage;
+			if (detectedLanguage !== language) {
+				deleteExistingSuggestionsHTML();
+				console.log(result.language ? `language is ${result.language}` : `language is probably ${result.bestLanguage}`);
+				modal.randomizeBtn.classList = `${initialClass} ${detectedLanguage}`;
+				language = detectedLanguage;
 			}
 		}
 	}
@@ -1548,7 +1608,7 @@ eHTML.modals.inputMnemonic.mnemonicGrid.addEventListener('input', (event) => {
 
 			deleteExistingSuggestionsHTML();
 			if (tempData.rndMnemonic.includes(input.value)) { input.classList.add('random'); } else { input.classList.remove('random'); }
-			if (switchBtnsIfMnemonicGridIsFilled(modal.wrap.id)) { return; }
+			if (switchBtnsIfMnemonicGridIsFilled(modal.wrap.id).allWordsAreValid) { return; }
 			focusNextInput(input);
 			return;
 		});
@@ -1569,185 +1629,26 @@ eHTML.modals.inputMnemonic.mnemonicGrid.addEventListener('input', (event) => {
 	}
 	input.parentElement.appendChild(suggestionsHTML);
 });
+eHTML.modals.inputMnemonic.copyMnemonicBtn.addEventListener('click', (event) => {
+	if (eHTML.modals.inputMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
 
-// WILL BE DELETED
-// FORM 0 (start choices)
-eHTML.forms[0].useExistingMnemonicBtn.addEventListener('click', (event) => {
-	parkour["step0"].fromExistingMnemonic = true;
-	initMnemonicInputs(eHTML.forms[2].mnemonicGridInputs, false);
-	setMnemonicInputsVisibility(eHTML.forms[2].mnemonicGrid, 24);
-	setActiveForm(1);
+	const mnemonic = tempData.mnemonic.getMnemonicStr();
+	if (!mnemonic) { return; }
+
+	navigator.clipboard.writeText(mnemonic);
+	modalInfo(eHTML.modals.inputMnemonic, 'Mnemonic copied to clipboard');
 });
-eHTML.forms[0].startBtn.addEventListener('click', async (event) => {
-	setActiveForm(1);
-	setPseudoMnemonicOptionsList();
+eHTML.modals.inputMnemonic.downloadMnemonicBtn.addEventListener('click', (event) => {
+	if (eHTML.modals.inputMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
 
-	await new Promise(r => setTimeout(r, 600));
+	const mnemonic = tempData.mnemonic.getMnemonicStr();
+	if (!mnemonic) { return; }
 
-	eHTML.forms[1].mnemoLinkRandomizeBtn.click();
-});
-eHTML.forms[0].retrieveBtn.addEventListener('click', (event) => {
-});
-// FORM 1 (pseudo mnemonic)
-eHTML.forms[1].bipList.addEventListener('change', (event) => {
-	const bip = eHTML.forms[1].bipList.value;
-	const language = userInfo.pseudoMnemonicLanguage;
-	const wordsList = emptyMnemoLinker.getWordsTable(bip, language);
-	if (!wordsList) { eHTML.forms[1].bipList.value = userInfo.pseudoMnemonicBip; return; }
-
-	userInfo.pseudoMnemonicBip = bip;
-});
-eHTML.forms[1].languageList.addEventListener('change', (event) => {
-	const bip = userInfo.pseudoMnemonicBip;
-	const language = eHTML.forms[1].languageList.value;
-	const wordsList = emptyMnemoLinker.getWordsTable(bip, language);
-	if (!wordsList) { eHTML.forms[1].languageList.value = userInfo.pseudoMnemonicLanguage; return; }
-
-	userInfo.pseudoMnemonicLanguage = language;
-});
-eHTML.forms[1].lengthList.addEventListener('change', (event) => {
-	const desiredLength = parseInt(eHTML.forms[1].lengthList.value);
-	setMnemonicInputsVisibility(eHTML.forms[1].mnemonicGrid, desiredLength);
-});
-eHTML.forms[1].previousLanguageBtn.addEventListener('click', (event) => {
-	if (parkour.step1.randomizingMnemonic) { return; }
-	const languages = emptyMnemoLinker.getAvailableLanguages();
-	const currentLanguageIndex = languages.indexOf(userInfo.pseudoMnemonicLanguage);
-	const previousLanguageIndex = currentLanguageIndex === 0 ? languages.length - 1 : currentLanguageIndex - 1;
-	const previousLanguage = languages[previousLanguageIndex];
-	if (!previousLanguage) { console.error('previousLanguage not found'); return; }
-
-	userInfo.pseudoMnemonicLanguage = previousLanguage;
-	eHTML.forms[1].mnemoLinkRandomizeBtn.classList = "languageSelectionBtn";
-	eHTML.forms[1].mnemoLinkRandomizeBtn.classList.add(previousLanguage);
-	parkour.step1.fillAsPlaceholder = true;
-	eHTML.forms[1].mnemoLinkRandomizeBtn.click();
-});
-eHTML.forms[1].nextLanguageBtn.addEventListener('click', (event) => {
-	if (parkour.step1.randomizingMnemonic) { return; }
-	const languages = emptyMnemoLinker.getAvailableLanguages();
-	const currentLanguageIndex = languages.indexOf(userInfo.pseudoMnemonicLanguage);
-	const nextLanguageIndex = currentLanguageIndex === languages.length - 1 ? 0 : currentLanguageIndex + 1;
-	const nextLanguage = languages[nextLanguageIndex];
-	if (!nextLanguage) { console.error('nextLanguage not found'); return; }
-
-	userInfo.pseudoMnemonicLanguage = nextLanguage;
-	eHTML.forms[1].mnemoLinkRandomizeBtn.classList = "languageSelectionBtn";
-	eHTML.forms[1].mnemoLinkRandomizeBtn.classList.add(nextLanguage);
-	parkour.step1.fillAsPlaceholder = true;
-	eHTML.forms[1].mnemoLinkRandomizeBtn.click();
-});
-eHTML.forms[1].mnemoLinkRandomizeBtn.addEventListener('click', async (event) => {
-	if (parkour.step1.randomizingMnemonic) { return; }
-	parkour.step1.randomizingMnemonic = true;
-
-	const desiredLength = parseInt(eHTML.forms[1].lengthList.value);
-	await randomizePseudoMnemonic(desiredLength, parkour.step1.fillAsPlaceholder);
-	parkour.step1.fillAsPlaceholder = false;
-	eHTML.forms[1].mnemonicGridInputs[0].focus();
-
-	parkour.step1.randomizingMnemonic = false;
-});
-eHTML.forms[1].mnemonicGrid.addEventListener('input', (event) => {
-	if (event.target.tagName !== 'INPUT') { return; }
-
-	const input = event.target;
-	const value = input.value.replace(/[^a-zA-Z]/g, '').toLowerCase();
-	event.target.value = value;
-
-	// if word in biplist focus next input
-	if (isWordInPseudoWordsList(value)) {
-		deleteExistingSuggestionsHTML();
-		if (parkour.step1.rndMnemonic.includes(value)) { input.classList.add('random'); } else { input.classList.remove('random'); }
-		actualizeScore()
-		if (switchContinueBtnIfPseudoMnemonicIsControlled()) { return; }
-		focusNextInput(input);
-		return;
-	}
-
-	// else, try to find suggestions
-	const bip = userInfo.pseudoMnemonicBip;
-	const language = userInfo.pseudoMnemonicLanguage;
-	if (value.length < 2) { deleteExistingSuggestionsHTML(); return; }
-	if (!emptyMnemoLinker.getAvailableLanguages().includes(language)) { deleteExistingSuggestionsHTML(); return; }
-	const suggestions = emptyMnemoLinker.getSuggestions(value, bip, language);
-	if (!suggestions || suggestions.length === 0) { return; }
-
-	function createSuggestionsHTML() {
-		const newElmnt = document.createElement('div');
-		newElmnt.classList.add('suggestions');
-		if (getInputIndex(input) > 5) { newElmnt.classList.add('fromBottom'); } else { newElmnt.classList.add('fromTop'); }
-
-		newElmnt.addEventListener('mouseover', (event) => {
-			if (!event.target.classList.contains('suggestion')) { return; }
-			//console.log(event.target.innerText);
-
-			const activeSuggestion = newElmnt.getElementsByClassName('active')[0];
-			if (activeSuggestion) { activeSuggestion.classList.remove('active'); }
-			event.target.classList.add('active');
-		});
-		newElmnt.addEventListener('click', (event) => {
-			if (!event.target.classList.contains('suggestion')) { return; }
-
-			const activeSuggestion = newElmnt.getElementsByClassName('active')[0];
-			if (!activeSuggestion) { return; }
-			input.value = activeSuggestion.innerText;
-
-			if (!isWordInPseudoWordsList(input.value)) { console.error('word not in wordsList'); return; }
-
-			deleteExistingSuggestionsHTML();
-			if (parkour.step1.rndMnemonic.includes(input.value)) { input.classList.add('random'); } else { input.classList.remove('random'); }
-			actualizeScore()
-			if (switchContinueBtnIfPseudoMnemonicIsControlled()) { return; }
-			focusNextInput(input);
-			return;
-		});
-
-		input.parentElement.appendChild(newElmnt);
-		return newElmnt;
-	}
-
-	const suggestionsHTML = input.parentElement.getElementsByClassName('suggestions')[0] || createSuggestionsHTML();
-	suggestionsHTML.innerHTML = "";
-
-	for (let i = 0; i < suggestions.length; i++) {
-		const suggestion = suggestions[i];
-		const suggestionHTML = document.createElement('div');
-		suggestionHTML.classList.add('suggestion');
-		suggestionHTML.innerText = suggestion;
-		if (i === 0) { suggestionHTML.classList.add('active'); }
-		suggestionsHTML.appendChild(suggestionHTML);
-	};
-});
-eHTML.forms[1].mnemonicGrid.addEventListener('click', (event) => {
-	if (event.target.tagName === 'BUTTON') {
-		const input = event.target.parentElement.querySelector('input');
-		const bip = userInfo.pseudoMnemonicBip;
-		const language = userInfo.pseudoMnemonicLanguage;
-		const wordsList = emptyMnemoLinker.getWordsTable(bip, language);
-		if (!wordsList) { return; }
-
-		const inputValueIsInWordsList = wordsList.includes(input.value);
-		if (inputValueIsInWordsList) { parkour.step1.rndButtonsPressed++; }
-
-		const rndWord = getRandomUniqueWord(wordsList, userInfo.pseudoMnemonic);
-		input.value = rndWord;
-		input.classList.add('random');
-		actualizeScore()
-		switchContinueBtnIfPseudoMnemonicIsControlled()
-	}
-});
-eHTML.forms[1].copyMnemonicBtn.addEventListener('click', (event) => {
-	const indexedMnemonicStr = userInfo.getIndexedPseudoMnemonicStr();
-	navigator.clipboard.writeText(indexedMnemonicStr);
-});
-eHTML.forms[1].downloadMnemonicBtn.addEventListener('click', (event) => {
-	const indexedMnemonicStr = userInfo.getIndexedPseudoMnemonicStr();
-	const blob = new Blob([indexedMnemonicStr], { type: 'text/plain' });
+	const blob = new Blob([mnemonic], { type: "text/plain" });
 	const url = URL.createObjectURL(blob);
 	const a = document.createElement('a');
 	a.href = url;
-	a.download = 'pseudo_mnemonic.txt';
+	a.download = "mnemonic.txt";
 	document.body.appendChild(a);
 	a.click();
 	setTimeout(() => {
@@ -1755,158 +1656,29 @@ eHTML.forms[1].downloadMnemonicBtn.addEventListener('click', (event) => {
 		URL.revokeObjectURL(url);
 	}, 0);
 });
-let form1ContinueBtnReady = true;
-eHTML.forms[1].continueBtn.addEventListener('click', async (event) => {
-	if (eHTML.forms[1].continueBtn.classList.contains('disabled')) { return; }
-	if (!form1ContinueBtnReady) { return; }
-	form1ContinueBtnReady = false;
+eHTML.modals.inputMnemonic.confirmBtn.addEventListener('click', async (event) => {
+	if (eHTML.modals.inputMnemonic.confirmBtn.classList.contains('busy')) { return; }
+	if (eHTML.modals.inputMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
+	if (eHTML.modals.inputMnemonic.confirmBtn.classList.contains('disabled')) { return; }
 
-	if (!switchContinueBtnIfPseudoMnemonicIsControlled()) { fillBottomInfo('Some words are incorrect'); form1ContinueBtnReady = true; return; }
-	userInfo.setPseudoMnemonic(userInfo.pseudoMnemonic);
+	const mnemonic = tempData.mnemonic.getMnemonicStr();
+	if (!mnemonic) { console.error('mnemonic not found'); return; }
 
-	const controlPassed = await controlPseudoMnemonic();
-	if (!controlPassed) { fillBottomInfo('Some words are incorrect'); form1ContinueBtnReady = true; return; }
-	console.log('controlPseudoMnemonic passed');
+	eHTML.modals.inputMnemonic.confirmBtn.classList.add('busy');
 
-	setActiveForm(2);
-
-	initMnemonicInputs(eHTML.forms[2].mnemonicGridInputs, true);
-	setMnemonicInputsVisibility(eHTML.forms[2].mnemonicGrid, 12);
-
-	const bip = settings.defaultBip;
-	const language = settings.defaultLanguage;
-	userInfo.mnemonicBip = bip;
-	userInfo.mnemonicLanguage = language;
-	//ws.send(JSON.stringify({ type: 'generate_mnemonic', data: { length: 24, bip, language } }));
-
-	// USING BIP39 BUNDLE
-	const mnemonic = generateBIP39Mnemonic(12, language);
-	if (!mnemonic) { console.error('Error while generating mnemonic'); return; }
-	userInfo.setMnemonic(mnemonic);
-	eHTML.forms[2].continueBtn.classList.add('disabled')
-	await fillMnemonicInputs(eHTML.forms[2].mnemonicGridInputs, userInfo.mnemonic, true);
-	eHTML.forms[2].continueBtn.classList.remove('disabled')
-
-	form1ContinueBtnReady = true;
-});
-// FORM 2 (mnemonic)
-eHTML.forms[2].mnemonicGrid.addEventListener('input', (event) => {
-	if (event.target.tagName !== 'INPUT') { return; }
-	const input = event.target;
-	// letter only
-	const value = event.target.value.replace(/[^a-zA-Z]/g, '').toLowerCase();
-	event.target.value = value;
-
-	if (value.length < 2) { deleteExistingSuggestionsHTML(); return; }
-	if (!emptyMnemoLinker.getAvailableLanguages().includes(userInfo.mnemonicLanguage)) { deleteExistingSuggestionsHTML(); return; }
-	const suggestions = emptyMnemoLinker.getSuggestions(value, userInfo.mnemonicBip, userInfo.mnemonicLanguage);
-	if (!suggestions || suggestions.length === 0) { return; }
-
-	function createSuggestionsHTML() {
-		const newElmnt = document.createElement('div');
-		newElmnt.classList.add('suggestions');
-		if (getInputIndex(input) > 5) { newElmnt.classList.add('fromBottom'); } else { newElmnt.classList.add('fromTop'); }
-
-		newElmnt.addEventListener('mouseover', (event) => {
-			if (!event.target.classList.contains('suggestion')) { return; }
-			//console.log(event.target.innerText);
-			
-			const activeSuggestion = newElmnt.getElementsByClassName('active')[0];
-			if (activeSuggestion) { activeSuggestion.classList.remove('active'); }
-			event.target.classList.add('active');
-		});
-		newElmnt.addEventListener('click', (event) => {
-			if (!event.target.classList.contains('suggestion')) { return; }
-			
-			const activeSuggestion = newElmnt.getElementsByClassName('active')[0];
-			if (!activeSuggestion) { return; }
-			input.value = activeSuggestion.innerText;
-		});
-
-		input.parentElement.appendChild(newElmnt);
-		return newElmnt;
-	}
-
-	const suggestionsHTML = input.parentElement.getElementsByClassName('suggestions')[0] || createSuggestionsHTML();
-	suggestionsHTML.innerHTML = "";
-
-	for (let i = 0; i < suggestions.length; i++) {
-		const suggestion = suggestions[i];
-		const suggestionHTML = document.createElement('div');
-		suggestionHTML.classList.add('suggestion');
-		suggestionHTML.innerText = suggestion;
-		if (i === 0) { suggestionHTML.classList.add('active'); }
-		suggestionsHTML.appendChild(suggestionHTML);
-	};
-});
-eHTML.forms[2].mnemonicGrid.addEventListener('click', (event) => {
-	if (event.target.tagName === 'INPUT') {
-		const isDisabled = event.target.classList.contains('disabled');
-		//const isValidWord = event.target.classList.contains('valid');
-		const mnemonicIsLocked = parkour["step2"].lockedMnemonic;
-		if (isDisabled || mnemonicIsLocked) { return };
-
-		event.target.value = ""
-		if (switchContinueBtnIfMnemonicIsControlled()) { return; }
-
-		//if (!parkour["step2"].controllingMnemonic) { return };
-	}
-});
-eHTML.forms[2].copyMnemonicBtn.addEventListener('click', (event) => {
-	const indexedMnemonicStr = userInfo.getIndexedMnemonicStr();
-	navigator.clipboard.writeText(indexedMnemonicStr);
-});
-eHTML.forms[2].downloadMnemonicBtn.addEventListener('click', (event) => {
-	const indexedMnemonicStr = userInfo.getIndexedMnemonicStr();
-	const blob = new Blob([indexedMnemonicStr], { type: 'text/plain' });
-	const url = URL.createObjectURL(blob);
-	const a = document.createElement('a');
-	a.href = url;
-	a.download = 'mnemonic.txt';
-	document.body.appendChild(a);
-	a.click();
-	setTimeout(() => {
-		document.body.removeChild(a);
-		URL.revokeObjectURL(url);
-	}, 0);
-});
-let form2ContinueBtnReady = true;
-eHTML.forms[2].continueBtn.addEventListener('click', async (event) => {
-	if (eHTML.forms[2].continueBtn.classList.contains('disabled')) { return; }
-	if (!form2ContinueBtnReady) { return; }
-	form2ContinueBtnReady = false;
-
-	if (!switchContinueBtnIfMnemonicIsControlled()) { fillBottomInfo('Some words are incorrect'); form2ContinueBtnReady = true; return; }
-
-	/** @type {MnemoLinker} */
-	const mnemoLinker = new MnemoLinker( { mnemonic: userInfo.mnemonic, pseudoMnemonic: userInfo.pseudoMnemonic } );
+	const masterMnemonicStr = await userData.getMasterMnemonicStr();
+	/** @type {MnemoLinkerLastest} */
+	const mnemoLinker = new MnemoLinkerLastest( { pseudoMnemonic: masterMnemonicStr , mnemonic: mnemonic } );
 	const mnemoLink = await mnemoLinker.encryptMnemonic();
-	if (!mnemoLink) { fillBottomInfo('Encoding failed ! - Please verify your pseudoMnemonic'); form1ContinueBtnReady = true; return; }
-	userInfo.mnemoLink = mnemoLink;
+	if (!mnemoLink) { console.error('Unable to create mnemoLink'); return; }
 
-	setActiveForm(3);
-	await fillMnemoLinkText(mnemoLink);
-	switchMnemoLinkButtons();
+	userData.addMnemoLink(mnemoLink);
+	await save.userMnemoLinks();
+	fillMnemoLinkList();
+	tempData.init();
 
-	form2ContinueBtnReady = true;
-});
-// FORM 3 (pseudo MnemoLink)
-eHTML.forms[3].copyMnemoLinkBtn.addEventListener('click', (event) => {
-	const mnemoLinkStr = eHTML.forms[3].mnemoLinkStr.innerText;
-	navigator.clipboard.writeText(mnemoLinkStr);
-});
-eHTML.forms[3].downloadMnemoLinkBtn.addEventListener('click', (event) => {
-	const mnemoLinkStr = eHTML.forms[3].mnemoLinkStr.innerText;
-	const blob = new Blob([mnemoLinkStr], { type: 'text/plain' });
-	const url = URL.createObjectURL(blob);
-	const a = document.createElement('a');
-	a.href = url;
-	a.download = 'MnemoLink.txt';
-	document.body.appendChild(a);
-	a.click();
-	setTimeout(() => {
-		document.body.removeChild(a);
-		URL.revokeObjectURL(url);
-	}, 0);
+	closeModal();
+
+	eHTML.modals.inputMnemonic.confirmBtn.classList.remove('busy');
 });
 //#endregion

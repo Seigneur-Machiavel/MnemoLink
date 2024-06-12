@@ -15,12 +15,12 @@ async function setNewPassword(password) {
     chrome.storage.local.set({
         hashedPassword: {
             hash: result.hash,
-            saltStr: result.saltStr,
-            ivStr: result.ivStr,
+            saltBase64: result.saltBase64,
+            ivBase64: result.ivBase64,
         }
     }, function () {
-        console.log(`Password set, salt: ${result.saltStr}, iv: ${result.ivStr}`);
-        console.log(`Password hash: ${result.hash}`);
+        console.log(`Password set, salt L: ${result.saltBase64.length}, iv L: ${result.ivBase64.length}`);
+        console.log(`Password hash L: ${result.hash.length}`);
     });
     return result;
 }
@@ -75,17 +75,17 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
     const password = document.getElementById('loginForm').getElementsByTagName('input')[0].value;
 
     chrome.storage.local.get(['hashedPassword'], async function(result) {
-        const { hash, saltStr, ivStr } = result.hashedPassword;
-        if (!hash || !saltStr || !ivStr) { alert('Password not set'); busy.splice(busy.indexOf('loginForm'), 1); return; }
-        //console.log(`Password-retrieved, salt: ${saltStr}, iv: ${ivStr}`)
+        const { hash, saltBase64, ivBase64 } = result.hashedPassword;
+        if (!hash || !saltBase64 || !ivBase64) { alert('Password not set'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+        //console.log(`Password-retrieved, salt: ${saltBase64}, iv: ${ivBase64}`)
         //console.log(`Password-retrieved hash: ${hash}`);
 
-        const res = await cryptoLight.init(password, saltStr, ivStr);
+        const res = await cryptoLight.init(password, saltBase64, ivBase64);
         if (!res) { alert('Key derivation failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
         //console.log(`Password-derived hash: ${res.hash}`);
 
         if (res.hash === hash) {
-            chrome.runtime.sendMessage({action: "openPage", data: {password}}); //, key: res.key});
+            chrome.runtime.sendMessage({action: "openPage", data: {password}});
         } else {
             alert('Wrong password');
         }
@@ -95,3 +95,5 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
 
 showFormDependingOnStoredPassword();
 document.getElementById('loginForm').getElementsByTagName('input')[0].value = '123456';
+document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].value = '123456';
+document.getElementById('passwordCreationForm').getElementsByTagName('input')[1].value = '123456';

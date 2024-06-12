@@ -30,6 +30,7 @@ input {
     text-align: center;
 }
 button {
+    cursor: pointer;
     width: 200px;
     height: 42px;
     border-style: none;
