@@ -122,44 +122,27 @@ class userDataClass {
 		return str;
 	}
 }
-class userInfoClass {
-	constructor() {
-		this.validMnemonicLengths = [12, 15, 18, 21, 25]; // [12, 24];
-		this.mnemonic = [];
-		this.mnemonicBip = "";
-		this.mnemonicLanguage = "";
-
-		this.pseudoMnemonic = [];
-		this.pseudoMnemonicBip = "";
-		this.pseudoMnemonicLanguage = "";
-
-		this.mnemoLink = "";
+class mnemoLinkBubbleObject {
+	constructor(element, x = 0, y = 0) {
+		/** @type {HTMLElement} */
+		this.element = element;
+		this.x = x;
+		this.y = y;
+		this.vector = { x: 0, y: 0 };
 	}
-	setMnemonic(mnemonic) {
-		if (!this.validMnemonicLengths.includes(mnemonic.length)) { console.error('Mnemonic must be 12 or 24 words long'); return false; }
-		this.mnemonic = mnemonic;
-		return true;
+	setPosition(x = 0, y = 0) {
+		this.x = x;
+		this.y = y;
+		this.element.style.left = `${x}px`;
+		this.element.style.top = `${y}px`;
 	}
-	setPseudoMnemonic(mnemonic) {
-		if (!this.validMnemonicLengths.includes(mnemonic.length)) { console.error('Pseudo mnemonic must be 12 or 24 words long'); return false; }
-		this.pseudoMnemonic = mnemonic;
-		return true;
+	setVector(x = 0, y = 0) {
+		this.vector = { x: x, y: y };
 	}
-	getIndexedMnemonicStr() {
-		let mnemonicStr = "";
-		for (let i = 0; i < this.mnemonic.length; i++) {
-			mnemonicStr += `${i + 1}. ${this.mnemonic[i]}\n`;
-		}
-		return mnemonicStr;
+	updatePosition() {
+		this.setPosition(this.x + this.vector.x, this.y + this.vector.y);
 	}
-	getIndexedPseudoMnemonicStr() {
-		let mnemonicStr = "";
-		for (let i = 0; i < this.pseudoMnemonic.length; i++) {
-			mnemonicStr += `${i + 1}. ${this.pseudoMnemonic[i]}\n`;
-		}
-		return mnemonicStr;
-	}
-} // DEPRECATED
+}
 //#endregion
 
 //#region - VARIABLES
@@ -168,7 +151,6 @@ let MnemoLinkerLastest = null;
 /** @type {MnemoLinker} */
 let emptyMnemoLinker = null;
 
-const skipper = {form1Control: true, form2Control: true} // TO MODIFY
 const settings = {
 	mnemoLinkerVersion: window.MnemoLinker.latestVersion,
 	defaultBip: "BIP-0039",
@@ -178,15 +160,9 @@ const settings = {
 	fastFillMode: true,
 	saveLogs: true,
 }
-const parkour = { // TO MODIFY
-	currentForm: -1,
-	formInTransition: false,
-	"step0": { fromExistingMnemonic: false },
-	"step1": { randomizingMnemonic: false, controllingMnemonic: false, fillAsPlaceholder: true, controlledMnemonic: false, rndMnemonic: [], rndButtonsPressed: 0},
-	"step2": { controllingMnemonic: false, controlledMnemonic: false, lockedMnemonic: true },
-};
+
+let mnemoBubbles = [];
 const userData = new userDataClass();
-const userInfo = new userInfoClass();
 const tempData = {
 	rndMnemonic: [],
 	rndButtonsPressed: 0,
@@ -369,6 +345,8 @@ async function getDataLocally(key = "toto") {
 async function asyncInitLoad() {
 	await load.all();
 	fillMnemoLinkList();
+	initMnemoLinkBubbles();
+	requestAnimationFrame(UXupdateLoop);
 
 	MnemoLinkerLastest = await window.MnemoLinker["v" + window.MnemoLinker.latestVersion];
 	emptyMnemoLinker = new MnemoLinkerLastest();
@@ -1202,35 +1180,75 @@ function createMnemoLinkElement(label = 'key1') {
 
 	return newMnemoLink;
 }
-/*function fillMnemoLinkBubblesWrap() {
+function createMnemoLinkBubbleElement() {
+	const newMnemoLink = document.createElement('div');
+	newMnemoLink.classList.add('mnemolinkBubble');
+	
+	return newMnemoLink;
+}
+function fillMnemoLinkBubblesWrap() {
 	const mnemolinksBubblesWrap = eHTML.dashboard.mnemolinksBubblesContainer.children[0];
+	mnemolinksBubblesWrap.innerHTML = '';
 	const monemoLinksLabels = userData.getListOfMnemoLinks();
 	for (let i = 0; i < monemoLinksLabels.length; i++) {
-		const label = monemoLinksLabels[i];
-		const element = createMnemoLinkBubbleElement(label);
-		eHTML.dashboard.mnemolinksList.appendChild(element);
+		const element = createMnemoLinkBubbleElement();
+		mnemolinksBubblesWrap.appendChild(element);
 	}
 }
-function positionMnemoLinkBubbles() {
-	//const radius = 150; // Rayon du cercle imaginaire
-	const radius = window.innerHeight / 3;
+function initMnemoLinkBubbles(radiusInFractionOfVH = 0.1) {
+	fillMnemoLinkBubblesWrap();
+	mnemoBubbles = [];
+
+	const radius = window.innerHeight * radiusInFractionOfVH;
 	const mnemolinksBubblesContainer = eHTML.dashboard.mnemolinksBubblesContainer;
+	const mnemolinksBubblesWrap = mnemolinksBubblesContainer.children[0];
 	const center_x = mnemolinksBubblesContainer.offsetWidth / 2;
 	const center_y = mnemolinksBubblesContainer.offsetHeight / 2;
-	const mnemoLinks = mnemolinksBubblesContainer.querySelectorAll('.mnemolinkBubble');
-  
-	mnemoLinks.forEach(function(mnemoLink, index) {
-		const width = mnemoLink.offsetWidth;
-		const total = mnemoLinks.length;
+	const mnemoLinksBubbles = mnemolinksBubblesWrap.querySelectorAll('.mnemolinkBubble');
+	const total = mnemoLinksBubbles.length;
+	
+	mnemoLinksBubbles.forEach(function(mnemoLinkBubble, index) {
 		const angle = (index / total) * (2 * Math.PI); // Angle for each element
 		
-		const x = center_x + radius * Math.cos(angle) - (width / 2);
-		const y = center_y + radius * Math.sin(angle) - (width / 2);
-	
-		mnemoLink.style.left = x + 'px';
-		mnemoLink.style.top = y + 'px';
+		const x = center_x + radius * Math.cos(angle);
+		const y = center_y + radius * Math.sin(angle);
+		
+		const mnemoLinkBubbleObj = new mnemoLinkBubbleObject(mnemoLinkBubble, x, y);
+		mnemoBubbles.push(mnemoLinkBubbleObj);
 	});
-}*/
+}
+function positionMnemoLinkBubbles(radiusInFractionOfVH = 0.3) {
+	const radius = window.innerHeight * radiusInFractionOfVH;
+	const maxSpeed = 2;
+	// moving to border line of the circle, using vector and
+	// considering inertia with dampening
+	const mnemolinksBubblesContainer = eHTML.dashboard.mnemolinksBubblesContainer;
+	const mnemolinksBubblesWrap = mnemolinksBubblesContainer.children[0];
+	const center_x = mnemolinksBubblesContainer.offsetWidth / 2;
+	const center_y = mnemolinksBubblesContainer.offsetHeight / 2;
+
+	for (let i = 0; i < mnemoBubbles.length; i++) {
+		/** @type {mnemoLinkBubbleObject} */
+		const  mnemoBubble = mnemoBubbles[i];
+
+		//mnemoBubble.setVector()
+		//mnemoBubble.updatePosition()
+		//mnemoBubble.vector.x
+
+		
+
+
+
+	};
+}
+function dampenSpeed(speed, dampening = 0.9) {
+	return speed * dampening;
+}
+async function UXupdateLoop() {
+	positionMnemoLinkBubbles();
+
+	requestAnimationFrame(UXupdateLoop);
+}
 //#endregion
 
 //#region - EVENT LISTENERS

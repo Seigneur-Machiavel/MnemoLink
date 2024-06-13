@@ -252,6 +252,7 @@ button {
 }
 .mnemolinkBubble {
     position: absolute;
+    transform: translateX(-50%) translateY(-50%);
     border-radius: 1vh;
     width: 4vh;
     height: 4vh;
