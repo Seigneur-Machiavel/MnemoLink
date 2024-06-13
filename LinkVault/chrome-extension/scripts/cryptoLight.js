@@ -61,15 +61,15 @@ const cryptoLight = {
         return derivedKey;
     },
     uint8ArrayToBase64(uint8Array) {
-        // Convertit le Uint8Array en chaîne de caractères binaires
+        // Convert the Uint8Array to a binary string
         const binaryString = String.fromCharCode.apply(null, uint8Array);
-        // Encode la chaîne binaire en Base64
+        // Encode the string in base64
         return btoa(binaryString);
     },
     base64ToUint8Array(base64) {
-        // Décode la chaîne Base64 en chaîne de caractères binaires
+        // Decode the base64 string to a binary string
         const binaryString = atob(base64);
-        // Convertit la chaîne binaire en Uint8Array
+        // Convert the binary string to a Uint8Array
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
         for (let i = 0; i < len; i++) {

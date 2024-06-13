@@ -26,6 +26,22 @@
         <span class="slider"></span>
     </label>
 
+    <div id="mnemolinksBubblesContainer">
+        <div class="wrap">
+            <!--<div class="mnemolinkBubble" id="mnemolink1"></div>
+            <div class="mnemolinkBubble" id="mnemolink2"></div>
+            <div class="mnemolinkBubble" id="mnemolink3"></div>-->
+        </div>
+    </div>
+
+    <div id="appTitleWrap" class="visible">
+        <div id="appTitleBackground"></div>
+        <div id="appTitle" class="appTitle hidden">
+            <h1 class="ml3">Link Vault</h1>
+            <span class="titleSufix">Beta</span>
+        </div>
+    </div>
+
     <div id="dashboard">
         <div id="dashboardFrameWrap" class="wrap">
             <div class="dashboardFrame">
@@ -46,11 +62,12 @@
                         <line x1="0" y1="0" x2="48" y2="0" stroke="black" stroke-width=".2vh"></line>
                     </svg>
                     <div id="mnemolinksList">
-                        <div class="mnemolink">
+                        <!--<div class="mnemolink">
                             <div class="leftDecoration"></div>
-                            <div class="deleteBtn"></div>
+                            <div class="showBtn"></div>
+                            <div class="editBtn"></div>
                             <input class="mnemolinkInput">key1</input>
-                        </div>
+                        </div>-->
                         <div id="linkNewMnemonicBtn"><div>+</div></div>
                     </div>
                 </div>
@@ -87,23 +104,8 @@
         </div>
     </div>
     
-    <div id="mnemolinksBubblesContainer">
-        <div class="wrap">
-            <div class="mnemolinkBubble" id="mnemolink1"></div>
-            <div class="mnemolinkBubble" id="mnemolink2"></div>
-            <div class="mnemolinkBubble" id="mnemolink3"></div>
-        </div>
-    </div>
     <div id="centerScreenBtnWrap">
         <div id="centerScreenBtn"></div>
-    </div>
-
-    <div id="appTitleWrap">
-        <div id="appTitleBackground"></div>
-        <div id="appTitle" class="appTitle hidden">
-            <h1 class="ml3">MNEMORIZER</h1>
-            <span class="titleSufix">Beta</span>
-        </div>
     </div>
 
     <div class="modalsWrap hidden fold">
@@ -242,181 +244,6 @@
                         <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAA3NCSVQICAjb4U/gAAAACXBIWXMAABdsAAAXbAHnC+qbAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAK5QTFRF////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAIAAAIAAAHAAAHAAAHBgAGBQAFBAAEBAAEBAAEBAAEBAAEAwADAwADAwADAwADAgAFAgAEAgAEAgAEAgAEAgAEBAIEBAIEAwEEAwEEAwEEAwEEAwEEAgEEAgEEAgEEBAEEBAEEBAEEAwEDAwEFAwEEAwEDAwEEAwEEAwEEAwEEAwEEAwEEAwEEAwEEAwEE4+8CqgAAADl0Uk5TAAEDBgcMDRATICEiIyUmLDI+P0BCRUxOVl9rd3h5f4CBiqutsrS7z9LU1dbZ2+Dn6+zw8fT1/P3+NMDcPgAAALBJREFUOE+l08cOwjAQRdGEAKGFGnrvvbfc//8xFoBMMhKzyOyefCTb47FlxS+v6pjg+PnoegeW2W9wVzz7EXAEzvVPaANM0yEAwKP7Dj0AtkUBYJIygGtTAtaeAQQjWwAuDQNg7gpAMLANYF8SAGbDn3BrScAplMYJASK1yCiAQ1kB3H0FsNPARtuiEu+Q8ppao5RWa4+pPbc2MMrI/RtadezVj2Pl/KQJTq0QXY9dLytSffZNDb5YAAAAAElFTkSuQmCC" />
                         -->
                     </button>
-                    <p class="bottomInfo"></p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="formsWrap">
-        <div class="formWrap" id="formWrap0" style="transform: translateX(100%) translateY(-50%) rotateY(90deg) skewX(1.2deg); opacity: 0.2;">
-
-            <div class="form" id="form0">
-                <h2 class="formTopText">Master your mnemonics effortlessly for lifelong recall.</h2>
-                <p class="formTopSubText">Join the <a href="https://discord.gg/f4KSMeApGA" target="_blank">Discord</a> server to receive help or report bugs, translation errors, or any other remarks.</p>
-                <div class="hSeparator"></div>
-                <div class="verticalButtonsList">
-                    <button id="useExistingMnemonicBtn" class="formButton disabled hidden">Use existing mnemonic (coming soon)</button>
-                    <button id="startBtn" class="formButton">Start</button>
-                    <button id="retrieveBtn" class="formButton">Retrieve / Training</button>
-                    <p class="bottomInfo"></p>
-                </div>
-                <div class="hSeparator"></div>
-                <h2 style="text-align: center;">Only proceed on a device you trust — make sure no one is watching over your shoulder.</h2>
-            </div>
-        </div>
-
-        <div class="formWrap" id="formWrap1" style="transform: translateX(100%) translateY(-50%) rotateY(90deg) skewX(-2deg); opacity: 0.2;">
-        
-            <div class="form" id="form1">
-                <div style="display: flex; justify-content: space-between;">
-                    <div style="display: flex; flex-direction: column; justify-content: space-evenly; width: 136px;">
-                        <select class="optionsList" style="display: none;">
-                            <option>BIP-0039</option>
-                        </select>
-                        <select class="optionsList" style="display: none;"></select>
-                        <select class="optionsList" style="display: none;"></select>
-                    </div>
-                    <div style="text-align: center;">
-                        <h2>Create your own Mnemonic</h2>
-                        <p class="formTopSubText">it's about finding a balance between ease of memorization and security.</p>
-                    </div>
-                    <div class="bipLanguageBtnWrap">
-                        <button id="previousLanguageBtn" class="arrowButton">&#11164;</button>
-                        <button id="mnemoLinkRandomizeBtn" class="languageSelectionBtn english"></button>
-                        <button id="nextLanguageBtn" class="arrowButton">&#11166;</button>
-                    </div>
-                </div>
-                <div class="hSeparator"></div>
-                <div class="mnemonicWrap">
-                    <div id="pseudoMnemonicGrid" class="mnemonicGrid">
-                        <div class="mnemonicSeparator"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">1.</label><input type="text" id="pseudoMnemonicInput1" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">2.</label><input type="text" id="pseudoMnemonicInput2" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">3.</label><input type="text" id="pseudoMnemonicInput3" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">4.</label><input type="text" id="pseudoMnemonicInput4" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">5.</label><input type="text" id="pseudoMnemonicInput5" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">6.</label><input type="text" id="pseudoMnemonicInput6" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">7.</label><input type="text" id="pseudoMnemonicInput7" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">8.</label><input type="text" id="pseudoMnemonicInput8" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">9.</label><input type="text" id="pseudoMnemonicInput9" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">10.</label><input type="text" id="pseudoMnemonicInput10" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">11.</label><input type="text" id="pseudoMnemonicInput11" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">12.</label><input type="text" id="pseudoMnemonicInput12" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">13.</label><input type="text" id="pseudoMnemonicInput13" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">14.</label><input type="text" id="pseudoMnemonicInput14" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">15.</label><input type="text" id="pseudoMnemonicInput15" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">16.</label><input type="text" id="pseudoMnemonicInput16" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">17.</label><input type="text" id="pseudoMnemonicInput17" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">18.</label><input type="text" id="pseudoMnemonicInput18" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">19.</label><input type="text" id="pseudoMnemonicInput19" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">20.</label><input type="text" id="pseudoMnemonicInput20" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">21.</label><input type="text" id="pseudoMnemonicInput21" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">22.</label><input type="text" id="pseudoMnemonicInput22" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">23.</label><input type="text" id="pseudoMnemonicInput23" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">24.</label><input type="text" id="pseudoMnemonicInput24" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
-                    </div>
-                </div>
-                <div style="display: flex; justify-content: center; height: 30px; margin: 16px 0 10px 0;">
-                    <div class="scoreBarWrap">
-                        <div class="scoreBarBackground"></div>
-                        <div class="scoreBarValue">
-                            <div class="scoreBarFill" id="scoreBarFill"></div>
-                        </div>
-                        <label class="scoreLabel">Security score: <span id="scoreLabel">100.00%</span></label>
-                    </div>
-                </div>
-                <div class="horizontalButtonsList">
-                    <button id="copyPseudoMnemonicBtn" class="formButton crushed">Copy
-                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAACXBIWXMAAACxAAAAsQHGLUmNAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAH9JREFUSIntlFEKgCAQBYfoVGH/2bGrk9RB7KcgrMSn1pcDgqD7hmVR+JER2AAnrFkRqOEOmBTBWdQpRSmCojSBs5SZbIB9C/Q7SJmJA9ZYgToT85ARJVC41YRmUIQqqIJ82st+4YO/KER9aNECE5nVq/Li37WPPS6r4YPaSRY7NTlrd5oI7GYAAAAASUVORK5CYII=" />
-                    </button>
-                    <button id="downloadPseudoMnemonicBtn" class="formButton crushed">Download
-                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAACXBIWXMAAACxAAAAsQHGLUmNAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAASlJREFUSInt0z1OQlEQBeAP8WcHFCxAGuzcg6WRhETXYtQYlqGlf52hsXQFlhZqb9DOEg0GCwbfC/HBfagdJ5m8e++bOWdmMkM6angIq5WIS0YLw7BWatBSCYFqwfnPBObCQmAh8H8CVWxJ29ha+CbvBnSMNvYZjXhryza5HW+N8Bni+CeiWS2q4zYnkkcj/tVLJP6NVVzLMn7BUe6+L8t8iBuszSPSzZF8Fpy74TsXJiuZtKTMT/GG7cRKUjLfCc4TGETA5YxK8iKz2nIVfoNl2SRNC/gwGs2DuHfirQgr8V2C11B7RGVKUCoqwTVEDy5kpR/+UqQSHGO+swo2cCdr0RPujUaxDKpoYj3u79gc/9xDX/E4lrU+diczaOLcqG/zEveCozkm/QLDg3YsFTo2qgAAAABJRU5ErkJggg==" />
-                    </button>
-                    <button id="continueForm1Btn" class="formButton disabled">Continue
-                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAA3NCSVQICAjb4U/gAAAACXBIWXMAABdsAAAXbAHnC+qbAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAK5QTFRF////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAIAAAIAAAHAAAHAAAHBgAGBQAFBAAEBAAEBAAEBAAEBAAEAwADAwADAwADAwADAgAFAgAEAgAEAgAEAgAEAgAEBAIEBAIEAwEEAwEEAwEEAwEEAwEEAgEEAgEEAgEEBAEEBAEEBAEEAwEDAwEFAwEEAwEDAwEEAwEEAwEEAwEEAwEEAwEEAwEEAwEEAwEE4+8CqgAAADl0Uk5TAAEDBgcMDRATICEiIyUmLDI+P0BCRUxOVl9rd3h5f4CBiqutsrS7z9LU1dbZ2+Dn6+zw8fT1/P3+NMDcPgAAALBJREFUOE+l08cOwjAQRdGEAKGFGnrvvbfc//8xFoBMMhKzyOyefCTb47FlxS+v6pjg+PnoegeW2W9wVzz7EXAEzvVPaANM0yEAwKP7Dj0AtkUBYJIygGtTAtaeAQQjWwAuDQNg7gpAMLANYF8SAGbDn3BrScAplMYJASK1yCiAQ1kB3H0FsNPARtuiEu+Q8ppao5RWa4+lPbc2MMrI/RtadezVj2Pl/KQJTq0QXY9dLytSffZNDb5YAAAAAElFTkSuQmCC" />
-                    </button>
-                    <p class="bottomInfo"></p>
-                </div>
-            </div>
-        </div>
-
-        <div class="formWrap" id="formWrap2" style="transform: translateX(100%) translateY(-50%) rotateY(90deg) skewX(2deg); opacity: 0.2;">
-            
-            <div class="form" id="form2">
-                <div style="text-align: center;">
-                    <h2>Enter the Mnemonic to link (disabled in beta).</h2>
-                    <p class="formTopSubText">Or save the newly generated mnemonic.</p>
-                </div>
-                <div class="hSeparator"></div>
-                <div class="mnemonicWrap">
-                    <div class="mnemonicWrapBackText">BETA</div>
-                    <div id="mnemonicGrid" class="mnemonicGrid">
-                        <div class="mnemonicSeparator"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">1.</label><input type="text" id="mnemonicInput1" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">2.</label><input type="text" id="mnemonicInput2" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">3.</label><input type="text" id="mnemonicInput3" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">4.</label><input type="text" id="mnemonicInput4" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">5.</label><input type="text" id="mnemonicInput5" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">6.</label><input type="text" id="mnemonicInput6" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">7.</label><input type="text" id="mnemonicInput7" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">8.</label><input type="text" id="mnemonicInput8" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">9.</label><input type="text" id="mnemonicInput9" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">10.</label><input type="text" id="mnemonicInput10" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">11.</label><input type="text" id="mnemonicInput11" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">12.</label><input type="text" id="mnemonicInput12" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">13.</label><input type="text" id="mnemonicInput13" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">14.</label><input type="text" id="mnemonicInput14" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">15.</label><input type="text" id="mnemonicInput15" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">16.</label><input type="text" id="mnemonicInput16" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">17.</label><input type="text" id="mnemonicInput17" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">18.</label><input type="text" id="mnemonicInput18" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">19.</label><input type="text" id="mnemonicInput19" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">20.</label><input type="text" id="mnemonicInput20" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">21.</label><input type="text" id="mnemonicInput21" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">22.</label><input type="text" id="mnemonicInput22" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">23.</label><input type="text" id="mnemonicInput23" class="wordInput" autocomplete="off"></div>
-                        <div class="wordInputWrap"><label class="wordIndexLabel">24.</label><input type="text" id="mnemonicInput24" class="wordInput" autocomplete="off"></div>
-                    </div>
-                </div>
-                <div class="hSeparator"></div>
-                <div class="horizontalButtonsList">
-                    <button id="copyMnemonicBtn" class="formButton crushed">Copy
-                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAACXBIWXMAAACxAAAAsQHGLUmNAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAH9JREFUSIntlFEKgCAQBYfoVGH/2bGrk9RB7KcgrMSn1pcDgqD7hmVR+JER2AAnrFkRqOEOmBTBWdQpRSmCojSBs5SZbIB9C/Q7SJmJA9ZYgToT85ARJVC41YRmUIQqqIJ82st+4YO/KER9aNECE5nVq/Li37WPPS6r4YPaSRY7NTlrd5oI7GYAAAAASUVORK5CYII=" />
-                    </button>
-                    <button id="downloadMnemonicBtn" class="formButton crushed">Download
-                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAACXBIWXMAAACxAAAAsQHGLUmNAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAASlJREFUSInt0z1OQlEQBeAP8WcHFCxAGuzcg6WRhETXYtQYlqGlf52hsXQFlhZqb9DOEg0GCwbfC/HBfagdJ5m8e++bOWdmMkM6angIq5WIS0YLw7BWatBSCYFqwfnPBObCQmAh8H8CVWxJ29ha+CbvBnSMNvYZjXhryza5HW+N8Bni+CeiWS2q4zYnkkcj/tVLJP6NVVzLMn7BUe6+L8t8iBuszSPSzZF8Fpy74TsXJiuZtKTMT/GG7cRKUjLfCc4TGETA5YxK8iKz2nIVfoNl2SRNC/gwGs2DuHfirQgr8V2C11B7RGVKUCoqwTVEDy5kpR/+UqQSHGO+swo2cCdr0RPujUaxDKpoYj3u79gc/9xDX/E4lrU+diczaOLcqG/zEveCozkm/QLDg3YsFTo2qgAAAABJRU5ErkJggg==" />
-                    </button>
-                    <button id="continueForm2Btn" class="formButton disabled">Continue
-                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAA3NCSVQICAjb4U/gAAAACXBIWXMAABdsAAAXbAHnC+qbAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAK5QTFRF////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAIAAAIAAAHAAAHAAAHBgAGBQAFBAAEBAAEBAAEBAAEBAAEAwADAwADAwADAwADAgAFAgAEAgAEAgAEAgAEAgAEBAIEBAIEAwEEAwEEAwEEAwEEAwEEAgEEAgEEAgEEBAEEBAEEBAEEAwEDAwEFAwEEAwEDAwEEAwEEAwEEAwEEAwEEAwEEAwEEAwEEAwEE4+8CqgAAADl0Uk5TAAEDBgcMDRATICEiIyUmLDI+P0BCRUxOVl9rd3h5f4CBiqutsrS7z9LU1dbZ2+Dn6+zw8fT1/P3+NMDcPgAAALBJREFUOE+l08cOwjAQRdGEAKGFGnrvvbfc//8xFoBMMhKzyOyefCTb47FlxS+v6pjg+PnoegeW2W9wVzz7EXAEzvVPaANM0yEAwKP7Dj0AtkUBYJIygGtTAtaeAQQjWwAuDQNg7gpAMLANYF8SAGbDn3BrScAplMYJASK1yCiAQ1kB3H0FsNPARtuiEu+Q8ppao5RWa4+lPbc2MMrI/RtadezVj2Pl/KQJTq0QXY9dLytSffZNDb5YAAAAAElFTkSuQmCC" />
-                    </button>
-                    <p class="bottomInfo"></p>
-                </div>
-            </div>
-        </div>
-
-        <div class="formWrap" id="formWrap3" style="transform: translateX(100%) translateY(-50%) rotateY(90deg) skewX(2deg); opacity: 0.2;">
-            <div class="form" id="form3">
-                <div style="text-align: center;">
-                    <h2>Here is your MnemoLink to save.<br>It does not contain sensitive data.</h2>
-                    <p class="formTopSubText">Note: The MnemoLink represents the conversion table that allows for the restoration of the linked mnemonic.</p>
-                </div>
-
-                <div class="hSeparator"></div>
-
-                <div class="mnemoLinkWrap" style="width: 100%; opacity: 1;">
-                    <p id="mnemoLinkStr"></p>
-                </div>
-
-                <div class="hSeparator"></div>
-                <div class="horizontalButtonsList">
-                    <button id="copyMnemoLinkBtn" class="formButton crushed">Copy
-                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAACXBIWXMAAACxAAAAsQHGLUmNAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAH9JREFUSIntlFEKgCAQBYfoVGH/2bGrk9RB7KcgrMSn1pcDgqD7hmVR+JER2AAnrFkRqOEOmBTBWdQpRSmCojSBs5SZbIB9C/Q7SJmJA9ZYgToT85ARJVC41YRmUIQqqIJ82st+4YO/KER9aNECE5nVq/Li37WPPS6r4YPaSRY7NTlrd5oI7GYAAAAASUVORK5CYII=" />
-                    </button>
-                    <button id="downloadMnemoLinkBtn" class="formButton crushed">Download
-                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAACXBIWXMAAACxAAAAsQHGLUmNAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAASlJREFUSInt0z1OQlEQBeAP8WcHFCxAGuzcg6WRhETXYtQYlqGlf52hsXQFlhZqb9DOEg0GCwbfC/HBfagdJ5m8e++bOWdmMkM6angIq5WIS0YLw7BWatBSCYFqwfnPBObCQmAh8H8CVWxJ29ha+CbvBnSMNvYZjXhryza5HW+N8Bni+CeiWS2q4zYnkkcj/tVLJP6NVVzLMn7BUe6+L8t8iBuszSPSzZF8Fpy74TsXJiuZtKTMT/GG7cRKUjLfCc4TGETA5YxK8iKz2nIVfoNl2SRNC/gwGs2DuHfirQgr8V2C11B7RGVKUCoqwTVEDy5kpR/+UqQSHGO+swo2cCdr0RPujUaxDKpoYj3u79gc/9xDX/E4lrU+diczaOLcqG/zEveCozkm/QLDg3YsFTo2qgAAAABJRU5ErkJggg==" />
-                    </button>
-                    <button id="inscribeBtn" class="formButton disabled">Inscribe (coming soon)</button>
                     <p class="bottomInfo"></p>
                 </div>
             </div>

@@ -52,7 +52,7 @@ const saltStrLength = 4; // need to be a multiple of 2
  * @param {Object} params.officialBIPs - The official BIPs used only by the builder!
  */
 export class MnemoLinker {
-	constructor(params = { mnemonic: null, pseudoMnemonic: null, BIPTables: null, version: null, officialBIPs: null}) {
+	constructor(params = { pseudoMnemonic: null, mnemonic: null, BIPTables: null, version: null, officialBIPs: null}) {
 		this.minMnemonicLength = 12;
 		this.cryptoLib = null;
 		this.officialBIPs = {}; // Only used when file called as "lastBuildControl.js"
@@ -197,34 +197,34 @@ export class MnemoLinker {
 		const secondChar = base64EncodingChars.indexOf(encodedNumber[1]);
 		return firstChar * 64 + secondChar;
 	}
-	#encodeBase64(data) {
+	uint8ArrayToBase64(uint8Array) {
 		// Node.js
 		if (typeof Buffer !== 'undefined') {
-			return Buffer.from(data).toString('base64');
+			return Buffer.from(uint8Array).toString('base64');
 		}
+
 		// Navigator
-		let binaryString = '';
-		const bytes = new Uint8Array(data);
-		const len = bytes.byteLength;
-		for (let i = 0; i < len; i++) {
-			binaryString += String.fromCharCode(bytes[i]);
-		}
-		return window.btoa(binaryString);
-	}
-	#decodeBase64(base64) {
+        const binaryString = String.fromCharCode.apply(null, uint8Array);
+		const base64 = btoa(binaryString);
+        return base64;
+    }
+    base64ToUint8Array(base64) {
 		// Node.js
 		if (typeof Buffer !== 'undefined') {
-			return Buffer.from(base64, 'base64');
+			const buffer = Buffer.from(base64, 'base64');
+			const uint8Array = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.length);
+			return uint8Array;
 		}
+
 		// Navigator
-		const binaryString = window.atob(base64);
-		const len = binaryString.length;
-		const bytes = new Uint8Array(len);
-		for (let i = 0; i < len; i++) {
-			bytes[i] = binaryString.charCodeAt(i);
-		}
-		return bytes;
-	}
+        const binaryString = atob(base64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
+    }
 
 	/**
 	 * Convert mnemonic to base64 normalized seed
@@ -292,40 +292,6 @@ export class MnemoLinker {
 		const mnemonicStr = mnemonic.join(' ');
 		return mnemonicStr;
 	}
-	#dissectMnemoLink(mnemoLink = '') {
-		// --- Suffix info corresponds to the version of the table, saved on the last 4 characters ---
-		const versionSuffix = mnemoLink.slice(-4);
-		const versionPart1 = this.#decode(versionSuffix.slice(0, 2));
-		const versionPart2 = this.#decode(versionSuffix.slice(2, 4));
-		const versionNumber = [versionPart1, versionPart2];
-		if (versionNumber.join() !== this.version.join()) { 
-			this.error = 'invalid version number';
-			console.error('version number is invalid');
-			return false;
-		}
-
-		// --- Salt info corresponds to X characters before the version suffix ---
-		const saltSuffix = mnemoLink.slice(-(4 + saltStrLength), -4);
-		const saltUnit16Array = new Uint16Array(saltStrLength / 2);
-		for (let i = 0; i < saltStrLength / 2; i++) {
-			const encodedNumber = saltSuffix.slice(i * 2, i * 2 + 2);
-			const decodedNumber = this.#decode(encodedNumber);
-			saltUnit16Array[i] = decodedNumber;
-		}
-
-		// --- Prefix info corresponds to the origin BIPTable ---
-		const BipCode = mnemoLink.split('BIP')[1].substring(0, 4);
-		const detectedBip = "BIP-" + BipCode;
-		const detectedLanguage = mnemoLink.split('BIP')[0];
-		const detectionSuccess = this.getWordsTable(detectedBip, detectedLanguage) !== false;
-
-		const prefix = detectedLanguage + "BIP" + BipCode;
-		let encryptedMnemonic = detectionSuccess ? mnemoLink.replace(prefix, '') : mnemoLink;
-		encryptedMnemonic = encryptedMnemonic.slice(0, encryptedMnemonic.length - 4); // remove the version suffix
-		encryptedMnemonic = encryptedMnemonic.slice(0, encryptedMnemonic.length - (saltStrLength / 2)); // remove the salt suffix
-
-		return { encryptedMnemonic, bip: detectedBip, language: detectedLanguage, saltUnit16Array };
-	}
 	async #deriveK(pseudoMnemonic, saltUnit16Array) {
 		const salt = saltUnit16Array;
 		const iterations = 100000 + this.version[1];
@@ -353,26 +319,26 @@ export class MnemoLinker {
 		return derivedKey;
 	}
 	async #encryptText(str, key, iv = new Uint8Array(16)) { // iv = this.cryptoLib.getRandomValues(new Uint8Array(16)); -> Will not use random IV for now
+		const buffer = new TextEncoder().encode(str);
 		const encryptedContent = await this.cryptoLib.subtle.encrypt(
 			{ name: "AES-GCM", iv: iv },
 			key,
-			new TextEncoder().encode(str)
+			buffer
 		);
 
-		const encryptedBase64 = this.#encodeBase64(encryptedContent);
-
+		const encryptedBase64 = this.uint8ArrayToBase64(new Uint8Array(encryptedContent));
 		return encryptedBase64
 	}
-	async #decryptText(str, key, iv = new Uint8Array(16)) { // iv = this.cryptoLib.getRandomValues(new Uint8Array(16)); -> Will not use random IV for now
-		const strUnit8Array = this.#decodeBase64(str);
+	async #decryptText(base64, key, iv = new Uint8Array(16)) { // iv = this.cryptoLib.getRandomValues(new Uint8Array(16)); -> Will not use random IV for now
+		//const strUnit8Array = this.base64ToUint8Array(str);
+		const buffer = this.base64ToUint8Array(base64);
 		const decryptedContent = await this.cryptoLib.subtle.decrypt(
 			{ name: "AES-GCM", iv: new Uint8Array(iv) },
 			key,
-			strUnit8Array
+			buffer
 		);
 
-		const decryptedText = new TextDecoder().decode(decryptedContent);
-	
+		const decryptedText = new TextDecoder().decode(new Uint8Array(decryptedContent));
 		return decryptedText;
 	}
 	#generateSalt() {
@@ -414,7 +380,8 @@ export class MnemoLinker {
 		const encodedMnemonicBase64Str = this.#encodeMnemonic(this.origin.mnemonic, 24);
 		const key = await this.#deriveK(encodedPseudoMnemonicBase64Str, salt.saltUnit16Array);
 		const encryptedMnemonicStr = await this.#encryptText(encodedMnemonicBase64Str, key);
-
+		//console.log(`saltL: ${salt.saltUnit16Array} | encryptedMnemonicStr: ${encryptedMnemonicStr}`);
+		
 		// control validity
 		const controlEncodedMnemonicBase64Str = await this.#decryptText(encryptedMnemonicStr, key);
 		const decodedMnemonicStr = this.#decodeMnemonic(controlEncodedMnemonicBase64Str, this.origin.bip, this.origin.language);
@@ -426,10 +393,18 @@ export class MnemoLinker {
 	}
 	async decryptMnemoLink(mnemoLink = '') {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
-		const { encryptedMnemonic, bip, language, saltUnit16Array } = this.#dissectMnemoLink(mnemoLink);
+		
+		const { encryptedMnemonic, bip, language, version, saltUnit16Array } = this.dissectMnemoLink(mnemoLink);
+		if (version.join(".") !== this.version.join(".")) { 
+			this.error = 'invalid version number';
+			console.error(`Invalid MnemoLink version number: ${version.join(".")} | current: ${this.version.join(".")}`);
+			return false;
+		}
 
 		const encodedPseudoMnemonicBase64Str = this.#encodeMnemonic(this.pseudo.mnemonic, 24);
 		const key = await this.#deriveK(encodedPseudoMnemonicBase64Str, saltUnit16Array);
+		
+		//console.log(`saltL: ${saltUnit16Array} | encryptedMnemonicStr: ${encryptedMnemonic}`);
 		const decryptedMnemonicStr = await this.#decryptText(encryptedMnemonic, key);
 		if (!decryptedMnemonicStr) { console.error('decryptedMnemonicStr is empty'); return false; }
 
@@ -437,6 +412,35 @@ export class MnemoLinker {
 		if (!decodedMnemonic) { console.error('decodedMnemonic is empty'); return false; }
 
 		return decodedMnemonic;
+	}
+	dissectMnemoLink(mnemoLink = '') {
+		// --- Suffix info corresponds to the version of the table, saved on the last 4 characters ---
+		const versionSuffix = mnemoLink.slice(-4);
+		const versionPart1 = this.#decode(versionSuffix.slice(0, 2));
+		const versionPart2 = this.#decode(versionSuffix.slice(2, 4));
+		const versionNumber = [versionPart1, versionPart2];
+
+		// --- Salt info corresponds to X characters before the version suffix ---
+		const saltSuffix = mnemoLink.slice(-(4 + saltStrLength), -4);
+		const saltUnit16Array = new Uint16Array(saltStrLength / 2);
+		for (let i = 0; i < saltStrLength / 2; i++) {
+			const encodedNumber = saltSuffix.slice(i * 2, i * 2 + 2);
+			const decodedNumber = this.#decode(encodedNumber);
+			saltUnit16Array[i] = decodedNumber;
+		}
+
+		// --- Prefix info corresponds to the origin BIPTable ---
+		const BipCode = mnemoLink.split('BIP')[1].substring(0, 4);
+		const detectedBip = "BIP-" + BipCode;
+		const detectedLanguage = mnemoLink.split('BIP')[0];
+		const detectionSuccess = this.getWordsTable(detectedBip, detectedLanguage) !== false;
+
+		const prefix = detectedLanguage + "BIP" + BipCode;
+		let encryptedMnemonic = detectionSuccess ? mnemoLink.replace(prefix, '') : mnemoLink;
+		encryptedMnemonic = encryptedMnemonic.slice(0, encryptedMnemonic.length - 4); // remove the version suffix
+		encryptedMnemonic = encryptedMnemonic.slice(0, encryptedMnemonic.length - saltStrLength); // remove the salt suffix
+
+		return { encryptedMnemonic, bip: detectedBip, language: detectedLanguage, version: versionNumber, saltUnit16Array };
 	}
 	getAvailableLanguages(bip = 'BIP-0039') {
 		const BIP = this.BIPTables[bip];

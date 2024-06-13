@@ -7,10 +7,7 @@ const officialBIPs = {
 }
 
 const MnemoLinker = require('./MnemoLinker-src.js');
-let controlMnemoLinker = false;
-if (fs.existsSync('lastBuildControl.js')) {
-	controlMnemoLinker = require('./lastBuildControl.js');
-}
+const controlMnemoLinker = require('./lastBuildControl.js');
 
 const BIPTables = {};
 const BIPTablesToHardcode = {};

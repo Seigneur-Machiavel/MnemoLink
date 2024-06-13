@@ -27,6 +27,29 @@ const urlprefix = ""
 // .src = `${urlprefix}sprites/cloud`
 
 //#region - CLASSES
+class centerScreenBtnClass {
+	constructor() {
+		this.element = document.getElementById('centerScreenBtn');
+	}
+	show(speed = 200) {
+		anime({
+			targets: this.element,
+			opacity: 1,
+			duration: speed,
+			easing: 'easeOutQuad',
+			complete: () => { this.element.style.zIndex = 1; }
+		});
+	}
+	hide(speed = 200) {
+		anime({
+			targets: this.element,
+			opacity: 0,
+			duration: speed,
+			easing: 'easeOutQuad',
+			complete: () => { this.element.style.zIndex = -1; }
+		});
+	}
+}
 class mnemonicObject {
 	constructor(mnemonic = [], bip = "BIP-0039", language = "english") {
 		this.mnemonic = mnemonic;
@@ -104,9 +127,52 @@ class userDataClass {
 	removeMnemoLink(label) {
 		if (!this.encryptedMnemoLinksStr[label]) { return false; }
 		delete this.encryptedMnemoLinksStr[label];
+		return true;
 	}
 	getListOfMnemoLinks() {
 		return Object.keys(this.encryptedMnemoLinksStr);
+	}
+	replaceMnemoLinkLabel(oldLabel, newLabel, logs = false) {
+		if (oldLabel === newLabel) { if (logs) { console.error('oldLabel and newLabel are the same !'); }; return false; }
+		if (!this.encryptedMnemoLinksStr[oldLabel]) { if (logs) { console.error('oldLabel not found !'); }; return false; }
+
+		const initialOrder = Object.keys(this.encryptedMnemoLinksStr);
+		if (initialOrder.indexOf(newLabel) !== -1) { if (logs) { console.error('newLabel already exists !'); }; return false; }
+
+		const newObject = {};
+		for (let i = 0; i < initialOrder.length; i++) {
+			const key = initialOrder[i];
+			if (key === oldLabel) { newObject[newLabel] = this.encryptedMnemoLinksStr[oldLabel]; }
+			else { newObject[key] = this.encryptedMnemoLinksStr[key]; }
+		}
+		this.encryptedMnemoLinksStr = newObject;
+
+		return true;
+	}
+	getMnemoLinkEncrypted(label) {
+		if (!this.encryptedMnemoLinksStr[label]) { return false; }
+		return this.encryptedMnemoLinksStr[label];
+	}
+	async getMnemoLinkDecrypted(label, logs = false) {
+		if (!this.encryptedMnemoLinksStr[label]) { if (logs) { console.error('label not found !'); return false; } }
+
+		const mnemoLinkEncrypted = this.encryptedMnemoLinksStr[label];
+		const dissected = emptyMnemoLinker.dissectMnemoLink(mnemoLinkEncrypted);
+		const versionStr = `v${dissected.version.join(".")}`;
+
+		let targetMnemoLinkerClass = await MnemoLinker[versionStr];
+		if (!targetMnemoLinkerClass) { if (logs) { console.error('version not found !'); return false; } }
+
+		const masterMnemonicStr = await this.getMasterMnemonicStr();
+		if (!masterMnemonicStr) { if (logs) { console.error('masterMnemonicStr not found !'); return false; } }
+
+		if (logs) { console.log(`versionStr: ${versionStr}`); }
+		/** @type {MnemoLinker} */
+		const targetMnemoLinker = new targetMnemoLinkerClass( { pseudoMnemonic: masterMnemonicStr } );
+		const mnemoLinkDecrypted = await targetMnemoLinker.decryptMnemoLink(mnemoLinkEncrypted);
+		if (!mnemoLinkDecrypted) { if (logs) { console.error('mnemoLinkDecrypted not found !'); return false; } }
+
+		return mnemoLinkDecrypted;
 	}
 	// Crypto -> local storage
 	async #encrypStringWithPassword(str = "") {
@@ -123,12 +189,16 @@ class userDataClass {
 	}
 }
 class mnemoLinkBubbleObject {
-	constructor(element, x = 0, y = 0) {
+	constructor(label, element, x = 0, y = 0) {
 		/** @type {HTMLElement} */
 		this.element = element;
+		this.label = label;
+		this.isShowing = false;
+		
 		this.x = x;
 		this.y = y;
 		this.vector = { x: 0, y: 0 };
+		this.posSaved = { x: 0, y: 0 };
 	}
 	setPosition(x = 0, y = 0) {
 		this.x = x;
@@ -136,11 +206,78 @@ class mnemoLinkBubbleObject {
 		this.element.style.left = `${x}px`;
 		this.element.style.top = `${y}px`;
 	}
-	setVector(x = 0, y = 0) {
-		this.vector = { x: x, y: y };
-	}
 	updatePosition() {
+		if ( this.isShowing ) { return; }
 		this.setPosition(this.x + this.vector.x, this.y + this.vector.y);
+	}
+	toCenterScreen() {
+		const x = window.innerWidth / 2;
+		const y = window.innerHeight / 2;
+		if (this.x === x && this.y === y) { return; }
+		
+		this.posSaved = { x: this.x, y: this.y };
+		centerScreenBtn.hide(240);
+		anime({
+			targets: this.element,
+			left: "50%",
+			top: "50%",
+			duration: 240,
+			easing: 'easeOutQuad',
+		});
+	}
+	showMnemonicInBubble(label, mnemonicStr) {
+		if (this.isShowing) { console.error('bubble already showing !'); return; }
+		if (this.label !== label) { console.error('label mismatch !'); return; }
+		
+		// clear bubble
+		this.element.innerHTML = '';
+		this.element.classList.add('showing');
+		this.isShowing = true;
+	
+		// title
+		const emptyDiv = document.createElement('div');
+		const titleH2 = document.createElement('h2');
+		titleH2.innerText = label;
+		emptyDiv.appendChild(titleH2);
+		
+		// mnemonic grid
+		const gridHtml = document.createElement('div');
+		gridHtml.classList.add('miniMnemonicGrid');
+		const mnemonic = mnemonicStr.split(' ');
+		mnemonic.forEach(word => {
+			const wordDiv = document.createElement('div');
+			wordDiv.innerText = word;
+			gridHtml.appendChild(wordDiv);
+		});
+	
+		emptyDiv.appendChild(gridHtml);
+	
+		// copy and download buttons
+		emptyDiv.innerHTML += `<div class="buttonsWrap">
+			<div class="copyBtn" id="bubbleCopyBtn">Copy</div>
+			<div class="downloadBtn" id="bubbleDownloadBtn">Download</div>
+		</div>`;
+	
+		emptyDiv.classList.add('mnemonicBubbleContent');
+		this.element.appendChild(emptyDiv);
+	}
+	stopShowing() {
+		if (!this.isShowing) { return; }
+		centerScreenBtn.show(240);
+		//this.element.classList.remove('showing');
+		this.element.innerHTML = '';
+		anime({
+			targets: this.element,
+			left: `${this.posSaved.x}px`,
+			top: `${this.posSaved.y}px`,
+			duration: 240,
+			easing: 'easeOutQuad',
+			complete: () => { 
+				this.element.classList.remove('showing');
+				this.isShowing = false;
+			}
+		});
+		//this.isShowing = false;
 	}
 }
 //#endregion
@@ -159,9 +296,14 @@ const settings = {
 	delayBeetweenChar: 10,
 	fastFillMode: true,
 	saveLogs: true,
+	mnemolinkBubblesMinCircleSpots: 6,
 }
 
+const mousePos = { x: 0, y: 0 };
+const timeOuts = {};
+/** @type {mnemoLinkBubbleObject[]} */
 let mnemoBubbles = [];
+const centerScreenBtn = new centerScreenBtnClass();
 const userData = new userDataClass();
 const tempData = {
 	rndMnemonic: [],
@@ -179,7 +321,6 @@ const eHTML = {
 	footerVersion: document.getElementById('footerVersion'),
 	dashboard: {
 		element: document.getElementById('dashboard'),
-		centerScreenBtn: document.getElementById('centerScreenBtn'),
 		mnemolinksList: document.getElementById('mnemolinksList'),
 		mnemolinksBubblesContainer: document.getElementById('mnemolinksBubblesContainer'),
 	},
@@ -215,55 +356,7 @@ const eHTML = {
 			confirmBtn : document.getElementById('mnemonicModalWrap').getElementsByClassName('modalButton')[2],
 			bottomInfo : document.getElementById('mnemonicModalWrap').getElementsByClassName('bottomInfo')[0]
 		},
-	},
-	forms: [
-		{	
-			wrap : document.getElementById('formWrap0'),
-			element : document.getElementById('form0'),
-			useExistingMnemonicBtn : document.getElementById('useExistingMnemonicBtn'),
-			startBtn : document.getElementById('startBtn'),
-			retrieveBtn : document.getElementById('retrieveBtn'),
-			bottomInfo : document.getElementById('form0').getElementsByClassName('bottomInfo')[0],
-		},
-		{	
-			wrap : document.getElementById('formWrap1'),
-			element: document.getElementById('form1'),
-			bipList : document.getElementById('form1').getElementsByClassName('optionsList')[0],
-			languageList : document.getElementById('form1').getElementsByClassName('optionsList')[1],
-			lengthList : document.getElementById('form1').getElementsByClassName('optionsList')[2],
-			previousLanguageBtn : document.getElementById('previousLanguageBtn'),
-			mnemoLinkRandomizeBtn : document.getElementById('mnemoLinkRandomizeBtn'),
-			nextLanguageBtn : document.getElementById('nextLanguageBtn'),
-			mnemonicGrid : document.getElementById('pseudoMnemonicGrid'),
-			mnemonicGridInputs : document.getElementById('pseudoMnemonicGrid').querySelectorAll('input'),
-			scoreBarFill : document.getElementById('scoreBarFill'),
-			scoreLabel : document.getElementById('scoreLabel'),
-			copyMnemonicBtn : document.getElementById('copyPseudoMnemonicBtn'),
-			downloadMnemonicBtn : document.getElementById('downloadPseudoMnemonicBtn'),
-			continueBtn : document.getElementById('continueForm1Btn'),
-			bottomInfo : document.getElementById('form1').getElementsByClassName('bottomInfo')[0],
-		},
-		{	
-			wrap : document.getElementById('formWrap2'),
-			element : document.getElementById('form2'),
-			mnemonicGrid : document.getElementById('mnemonicGrid'),
-			mnemonicGridInputs : document.getElementById('mnemonicGrid').querySelectorAll('input'),
-			copyMnemonicBtn : document.getElementById('copyMnemonicBtn'),
-			downloadMnemonicBtn : document.getElementById('downloadMnemonicBtn'),
-			continueBtn : document.getElementById('continueForm2Btn'),
-			bottomInfo : document.getElementById('form2').getElementsByClassName('bottomInfo')[0],
-		},
-		{
-			wrap : document.getElementById('formWrap3'),
-			element : document.getElementById('form3'),
-			mnemoLinkWrap : document.getElementById('form3').getElementsByClassName('mnemoLinkWrap')[0],
-			mnemoLinkStr : document.getElementById('mnemoLinkStr'),
-			copyMnemoLinkBtn : document.getElementById('copyMnemoLinkBtn'),
-			downloadMnemoLinkBtn : document.getElementById('downloadMnemoLinkBtn'),
-			inscribeBtn : document.getElementById('inscribeBtn'),
-			bottomInfo : document.getElementById('form3').getElementsByClassName('bottomInfo')[0],
-		}
-	]
+	}
 }
 eHTML.footerVersion.innerText = "v" + window.MnemoLinker.latestVersion;
 //#endregion
@@ -350,20 +443,26 @@ async function asyncInitLoad() {
 
 	MnemoLinkerLastest = await window.MnemoLinker["v" + window.MnemoLinker.latestVersion];
 	emptyMnemoLinker = new MnemoLinkerLastest();
+	if (userData.preferences.darkMode) { eHTML.toggleDarkModeButton.checked = true; toggleDarkMode(eHTML.toggleDarkModeButton); }
 }; asyncInitLoad(); // auto execute
 function toggleDarkMode(element) {
 	if (element.checked) {
 		document.body.classList.add('dark-mode');
-		document.getElementById('dashboard').classList.add('invertColors');
+		eHTML.dashboard.element.classList.add('invertColors');
+		eHTML.modals.wrap.classList.add('invertColors');
 	} else {
 		document.body.classList.remove('dark-mode');
-		document.getElementById('dashboard').classList.remove('invertColors');
+		eHTML.dashboard.element.classList.remove('invertColors');
+		eHTML.modals.wrap.classList.remove('invertColors');
 	}
+
+	userData.preferences.darkMode = element.checked;
+	save.userPreferences();
 }
 //#endregion
 
 //#region - WELCOME ANIMATIONS
-/*const textWrapper = document.querySelector('.ml3');
+const textWrapper = document.querySelector('.ml3');
 textWrapper.innerHTML = textWrapper.textContent.replace(/\S/g, "<span class='letter'>$&</span>");
 const titleAnimationDuration = {A: 800, B: 1000, C: 1400};
 setTimeout(() => { document.getElementById('appTitleBackground').style.opacity = 1; }, titleAnimationDuration.A / 2);
@@ -377,10 +476,9 @@ anime.timeline({loop: false})
     delay: (el, i) => titleAnimationDuration.A / 10 * (i+1)
   });
 setTimeout(() => { 
-	document.getElementById('appTitleWrap').classList.add('topScreen');
+	//document.getElementById('appTitleWrap').classList.add('topScreen');
 	document.getElementById('appTitle').getElementsByClassName('titleSufix')[0].classList.add('visible');
-	if (parkour.currentForm === -1) { setActiveForm(0); }
-}, titleAnimationDuration.C);*/
+}, titleAnimationDuration.C);
 //#endregion
 
 //#region - SIMPLE FUNCTIONS
@@ -474,6 +572,19 @@ function isWordInWordsList(word, bip, language) {
 
 	return wordsList.includes(word);
 }
+function getInputIndex(input) {
+	const masterMnemonicGridInputs = eHTML.modals.inputMasterMnemonic.mnemonicGridInputs;
+	for (let i = 0; i < masterMnemonicGridInputs.length; i++) {
+		if (masterMnemonicGridInputs[i] === input) { return i; }
+	}
+
+	const mnemonicGridInputs = eHTML.modals.inputMnemonic.mnemonicGridInputs;
+	for (let i = 0; i < mnemonicGridInputs.length; i++) {
+		if (mnemonicGridInputs[i] === input) { return i; }
+	}
+
+	return -1;
+}
 function focusNextInput(inputElement) {
 	const mnemonicGrid = inputElement.parentElement.parentElement;
 	const mnemonicGridInputs = mnemonicGrid.querySelectorAll('input');
@@ -514,489 +625,18 @@ function extractMnemonicFromInputs(modal = eHTML.modals.inputMasterMnemonic) {
 }
 //#endregion
 
-//#region -  OLD FUNCTIONS - WILL BE DELETED
-function setActiveForm(formIndex) {
-	parkour.currentForm = formIndex;
-	const nbOfForms = eHTML.forms.length;
-	for (let i = 0; i < nbOfForms; i++) {
-		if (i < formIndex) {
-			setFormPosition(eHTML.forms[i].wrap, 'left');
-		} else if (i > formIndex) {
-			setFormPosition(eHTML.forms[i].wrap, 'right');
-		} else {
-			setFormPosition(eHTML.forms[i].wrap, 'center');
-		}
-	}
-}
-/**
- * Set the position of a form (left, center, right)
- * @param {HTMLElement} formElmnt
- * @param {string} position - 'left' || 'center' || 'right'
- */
-function setFormPosition(formElmnt, position = 'left') {
-    const defaultAnimation = {
-        translateY: '-50%',
-        skewX: '1.2deg',
-        duration: 500
-    };
-
-    const specificAnimations = {
-        center: {
-            translateX: '0%',
-            rotateY: '0deg',
-            opacity: 1,
-            delay: 300,
-            easing: 'easeOutElastic(1.4, .8)',
-        },
-        left: {
-            translateX: '-60%',
-            rotateY: '-90deg',
-            opacity: 0.2,
-            easing: 'easeInOutQuad'
-        },
-        right: {
-            translateX: '60%',
-            rotateY: '90deg',
-            opacity: 0.2,
-            easing: 'easeInOutQuad'
-        }
-    };
-    
-    const animation = {
-        targets: formElmnt,
-        ...defaultAnimation,
-        ...specificAnimations[position]
-    };
-    
-    anime(animation);
-}
-async function fillMnemonicInputs(wrapInputsElmnts, mnemonic = [], setReadOnly = false) {
-	if (setReadOnly) {
-		wrapInputsElmnts.forEach((input) => {
-			input.readOnly = true;
-			input.placeholder = ""; 
-		});
-	}
-
-	const mnemonicGridWrap = eHTML.forms[2].mnemonicGrid.parentElement;
-	const mnemonicGridRect = mnemonicGridWrap.getBoundingClientRect();
-
-	// wait form to be visible
-	await new Promise(r => setTimeout(r, 500));
-	// fill one char by loop
-	for (let i = 0; i < mnemonic.length; i++) {
-		const word = mnemonic[i];
-		const input = wrapInputsElmnts[i];
-
-		// scroll if needed 
-		const inputRect = input.getBoundingClientRect();
-		if (inputRect.top < mnemonicGridRect.top) { mnemonicGridWrap.scrollTop -= mnemonicGridRect.top - inputRect.top; }
-		if (inputRect.bottom > mnemonicGridRect.bottom) { mnemonicGridWrap.scrollTop += inputRect.bottom - mnemonicGridRect.bottom; }
-		
-		for (let j = 0; j < word.length; j++) {
-			const nextChar = word.charAt(j);
-			input.value += nextChar;
-
-			const delay = rnd(0, settings.delayBeetweenChar);
-			await new Promise(r => setTimeout(r, delay));
-		}
-	}
-
-	switchContinueBtnIfMnemonicIsControlled();
-
-	console.log(`fillMnemonicInputs done`);
-}
-function initMnemonicInputs(wrapInputsElmnts, readOnly = false) {
-	wrapInputsElmnts.forEach((input) => {
-		input.value = "";
-		input.readOnly = readOnly;
-		input.placeholder = "";
-		input.classList.remove('valid');
-		input.classList.add('random');
-		input.classList.add('disabled');
-	});
-}
-async function clearMnemonicInputs(wrapInputsElmnts, instantMode = false) {
-	if (instantMode) { wrapInputsElmnts.forEach((input) => { input.value = ""; }); return }
-
-	function isEmpty() {
-		for (let i = 0; i < wrapInputsElmnts.length; i++) {
-			if (wrapInputsElmnts[i].value !== "") { return false; }
-		}
-		return true;
-	}
-
-	// remove one char by loop
-	while (!isEmpty()) {
-		const wordIndex = rnd(0, wrapInputsElmnts.length - 1);
-		if (wrapInputsElmnts[wordIndex].value === "") { continue; }
-
-		wrapInputsElmnts[wordIndex].value = wrapInputsElmnts[wordIndex].value.slice(0, -1);
-
-		const timeOutRnd = rnd(0, settings.delayBeetweenChar);
-		await new Promise(r => setTimeout(r, timeOutRnd));
-	}
-}
-function setMnemonicInputsVisibility(mnemonicGridElmnt, mnemonicLength) {
-	console.log(`setMnemonicInputsVisibility: ${mnemonicLength}`);
-	const inputWrapElmnts = mnemonicGridElmnt.getElementsByClassName('wordInputWrap');
-	for (let i = 0; i < inputWrapElmnts.length; i++) {
-		if (i < mnemonicLength) {
-			inputWrapElmnts[i].classList.remove('hidden');
-		} else {
-			inputWrapElmnts[i].classList.add('hidden');
-		}
-	}
-}
-function getInputIndex(input) {
-	for (let i = 0; i < eHTML.forms[2].mnemonicGridInputs.length; i++) {
-		if (eHTML.forms[2].mnemonicGridInputs[i] === input) { return i; }
-	}
-
-	for (let i = 0; i < eHTML.forms[1].mnemonicGridInputs.length; i++) {
-		if (eHTML.forms[1].mnemonicGridInputs[i] === input) { return i; }
-	}
-
-	return -1;
-}
-function fillBottomInfo(text, timeout = 5000) {
-	// reset bottom info
-	for (let i = 0; i < eHTML.forms.length; i++) {
-		eHTML.forms[i].bottomInfo.innerText = "";
-	}
-
-	const formIndex = parkour.currentForm;
-	const bottomInfo = eHTML.forms[formIndex].bottomInfo;
-	bottomInfo.innerText = text;
-
-	setTimeout(() => {
-		bottomInfo.innerText = "";
-	}, timeout);
-}
-function getMnemonicFromInputs() {
-	const wordsList = emptyMnemoLinker.getWordsTable(userInfo.mnemonicBip, userInfo.mnemonicLanguage);
-	if (!wordsList) { return; }
-
-	const result = { allWordsAreValid: true, mnemonic: [], mnemonicStr: "" };
-	const mnemonic = [];
-	for (let i = 0; i < eHTML.forms[2].mnemonicGridInputs.length; i++) {
-		const input = eHTML.forms[2].mnemonicGridInputs[i];
-		if (input.parentElement.classList.contains('hidden')) { continue; }
-
-		mnemonic.push(input.value);
-	};
-
-	// check if all words are included in the words list
-	for (let i = 0; i < mnemonic.length; i++) {
-		if (!wordsList.includes(mnemonic[i])) { result.allWordsAreValid = false; break; }
-	}
-
-	result.mnemonic = mnemonic;
-
-	return result;
-}
-function switchContinueBtnIfMnemonicIsControlled() {
-	const continueBtn = eHTML.forms[2].continueBtn;
-	const copyBtn = eHTML.forms[2].copyMnemonicBtn;
-	const downloadBtn = eHTML.forms[2].downloadMnemonicBtn;
-	const mnemonicFromInputs = getMnemonicFromInputs();
-
-	if (!mnemonicFromInputs.allWordsAreValid || !userInfo.setMnemonic(mnemonicFromInputs.mnemonic)) {
-		continueBtn.classList.add('disabled');
-		copyBtn.classList.add('crushed');
-		downloadBtn.classList.add('crushed');
-		return false;
-	}
-
-	continueBtn.classList.remove('disabled');
-	copyBtn.classList.remove('crushed');
-	downloadBtn.classList.remove('crushed');
-
-	copyBtn.focus();
-
-	return true;
-}
-// form2: pseudo mnemonic specific functions
-function setPseudoMnemonicOptionsList() {
-	// BIP LIST
-	const defaultBip = settings.defaultBip;
-	userInfo.pseudoMnemonicBip = defaultBip;
-	// const bipList = eHTML.forms[1].bipList;
-
-	// LANGUAGE LIST
-	const languages = emptyMnemoLinker.getAvailableLanguages();
-	const languageList = eHTML.forms[1].languageList;
-	languageList.innerHTML = "";
-	for (let i = 0; i < languages.length; i++) {
-		const language = languages[i];
-		const newElmnt = document.createElement('option');
-		newElmnt.value = language;
-		newElmnt.innerText = language;
-		languageList.appendChild(newElmnt);
-	}
-
-	const defaultLanguage = settings.defaultLanguage;
-	const defaultLanguageIndex = languages.indexOf(defaultLanguage);
-	languageList.selectedIndex = defaultLanguageIndex;
-	userInfo.pseudoMnemonicLanguage = defaultLanguage;
-
-	// LENGTH LIST
-	const lengthList = eHTML.forms[1].lengthList;
-	lengthList.innerHTML = "";
-	// const authorizedLengths = userInfo.mnemonic.length === 12 ? [12] : [12, 24];
-	const authorizedLengths = [12];
-	for (let i = 0; i < authorizedLengths.length; i++) {
-		const length = authorizedLengths[i];
-		const newElmnt = document.createElement('option');
-		newElmnt.value = length;
-		newElmnt.innerText = `${length} words`;
-		lengthList.appendChild(newElmnt);
-	}
-
-	lengthList.selectedIndex = 0;
-	setMnemonicInputsVisibility(eHTML.forms[1].mnemonicGrid, authorizedLengths[0]);
-}
-function isWordInPseudoWordsList(word) {
-	const bip = userInfo.pseudoMnemonicBip;
-	const language = userInfo.pseudoMnemonicLanguage;
-	const wordsList = emptyMnemoLinker.getWordsTable(bip, language);
-	if (!wordsList) { return false; }
-
-	return wordsList.includes(word);
-}
-/*function focusNextInput(inputElement) {
-	const mnemonicGrid = input.parentElement.parentElement;
-	const mnemonicGridInputs = mnemonicGrid.querySelectorAll('input');
-	for (let i = 0; i < mnemonicGridInputs.length; i++) {
-		const input = mnemonicGridInputs[i];
-		if (input === inputElement) {
-			const nextInput = mnemonicGridInputs[i + 1];
-			if (nextInput) { nextInput.focus(); }
-			break;
-		}
-	}
-	return;
-}*/
-function getPseudoMnemonicFromInputs() {
-	const wordsList = emptyMnemoLinker.getWordsTable(userInfo.pseudoMnemonicBip, userInfo.pseudoMnemonicLanguage);
-	if (!wordsList) { return; }
-
-	const result = { allWordsAreValid: true, mnemonic: [], mnemonicStr: "", nbOfRandomWords: 0 };
-	const mnemonic = [];
-	for (let i = 0; i < eHTML.forms[1].mnemonicGridInputs.length; i++) {
-		const input = eHTML.forms[1].mnemonicGridInputs[i];
-		if (input.parentElement.classList.contains('hidden')) { continue; }
-
-		const isRandom = input.classList.contains('random');
-		if (isRandom) { result.nbOfRandomWords++; }
-		
-		mnemonic.push(input.value);
-	};
-
-	// check if all words are included in the words list
-	for (let i = 0; i < mnemonic.length; i++) {
-		if (!wordsList.includes(mnemonic[i])) { result.allWordsAreValid = false; break; }
-	}
-
-	result.mnemonic = mnemonic;
-	result.mnemonicStr = mnemonic.join(' ');
-	return result;
-}
-function getRandomUniqueWord(wordsList = [], mnemonic = []) {
-	const wordsListLength = wordsList.length;
-	if (wordsListLength === 0) { return; }
-
-	let remainingAttempts = 100;
-	let rnd = cryptoRnd(0, wordsListLength - 1);
-	let rndWord = wordsList[rnd];
-	while (mnemonic.includes(rndWord)) {
-		rnd = cryptoRnd(0, wordsListLength - 1);
-		rndWord = wordsList[rnd];
-		remainingAttempts--;
-		if (remainingAttempts === 0) { console.error('No unique word found !'); return false; }
-	}
-
-	return rndWord;
-}
-async function randomizePseudoMnemonic(desiredLength, asPlaceholder = false) {
-	eHTML.forms[1].mnemonicGrid.classList.add('busy');
-	parkour.step1.rndButtonsPressed = 0;
-
-	const bip = userInfo.pseudoMnemonicBip;
-	const language = userInfo.pseudoMnemonicLanguage;
-	const wordsList = emptyMnemoLinker.getWordsTable(bip, language);
-	if (!wordsList) { return; }
-
-	eHTML.forms[1].mnemonicGridInputs.forEach((input) => { input.value = ""; input.placeholder = "";  });
-
-	const mnemonic = [];
-	for (let i = 0; i < desiredLength; i++) {
-		const input = eHTML.forms[1].mnemonicGridInputs[i];
-		const rndWord = getRandomUniqueWord(wordsList, userInfo.pseudoMnemonic);
-		mnemonic.push(rndWord);
-		for (let j = 0; j < rndWord.length; j++) {
-			/*const rndFakeChar = rnd(0, 5);
-			// add fake char and remove it (from a to z, lowercase only) -> just a visual effect
-			for (let k = 0; k < rndFakeChar; k++) {
-				const fakeChar = String.fromCharCode(rnd(97, 122));
-				if (asPlaceholder) { input.placeholder += fakeChar; } else { input.value += fakeChar; };
-				await new Promise(r => setTimeout(r, settings.delayBeetweenChar));
-				if (asPlaceholder) { input.placeholder = input.placeholder.slice(0, -1); } else { input.value = input.value.slice(0, -1); };
-			}*/
-
-			input.placeholder += rndWord.charAt(j);
-			if (!asPlaceholder) { input.value += rndWord.charAt(j); };
-			const delay = settings.delayBeetweenChar;
-			const timeOutRnd = rnd(0, delay);
-			await new Promise(r => setTimeout(r, timeOutRnd));
-		}
-		input.classList.add('random');
-	};
-
-	parkour.step1.rndMnemonic = mnemonic;
-	switchContinueBtnIfPseudoMnemonicIsControlled();
-	actualizeScore();
-	eHTML.forms[1].mnemonicGrid.classList.remove('busy');
-}
-function switchContinueBtnIfPseudoMnemonicIsControlled() {
-	const continueBtn = eHTML.forms[1].continueBtn;
-	const copyBtn = eHTML.forms[1].copyMnemonicBtn;
-	const downloadBtn = eHTML.forms[1].downloadMnemonicBtn;
-	const mnemonicFromInputs = getPseudoMnemonicFromInputs();
-
-	if (!mnemonicFromInputs.allWordsAreValid || !userInfo.setPseudoMnemonic(mnemonicFromInputs.mnemonic)) {
-		continueBtn.classList.add('disabled');
-		copyBtn.classList.add('crushed');
-		downloadBtn.classList.add('crushed');
-		return false; 
-	}
-
-	
-	continueBtn.classList.remove('disabled');
-	copyBtn.classList.remove('crushed');
-	downloadBtn.classList.remove('crushed');
-
-	copyBtn.focus();
-
-	return true;
-}
-async function controlPseudoMnemonic() {
-	if (skipper.form2Control) { return true; }
-
-	await clearMnemonicInputs(eHTML.forms[1].mnemonicGridInputs);
-	eHTML.forms[1].mnemonicGridInputs.forEach((input) => { input.classList.remove('disabled') });
-
-	parkour["step1"].controllingMnemonic = true;
-	const nbOfWordsToCheck = settings.nbOfWordsToCheck;
-	let controlledWordsIndex = [];
-
-	while(controlledWordsIndex.length < nbOfWordsToCheck) {
-		const wordIndex = rnd(0, userInfo.pseudoMnemonic.length - 1);
-		if (controlledWordsIndex.includes(wordIndex)) { continue; }
-		
-		const correspondingInput = eHTML.forms[1].mnemonicGridInputs[wordIndex];
-		correspondingInput.placeholder = "???";
-		correspondingInput.readOnly = false;
-		correspondingInput.focus();
-
-		while (parkour.currentForm === 2 && !userInfo.pseudoMnemonic.includes(correspondingInput.value)) {
-			await new Promise(r => setTimeout(r, 100));
-			if (!parkour["step1"].controllingMnemonic) { console.log('controlPseudoMnemonic aborted'); return false; }
-		}
-		if (parkour.currentForm !== 2) { console.log('controlPseudoMnemonic aborted'); return false; }
-
-		controlledWordsIndex.push(wordIndex);
-		correspondingInput.value = "";
-		correspondingInput.placeholder = "✓";
-		correspondingInput.readOnly = true;
-		deleteExistingSuggestionsHTML();
-	}
-
-	parkour["step1"].controllingMnemonic = false;
-	parkour["step1"].controlledMnemonic = true;
-	return true;
-}
-// form3: MnemoLink specific functions
-async function fillMnemoLinkText(mnemoLinkStr = '', initDelay = 500, animationDuration = 2500) {
-	const mnemoLinkStrElmnt = eHTML.forms[3].mnemoLinkStr;
-	const mnemoLinkWrapElmnt = eHTML.forms[3].mnemoLinkWrap;
-
-	const mixingOperations = 6;
-	const durations = {
-		delay: animationDuration * 0.2,
-		mixDuration: animationDuration * 0.5,
-		showDuration: animationDuration * 0.3,
-		mixing: animationDuration * 0.7 / mixingOperations
-	};
-	const wordsListA = emptyMnemoLinker.getWordsTable(userInfo.mnemonicBip, userInfo.mnemonicLanguage);
-	const wordsListB = emptyMnemoLinker.getWordsTable(userInfo.pseudoMnemonicBip, userInfo.pseudoMnemonicLanguage);
-	mnemoLinkStrElmnt.innerText = wordsListA.join(' ');
-
-	await new Promise(r => setTimeout(r, initDelay));
-	
-	setTimeout(() => {
-		anime({
-			targets: mnemoLinkWrapElmnt,
-			width: '0%',
-			opacity: .6,
-			duration: durations.mixDuration,
-			easing: 'easeInOutQuad',
-			complete: () => {
-				anime({
-					targets: mnemoLinkWrapElmnt,
-					width: '100%',
-					opacity: 1,
-					duration: durations.showDuration,
-					easing: 'easeInOutQuad',
-				});
-			}
-		});
-	}, durations.delay);
-
-	function genMixedWordsList() {
-		const desiredLength = wordsListA.length;
-		const mixedWordsList = [];
-		for (let i = 0; i < desiredLength; i++) {
-			const list = rnd(0, 1) === 0 ? wordsListA : wordsListB;
-			const rndIndex = rnd(0, list.length - 1);
-			mixedWordsList.push(list[rndIndex]);
-		}
-		return mixedWordsList;
-	}
-
-	for (let i = 0; i < mixingOperations; i++) {
-		const mixedWordsList = genMixedWordsList();
-		mnemoLinkStrElmnt.innerText = mixedWordsList.join(' ');
-		await new Promise(r => setTimeout(r, durations.mixing));
-	}
-
-	mnemoLinkStrElmnt.innerText = mnemoLinkStr;
-
-	await new Promise(r => setTimeout(r, durations.mixDuration - initDelay > 0 ? durations.mixDuration - initDelay : 0));
-
-	return true;
-}
-function switchMnemoLinkButtons() {
-	const copyBtn = eHTML.forms[3].copyMnemoLinkBtn;
-	const downloadBtn = eHTML.forms[3].downloadMnemoLinkBtn;
-	//const inscribeBtn = eHTML.forms[3].inscribeBtn;
-
-	copyBtn.classList.remove('crushed');
-	downloadBtn.classList.remove('crushed');
-
-	copyBtn.focus();
-
-	return true;
-}
-//#endregion
-
 //#region - UX FUNCTIONS
 function toggleDashboard() {
 	const dashboard = eHTML.dashboard.element;
+	const appTitleWrap = document.getElementById('appTitleWrap');
 	if (dashboard.classList.contains('open')) { 
 		dashboard.classList.remove('open');
+		timeOuts["appTitleWrapVisible"] = setTimeout(() => { appTitleWrap.classList.add('visible'); }, 400);
 	} else {
 		dashboard.classList.add('open');
+		// cancel the timeout to show the app title
+		clearTimeout(timeOuts["appTitleWrapVisible"]);
+		appTitleWrap.classList.remove('visible');
 	}
 }
 function openModal(modalName = '') {
@@ -1098,6 +738,17 @@ function setModalBottomButtonsState(modal = eHTML.modals.inputMasterMnemonic, re
 		downloadBtn.classList.remove('crushed');
 	}
 }
+function initMnemonicInputs(wrapInputsElmnts, readOnly = false) {
+	//console.log(`initMnemonicInputs: ${wrapInputsElmnts.length}`);
+	wrapInputsElmnts.forEach((input) => {
+		input.value = "";
+		input.readOnly = readOnly;
+		input.placeholder = "";
+		input.classList.remove('valid');
+		input.classList.add('random');
+		input.classList.add('disabled');
+	});
+}
 function switchBtnsIfMnemonicGridIsFilled(modalWrapID = "masterMnemonicModalWrap") {
 	const modals = Object.keys(eHTML.modals);
 	let modal = null;
@@ -1142,12 +793,10 @@ function createMnemoLinkElement(label = 'key1') {
 	newMnemoLink.classList.add('mnemolink');
 	newMnemoLink.innerHTML = `
 		<div class="leftDecoration"></div>
-		<div class="deleteBtn"></div>
-		<input class="mnemolinkInput" value="key1"></input>
+		<div class="showBtn"></div>
+		<div class="editBtn"></div>
+		<input class="mnemolinkInput" value="${label}" defaultValue="${label}" readonly></input>
 	`;
-
-	const mnemolinkInput = newMnemoLink.getElementsByClassName('mnemolinkInput')[0];
-	mnemolinkInput.value = label;
 
 	return newMnemoLink;
 }
@@ -1166,83 +815,90 @@ function fillMnemoLinkList() {
 	linkNewMnemonicBtnWrap.innerHTML = '<div id="linkNewMnemonicBtn">+</div>';
 	eHTML.dashboard.mnemolinksList.appendChild(linkNewMnemonicBtnWrap);
 }
-function createMnemoLinkElement(label = 'key1') {
-	const newMnemoLink = document.createElement('div');
-	newMnemoLink.classList.add('mnemolink');
-	newMnemoLink.innerHTML = `
-		<div class="leftDecoration"></div>
-		<div class="deleteBtn"></div>
-		<input class="mnemolinkInput" value="key1"></input>
-	`;
-
-	const mnemolinkInput = newMnemoLink.getElementsByClassName('mnemolinkInput')[0];
-	mnemolinkInput.value = label;
-
-	return newMnemoLink;
-}
 function createMnemoLinkBubbleElement() {
 	const newMnemoLink = document.createElement('div');
 	newMnemoLink.classList.add('mnemolinkBubble');
 	
 	return newMnemoLink;
 }
-function fillMnemoLinkBubblesWrap() {
+function initMnemoLinkBubbles(intRadiusInFractionOfVH = 0.054, angleDecay = -1.5) {
+	const radius = window.innerHeight * intRadiusInFractionOfVH;
+	const center_x = mnemolinksBubblesContainer.offsetWidth / 2;
+	const center_y = mnemolinksBubblesContainer.offsetHeight / 2;
+	
 	const mnemolinksBubblesWrap = eHTML.dashboard.mnemolinksBubblesContainer.children[0];
 	mnemolinksBubblesWrap.innerHTML = '';
 	const monemoLinksLabels = userData.getListOfMnemoLinks();
+	const total = settings.mnemolinkBubblesMinCircleSpots > monemoLinksLabels.length ? settings.mnemolinkBubblesMinCircleSpots : monemoLinksLabels.length;
+	
+	mnemoBubbles = [];
 	for (let i = 0; i < monemoLinksLabels.length; i++) {
 		const element = createMnemoLinkBubbleElement();
 		mnemolinksBubblesWrap.appendChild(element);
-	}
-}
-function initMnemoLinkBubbles(radiusInFractionOfVH = 0.1) {
-	fillMnemoLinkBubblesWrap();
-	mnemoBubbles = [];
 
-	const radius = window.innerHeight * radiusInFractionOfVH;
-	const mnemolinksBubblesContainer = eHTML.dashboard.mnemolinksBubblesContainer;
-	const mnemolinksBubblesWrap = mnemolinksBubblesContainer.children[0];
-	const center_x = mnemolinksBubblesContainer.offsetWidth / 2;
-	const center_y = mnemolinksBubblesContainer.offsetHeight / 2;
-	const mnemoLinksBubbles = mnemolinksBubblesWrap.querySelectorAll('.mnemolinkBubble');
-	const total = mnemoLinksBubbles.length;
-	
-	mnemoLinksBubbles.forEach(function(mnemoLinkBubble, index) {
-		const angle = (index / total) * (2 * Math.PI); // Angle for each element
+		const angle = (i / total) * (2 * Math.PI) + angleDecay; // Angle for each element
 		
 		const x = center_x + radius * Math.cos(angle);
 		const y = center_y + radius * Math.sin(angle);
-		
-		const mnemoLinkBubbleObj = new mnemoLinkBubbleObject(mnemoLinkBubble, x, y);
+
+		const mnemoLinkBubbleObj = new mnemoLinkBubbleObject(monemoLinksLabels[i], element, x, y);
 		mnemoBubbles.push(mnemoLinkBubbleObj);
-	});
+	}
 }
-function positionMnemoLinkBubbles(radiusInFractionOfVH = 0.3) {
-	const radius = window.innerHeight * radiusInFractionOfVH;
-	const maxSpeed = 2;
-	// moving to border line of the circle, using vector and
-	// considering inertia with dampening
+function positionMnemoLinkBubbles(intRadiusInFractionOfVH = 0.054, extRadiusInFractionOfVH = 0.3, centerMagnet = true) {
+	//intRadiusInFractionOfVH = 0.084
+	const isDashboardOpen = eHTML.dashboard.element.classList.contains('open');
+	const circleRadius = window.innerHeight * (isDashboardOpen ? extRadiusInFractionOfVH : intRadiusInFractionOfVH);
+	const maxSpeed = .1;
 	const mnemolinksBubblesContainer = eHTML.dashboard.mnemolinksBubblesContainer;
-	const mnemolinksBubblesWrap = mnemolinksBubblesContainer.children[0];
 	const center_x = mnemolinksBubblesContainer.offsetWidth / 2;
 	const center_y = mnemolinksBubblesContainer.offsetHeight / 2;
-
+	
 	for (let i = 0; i < mnemoBubbles.length; i++) {
 		/** @type {mnemoLinkBubbleObject} */
 		const  mnemoBubble = mnemoBubbles[i];
 
-		//mnemoBubble.setVector()
-		//mnemoBubble.updatePosition()
-		//mnemoBubble.vector.x
+		const isOutCircle = Math.sqrt((mnemoBubble.x - center_x) ** 2 + (mnemoBubble.y - center_y) ** 2) > circleRadius;
+		const remainingDistance = Math.sqrt((mnemoBubble.x - center_x) ** 2 + (mnemoBubble.y - center_y) ** 2) + ( isOutCircle ? -circleRadius : circleRadius );
 
+		const dx = isOutCircle ? center_x - mnemoBubble.x : mnemoBubble.x - center_x;
+		const dy = isOutCircle ? center_y - mnemoBubble.y : mnemoBubble.y - center_y;
+		const angle = Math.atan2(dy, dx);
+		const isOppositeSpeed = Math.sign(mnemoBubble.vector.x) !== Math.sign(dx) || Math.sign(mnemoBubble.vector.y) !== Math.sign(dy);
 		
+		let speed = Math.min(maxSpeed, Math.sqrt(dx * dx + dy * dy) * 0.1);
+		speed = isOppositeSpeed ? Math.sqrt(speed, 1.68) : speed;
 
+		let speedMultiplicator = rnd(.9, 1) * ( isOutCircle ? (remainingDistance / circleRadius * 8) : (remainingDistance / circleRadius * 1) );
+		if (isDashboardOpen) {
+			//speedMultiplicator = isOutCircle && remainingDistance < .02 ? Math.pow(speedMultiplicator, .1) : speedMultiplicator;
+			speedMultiplicator = isOutCircle ? Math.pow(speedMultiplicator, .1) : speedMultiplicator;
+		} else {
+			speedMultiplicator = 2;
+		}
 
+		mnemoBubble.vector.x += Math.cos(angle) * speed * speedMultiplicator;
+		mnemoBubble.vector.y += Math.sin(angle) * speed * speedMultiplicator;
 
+		// stop bubbles when they are in the center
+		if (centerMagnet && !isDashboardOpen && !isOutCircle) {
+			mnemoBubble.vector.x = 0;
+			mnemoBubble.vector.y = 0;
+		}
+		
+		mnemoBubble.updatePosition()
 	};
 }
-function dampenSpeed(speed, dampening = 0.9) {
-	return speed * dampening;
+function clearMnemonicBubbleShowing() {
+	mnemoBubbles.forEach((mnemoBubble) => {
+		mnemoBubble.stopShowing();
+	});
+
+	// reset showBtns
+	const showBtns = document.getElementsByClassName('showBtn');
+	for (let i = 0; i < showBtns.length; i++) {
+		showBtns[i].classList.remove('showing');
+	}
 }
 async function UXupdateLoop() {
 	positionMnemoLinkBubbles();
@@ -1252,6 +908,10 @@ async function UXupdateLoop() {
 //#endregion
 
 //#region - EVENT LISTENERS
+document.addEventListener('mousemove', (event) => {
+	mousePos.x = event.clientX;
+	mousePos.y = event.clientY;
+});
 document.getElementById("dark-mode-toggle").addEventListener('change', (event) => {
 	toggleDarkMode(eHTML.toggleDarkModeButton)
 	// save dark-mode state
@@ -1329,17 +989,73 @@ document.addEventListener('keydown', (event) => {
 			default:
 				break;
 		}
-	}	
+	}
 });
 document.addEventListener('click', (event) => {
-	//if (parkour.currentForm === -1) { setActiveForm(0); }
-	if (event.target.classList.contains('suggestion')) { return; }
-	if (event.target.classList.contains('suggestions')) { return; }
-	deleteExistingSuggestionsHTML();
+	const isTargetSuggestion = event.target.classList.contains('suggestion') || event.target.classList.contains('suggestions');
+	if (!isTargetSuggestion) {
+		deleteExistingSuggestionsHTML();
+		if (event.target.id === 'linkNewMnemonicBtn') { openModal('inputMnemonic'); }
+	}
 
-	if (event.target.id === 'linkNewMnemonicBtn') { openModal('inputMnemonic'); }
+	const isTargetBubbleOrShowBtn = event.target.classList.contains('mnemolinkBubble') || event.target.classList.contains('showBtn');
+	if (!isTargetBubbleOrShowBtn) {
+		//const noBubbleShowing = mnemoBubbles.every((mnemoBubble) => !mnemoBubble.isShowing);
+		//if (noBubbleShowing) { return; }
+		const bubbleShowing = mnemoBubbles.find((mnemoBubble) => mnemoBubble.isShowing);
+		if (!bubbleShowing) { return; }
+		
+		const mnemolinkBubble = bubbleShowing.element;
+		function getMnemonicFromBubble() {
+			const gridChildren = mnemolinkBubble.querySelector('.miniMnemonicGrid').children;
+			let mnemonicStr = '';
+			for (let i = 0; i < gridChildren.length; i++) {
+				mnemonicStr += gridChildren[i].innerText + ' ';
+			}
+			return mnemonicStr;
+		}
+		const mnemolinkBubbleCopyBtn = document.getElementById('bubbleCopyBtn');
+		if (event.target === mnemolinkBubbleCopyBtn) {
+			const mnemonic = getMnemonicFromBubble();
+			navigator.clipboard.writeText(mnemonic);
+			anime({
+				targets: mnemolinkBubbleCopyBtn,
+				scale: 1.1,
+				duration: 100,
+				direction: 'alternate',
+				easing: 'easeInOutSine',
+			});
+			return;
+		}
+			
+		const mnemolinkBubbleDownloadBtn = document.getElementById('bubbleDownloadBtn');
+		if (event.target === mnemolinkBubbleDownloadBtn) {
+			const mnemonic = getMnemonicFromBubble();
+			const blob = new Blob([mnemonic], { type: "text/plain" });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = "mnemonic.txt";
+			document.body.appendChild(a);
+			a.click();
+			setTimeout(() => {
+				document.body.removeChild(a);
+				URL.revokeObjectURL(url);
+			}, 0);
+			anime({
+				targets: mnemolinkBubbleDownloadBtn,
+				scale: 1.1,
+				duration: 100,
+				direction: 'alternate',
+				easing: 'easeInOutSine',
+			});
+			return;
+		}
+
+		clearMnemonicBubbleShowing();
+	}
 });
-centerScreenBtn.addEventListener('click', async (event) => {
+centerScreenBtn.element.addEventListener('click', async (event) => {
 	if (!userData.isMasterMnemonicFilled()) {
 		openModal('inputMasterMnemonic');
 		await randomizeMnemonic(eHTML.modals.inputMasterMnemonic, true);
@@ -1350,10 +1066,112 @@ centerScreenBtn.addEventListener('click', async (event) => {
 	// if master mnemonic is already filled
 	toggleDashboard();
 });
-// MODAL : MASTER MNEMONIC
-eHTML.modals.wrap.addEventListener('click', (event) => {
-	if (event.target === eHTML.modals.wrap) { closeModal(); }
+// DASHBOARD : MNEMOLINKS LIST
+document.addEventListener('mousedown', (event) => {
+	if (!event.target.classList.contains('mnemolinkInput')) { return; }
+	event.preventDefault();
 });
+document.addEventListener('focusout', (event) => {
+	// correspond to the "eHTML.dashboard.mnemolinksList" event listener, but work better using "document" event listener
+	// console.log(`focusout: ${event.target.tagName}`);
+	if (!event.target.classList.contains('mnemolinkInput')) { return; }
+
+	const mnemolinkInput = event.target;
+	const editBtn = mnemolinkInput.parentElement.getElementsByClassName('editBtn')[0];
+	const rect = editBtn.getBoundingClientRect();
+	const x = mousePos.x;
+	const y = mousePos.y;
+	if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) { return; }
+
+	const value = mnemolinkInput.value;
+	if (value !== "" && userData.replaceMnemoLinkLabel(mnemolinkInput.defaultValue, value, true)) {
+		mnemolinkInput.defaultValue = value;
+		fillMnemoLinkList();
+		initMnemoLinkBubbles();
+	}
+	
+	editBtn.classList.remove('trash');
+	mnemolinkInput.readOnly = true;
+});
+eHTML.dashboard.mnemolinksList.addEventListener('mouseover', (event) => {
+	mnemoBubbles.forEach((bubble) => { bubble.element.classList.remove('hoverFromList'); });
+	const mnemolinkInputs = document.getElementsByClassName('mnemolinkInput')
+	for (let i = 0; i < mnemolinkInputs.length; i++) { mnemolinkInputs[i].classList.remove('hoverFromList'); }
+	const mnemolink = event.target.classList.contains('mnemolink') ? event.target : event.target.parentElement;
+	if (!mnemolink.classList.contains('mnemolink')) { return; }
+
+	const index = Array.from(mnemolink.parentElement.children).indexOf(mnemolink);
+	const bubble = mnemoBubbles[index];
+	if (!bubble) { return; }
+
+	bubble.element.classList.add('hoverFromList');
+
+	const mnemolinkInput = mnemolink.getElementsByClassName('mnemolinkInput')[0];
+	mnemolinkInput.classList.add('hoverFromList');
+});
+eHTML.dashboard.mnemolinksList.addEventListener('mouseout', (event) => {
+	mnemoBubbles.forEach((bubble) => { bubble.element.classList.remove('hoverFromList'); });
+	const mnemolinkInputs = document.getElementsByClassName('mnemolinkInput')
+	for (let i = 0; i < mnemolinkInputs.length; i++) { mnemolinkInputs[i].classList.remove('hoverFromList'); }
+});
+eHTML.dashboard.mnemolinksList.addEventListener('click', async (event) => {
+	if (event.target.classList.contains('mnemolinkInput')) { event.preventDefault(); return; }
+
+	const isEditBtn = event.target.classList.contains('editBtn');
+	if (isEditBtn) {
+		const isTrash = event.target.classList.contains('trash');
+		if (!isTrash) {
+			event.target.classList.add('trash');
+			const mnemolinkInput = event.target.parentElement.getElementsByClassName('mnemolinkInput')[0];
+			mnemolinkInput.readOnly = false;
+			mnemolinkInput.setSelectionRange(mnemolinkInput.value.length, mnemolinkInput.value.length);
+			mnemolinkInput.focus();
+			return;
+		} else {
+			console.log('delete mnemolink');
+			const index = Array.from(event.target.parentElement.parentElement.children).indexOf(event.target.parentElement);
+			const listOfMnemoLinksLabel = userData.getListOfMnemoLinks();
+			const label = listOfMnemoLinksLabel[index];
+			userData.removeMnemoLink(label);
+			save.userMnemoLinks();
+
+			fillMnemoLinkList();
+			initMnemoLinkBubbles();
+
+			return;
+		}
+	}
+
+	const isShowBtn = event.target.classList.contains('showBtn');
+	if (isShowBtn) {
+		const isShowing = event.target.classList.contains('showing');
+		if (!isShowing) {
+			clearMnemonicBubbleShowing();
+			event.target.classList.add('showing');
+			const index = Array.from(event.target.parentElement.parentElement.children).indexOf(event.target.parentElement);
+			const listOfMnemoLinksLabel = userData.getListOfMnemoLinks();
+			const label = listOfMnemoLinksLabel[index];
+			const mnemonic = await userData.getMnemoLinkDecrypted(label, true);
+			if (!mnemonic) { console.error(`Unable to get decrypted mnemonic for MnemoLink: ${label}`); return; }
+			
+			mnemoBubbles[index].showMnemonicInBubble(label, mnemonic);
+			mnemoBubbles[index].toCenterScreen();
+			return;
+		} else {
+			event.target.classList.remove('showing');
+			clearMnemonicBubbleShowing();
+			return;
+		}
+	}
+});
+eHTML.dashboard.mnemolinksList.addEventListener('keydown', (event) => {
+	if (event.key === 'Enter') {
+		event.preventDefault();
+		event.target.blur();
+	}
+});
+// MODAL : MASTER MNEMONIC
+eHTML.modals.wrap.addEventListener('click', (event) => { if (event.target === eHTML.modals.wrap) { closeModal(); } });
 eHTML.modals.inputMasterMnemonic.previousLanguageBtn.addEventListener('click', async (event) => {
 	if (eHTML.modals.inputMasterMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
 	const languageBtn = eHTML.modals.inputMasterMnemonic.randomizeBtn;
@@ -1591,7 +1409,7 @@ eHTML.modals.inputMnemonic.mnemonicGrid.addEventListener('input', (event) => {
 			const result = emptyMnemoLinker.getBIPTableFromMnemonic(extracted.mnemonic.mnemonic);
 			const initialClass = modal.randomizeBtn.classList[0];
 			const detectedLanguage = result.language ? result.language : result.bestLanguage;
-			if (detectedLanguage !== language) {
+			if (detectedLanguage.length !== 0 && detectedLanguage !== language) {
 				deleteExistingSuggestionsHTML();
 				console.log(result.language ? `language is ${result.language}` : `language is probably ${result.bestLanguage}`);
 				modal.randomizeBtn.classList = `${initialClass} ${detectedLanguage}`;
@@ -1685,7 +1503,7 @@ eHTML.modals.inputMnemonic.confirmBtn.addEventListener('click', async (event) =>
 	eHTML.modals.inputMnemonic.confirmBtn.classList.add('busy');
 
 	const masterMnemonicStr = await userData.getMasterMnemonicStr();
-	/** @type {MnemoLinkerLastest} */
+	/** @type {MnemoLinker} */
 	const mnemoLinker = new MnemoLinkerLastest( { pseudoMnemonic: masterMnemonicStr , mnemonic: mnemonic } );
 	const mnemoLink = await mnemoLinker.encryptMnemonic();
 	if (!mnemoLink) { console.error('Unable to create mnemoLink'); return; }
@@ -1693,6 +1511,7 @@ eHTML.modals.inputMnemonic.confirmBtn.addEventListener('click', async (event) =>
 	userData.addMnemoLink(mnemoLink);
 	await save.userMnemoLinks();
 	fillMnemoLinkList();
+	initMnemoLinkBubbles();
 	tempData.init();
 
 	closeModal();
