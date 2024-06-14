@@ -29,6 +29,20 @@ input {
     font-size: large;
     text-align: center;
 }
+input.wrong {
+    border: 2px solid red;
+    animation: shake 0.5s;
+}
+input:focus {
+    outline: none;
+}
+@keyframes shake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-10px); }
+    50% { transform: translateX(10px); }
+    75% { transform: translateX(-10px); }
+    100% { transform: translateX(0); }
+}
 button {
     cursor: pointer;
     width: 200px;

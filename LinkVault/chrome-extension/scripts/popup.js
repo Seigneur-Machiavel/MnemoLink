@@ -2,6 +2,7 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
 	const { cryptoLight } = require("./cryptoLight.js");
 }
 
+const hardcodedPassword = '123456'; // should be "" in production
 const busy = [];
 function setVisibleForm(formId) {
     const forms = document.getElementsByTagName('form');
@@ -66,13 +67,18 @@ document.getElementById('passwordCreationForm').addEventListener('submit', async
     
     busy.splice(busy.indexOf('passwordCreationForm'), 1);
 });
-
+document.getElementById('loginForm').addEventListener('input', function(e) {
+    const input = e.target;
+    if (input.classList.contains('wrong')) { input.classList.remove('wrong'); }
+});
 document.getElementById('loginForm').addEventListener('submit', function(e) {
-    if (busy.includes('loginForm')) return;
+    if (busy.includes('loginForm')) { return; }
     busy.push('loginForm');
 
     e.preventDefault();
-    const password = document.getElementById('loginForm').getElementsByTagName('input')[0].value;
+    const input = document.getElementById('loginForm').getElementsByTagName('input')[0];
+    let password = input.value;
+    if (password === '') { busy.splice(busy.indexOf('loginForm'), 1); return; }
 
     chrome.storage.local.get(['hashedPassword'], async function(result) {
         const { hash, saltBase64, ivBase64 } = result.hashedPassword;
@@ -85,15 +91,17 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
         //console.log(`Password-derived hash: ${res.hash}`);
 
         if (res.hash === hash) {
-            chrome.runtime.sendMessage({action: "openPage", data: {password}});
+            input.value = '';
+            chrome.runtime.sendMessage({action: "openPage", password: password});
+            password = null;
         } else {
-            alert('Wrong password');
+            input.classList.add('wrong');
         }
         busy.splice(busy.indexOf('loginForm'), 1);
     });
 });
 
 showFormDependingOnStoredPassword();
-document.getElementById('loginForm').getElementsByTagName('input')[0].value = '123456';
-document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].value = '123456';
-document.getElementById('passwordCreationForm').getElementsByTagName('input')[1].value = '123456';
+document.getElementById('loginForm').getElementsByTagName('input')[0].value = hardcodedPassword;
+document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].value = hardcodedPassword;
+document.getElementById('passwordCreationForm').getElementsByTagName('input')[1].value = hardcodedPassword;

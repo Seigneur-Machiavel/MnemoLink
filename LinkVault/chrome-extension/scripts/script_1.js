@@ -8,18 +8,24 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    chrome.runtime.sendMessage({action: "getPassword"}, function(response) {
-		const password = response.password;
-        if (!password) { return; }
-		
-		chrome.storage.local.get(['hashedPassword'], async function(result) {
-			const { hash, saltBase64, ivBase64 } = result.hashedPassword;
-			const res = await cryptoLight.init(password, saltBase64, ivBase64);
-			if (!res.hash === hash) { console.error('Wrong password'); return; }
-
-			console.log(`Ready to decrypt !`);
-		});
-    });
+	chrome.runtime.sendMessage({action: "getPassword"}, function(response) {
+		if (response && response.password) {
+			console.log(`Password received: ${JSON.stringify(response.password)}`)
+			chrome.storage.local.get(['hashedPassword'], async function(result) {
+				const { hash, saltBase64, ivBase64 } = result.hashedPassword;
+				const res = await cryptoLight.init(response.password, saltBase64, ivBase64);
+				if (res.hash !== hash) { 
+					console.info('Wrong password, requesting authentication');
+					openModal('authentification');
+					return;
+				}
+				await asyncInitLoad(true);
+			});
+		} else {
+			console.log('No password received, requesting authentication');
+			openModal('authentification');
+		}
+	});
 });
 
 const urlprefix = ""
@@ -32,6 +38,7 @@ class centerScreenBtnClass {
 		this.element = document.getElementById('centerScreenBtn');
 	}
 	show(speed = 200) {
+		this.element.classList.remove('hidden');
 		anime({
 			targets: this.element,
 			opacity: 1,
@@ -46,7 +53,7 @@ class centerScreenBtnClass {
 			opacity: 0,
 			duration: speed,
 			easing: 'easeOutQuad',
-			complete: () => { this.element.style.zIndex = -1; }
+			complete: () => { this.element.style.zIndex = -1; this.element.classList.add('hidden'); }
 		});
 	}
 }
@@ -215,6 +222,7 @@ class mnemoLinkBubbleObject {
 		const y = window.innerHeight / 2;
 		if (this.x === x && this.y === y) { return; }
 		
+		this.vector = { x: 0, y: 0 };
 		this.posSaved = { x: this.x, y: this.y };
 		centerScreenBtn.hide(240);
 		anime({
@@ -282,6 +290,7 @@ class mnemoLinkBubbleObject {
 }
 //#endregion
 
+const hardcodedPassword = '123456'; // should be "" in production
 //#region - VARIABLES
 /** @type {MnemoLinker} */
 let MnemoLinkerLastest = null;
@@ -326,6 +335,13 @@ const eHTML = {
 	},
 	modals: {
 		wrap: document.getElementsByClassName('modalsWrap')[0],
+		authentification: {
+			wrap : document.getElementById('authentificationModalWrap'),
+			modal: document.getElementById('authentificationModalWrap').getElementsByClassName('modal')[0],
+			loginForm: document.getElementById('loginForm'),
+			input: document.getElementById('authentificationModalWrap').getElementsByTagName('input')[0],
+			button: document.getElementById('authentificationModalWrap').getElementsByTagName('button')[0],
+		},
 		inputMasterMnemonic: {
 			wrap : document.getElementById('masterMnemonicModalWrap'),
 			element: document.getElementById('masterMnemonicModalWrap').getElementsByClassName('modal')[0],
@@ -360,6 +376,7 @@ const eHTML = {
 }
 eHTML.footerVersion.innerText = "v" + window.MnemoLinker.latestVersion;
 //#endregion
+eHTML.modals.authentification.input.value = hardcodedPassword;
 
 //#region - STORAGE FUNCTIONS
 const save = {
@@ -373,20 +390,30 @@ const save = {
 	},
 	async userEncryptedMnemonicsStr() {
 		const masterMnemonicStr = userData.encryptedMasterMnemonicsStr;
-		await storeDataLocally('encryptedMasterMnemonicsStr', masterMnemonicStr, save.logs);
+		await this.storeDataLocally('encryptedMasterMnemonicsStr', masterMnemonicStr, save.logs);
 	},
 	async userMnemoLinks() {
 		const data = userData.encryptedMnemoLinksStr;
-		await storeDataLocally('encryptedMnemoLinksStr', data, save.logs);
+		await this.storeDataLocally('encryptedMnemoLinksStr', data, save.logs);
 	},
 	async userPreferences() {
 		const data = userData.preferences;
-		await storeDataLocally('preferences', data, save.logs);
+		await this.storeDataLocally('preferences', data, save.logs);
+	},
+	async storeDataLocally(key = "toto", data, logs = false) {
+		try {
+			const result = await chrome.storage.local.set({ [key]: data })
+			console.log(result);
+			if (logs) { console.log(`${key} stored, data: ${JSON.stringify(data)}`); }
+		} catch (error) {
+			if (logs) { console.error(`Error while storing ${key}, data: ${data}`); }
+		}
 	}
 }
 const load = {
 	logs: true,
 	async all() {
+		console.log('Loading all data...');
 		const loadFunctions = Object.keys(load).filter((key) => key !== "all" && key !== "logs");
 		for (let i = 0; i < loadFunctions.length; i++) {
 			const functionName = loadFunctions[i];
@@ -394,7 +421,7 @@ const load = {
 		}
 	},
 	async userEncryptedMnemonicsStr() {
-		const data = await getDataLocally('encryptedMasterMnemonicsStr')
+		const data = await this.getDataLocally('encryptedMasterMnemonicsStr')
 		const logMsg = !data ? 'No encryptedMasterMnemonicsStr found !' : 'encryptedMasterMnemonicsStr loaded !';
 		if (load.logs) { console.log(logMsg); }
 		if (!data) { return; }
@@ -402,7 +429,7 @@ const load = {
 		userData.encryptedMasterMnemonicsStr = data;
 	},
 	async userMnemoLinks() {
-		const data = await getDataLocally('encryptedMnemoLinksStr')
+		const data = await this.getDataLocally('encryptedMnemoLinksStr')
 		const logMsg = !data ? 'No encryptedMnemoLinksStr found !' : 'encryptedMnemoLinksStr loaded !';
 		if (load.logs) { console.log(logMsg); }
 		if (!data) { return; }
@@ -410,41 +437,27 @@ const load = {
 		userData.encryptedMnemoLinksStr = data;
 	},
 	async userPreferences() {
-		const data = await getDataLocally('preferences')
+		const data = await this.getDataLocally('preferences')
 		const logMsg = !data ? 'No preferences found !' : 'Preferences loaded !';
 		if (load.logs) { console.log(logMsg); }
 		if (!data) { return; }
 
 		userData.preferences = data;
+	},
+	async getDataLocally(key = "toto") {
+		const fromStorage = await chrome.storage.local.get([key])
+		if (!fromStorage[key]) { return false; }
+		return fromStorage[key];
 	}
-}
-async function storeDataLocally(key = "toto", data, logs = false) {
-	try {
-		const result = await chrome.storage.local.set({ [key]: data })
-		console.log(result);
-		if (logs) { console.log(`${key} stored, data: ${JSON.stringify(data)}`); }
-	} catch (error) {
-		if (logs) { console.error(`Error while storing ${key}, data: ${data}`); }
-	}
-}
-async function getDataLocally(key = "toto") {
-	const fromStorage = await chrome.storage.local.get([key])
-	if (!fromStorage[key]) { return false; }
-	return fromStorage[key];
 }
 //#endregion
 
 //#region - PRELOAD FUNCTIONS
-async function asyncInitLoad() {
-	await load.all();
-	fillMnemoLinkList();
-	initMnemoLinkBubbles();
-	requestAnimationFrame(UXupdateLoop);
-
+async function loadMnemoLinkerLatestVersion() {
 	MnemoLinkerLastest = await window.MnemoLinker["v" + window.MnemoLinker.latestVersion];
 	emptyMnemoLinker = new MnemoLinkerLastest();
 	if (userData.preferences.darkMode) { eHTML.toggleDarkModeButton.checked = true; toggleDarkMode(eHTML.toggleDarkModeButton); }
-}; asyncInitLoad(); // auto execute
+}; loadMnemoLinkerLatestVersion();
 function toggleDarkMode(element) {
 	if (element.checked) {
 		document.body.classList.add('dark-mode');
@@ -475,13 +488,21 @@ anime.timeline({loop: false})
     duration: titleAnimationDuration.B,
     delay: (el, i) => titleAnimationDuration.A / 10 * (i+1)
   });
-setTimeout(() => { 
+setTimeout(async () => {
 	//document.getElementById('appTitleWrap').classList.add('topScreen');
 	document.getElementById('appTitle').getElementsByClassName('titleSufix')[0].classList.add('visible');
 }, titleAnimationDuration.C);
 //#endregion
 
 //#region - SIMPLE FUNCTIONS
+async function asyncInitLoad(logs = false) {
+	await load.all();
+	fillMnemoLinkList();
+	initMnemoLinkBubbles();
+	requestAnimationFrame(UXupdateLoop);
+	if (logs) { console.log('Ready to decrypt!'); }
+	return true;
+};
 function generateBIP39Mnemonic(mnemonicLength = 12, language = "english") {
 	const entropy = mnemonicLength === 12 ? 128 : 256;
 
@@ -622,6 +643,35 @@ function extractMnemonicFromInputs(modal = eHTML.modals.inputMasterMnemonic) {
 	result.mnemonic = new mnemonicObject(mnemonic, bip, language);
 
 	return result;
+}
+async function centerScreenBtnAction() {
+	if (!cryptoLight.key) {
+		openModal('authentification');
+		return;
+	}
+
+	if (!userData.isMasterMnemonicFilled()) {
+		openModal('inputMasterMnemonic');
+		await randomizeMnemonic(eHTML.modals.inputMasterMnemonic, true);
+		eHTML.modals.inputMasterMnemonic.mnemonicGridInputs[0].focus();
+		return;
+	}
+
+	// if master mnemonic is already filled
+	toggleDashboard();
+}
+function downloadStringAsFile(string, filename) {
+	const blob = new Blob([string], { type: "text/plain" });
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = filename;
+	document.body.appendChild(a);
+	a.click();
+	setTimeout(() => {
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+	}, 0);
 }
 //#endregion
 
@@ -846,9 +896,11 @@ function initMnemoLinkBubbles(intRadiusInFractionOfVH = 0.054, angleDecay = -1.5
 	}
 }
 function positionMnemoLinkBubbles(intRadiusInFractionOfVH = 0.054, extRadiusInFractionOfVH = 0.3, centerMagnet = true) {
+	const isModalOpen = !eHTML.modals.wrap.classList.contains('fold');
 	//intRadiusInFractionOfVH = 0.084
 	const isDashboardOpen = eHTML.dashboard.element.classList.contains('open');
-	const circleRadius = window.innerHeight * (isDashboardOpen ? extRadiusInFractionOfVH : intRadiusInFractionOfVH);
+	let circleRadius = window.innerHeight * (isDashboardOpen ? extRadiusInFractionOfVH : intRadiusInFractionOfVH);
+	if (isModalOpen) { circleRadius *= 0.5; }
 	const maxSpeed = .1;
 	const mnemolinksBubblesContainer = eHTML.dashboard.mnemolinksBubblesContainer;
 	const center_x = mnemolinksBubblesContainer.offsetWidth / 2;
@@ -908,6 +960,34 @@ async function UXupdateLoop() {
 //#endregion
 
 //#region - EVENT LISTENERS
+eHTML.modals.authentification.loginForm.addEventListener('submit', function(e) {
+	e.preventDefault();
+
+	const input = eHTML.modals.authentification.input;
+	let password = input.value;
+	if (password === '') { return; }
+	
+	chrome.storage.local.get(['hashedPassword'], async function(result) {
+		const { hash, saltBase64, ivBase64 } = result.hashedPassword;
+		const res = await cryptoLight.init(password, saltBase64, ivBase64);
+
+		if (res.hash !== hash) { 
+			input.classList.add('wrong');
+			return;
+		}
+
+		password = null;
+		input.value = '';
+		await asyncInitLoad(true);
+		closeModal();
+
+		await centerScreenBtnAction();
+	});
+});
+eHTML.modals.authentification.input.addEventListener('input', function(e) {
+	const input = e.target;
+	if (input.classList.contains('wrong')) { input.classList.remove('wrong'); }
+});
 document.addEventListener('mousemove', (event) => {
 	mousePos.x = event.clientX;
 	mousePos.y = event.clientY;
@@ -1000,8 +1080,7 @@ document.addEventListener('click', (event) => {
 
 	const isTargetBubbleOrShowBtn = event.target.classList.contains('mnemolinkBubble') || event.target.classList.contains('showBtn');
 	if (!isTargetBubbleOrShowBtn) {
-		//const noBubbleShowing = mnemoBubbles.every((mnemoBubble) => !mnemoBubble.isShowing);
-		//if (noBubbleShowing) { return; }
+		/** @type {mnemoLinkBubbleObject} */
 		const bubbleShowing = mnemoBubbles.find((mnemoBubble) => mnemoBubble.isShowing);
 		if (!bubbleShowing) { return; }
 		
@@ -1051,21 +1130,19 @@ document.addEventListener('click', (event) => {
 			});
 			return;
 		}
+		
+		let element = event.target;
+		for (let i = 0; i < 4; i++) {
+			if (!element) { break; }
+			if (element === mnemolinkBubble) { return; }
+			element = element.parentElement;
+		}
 
+		console.log('close bubble');
 		clearMnemonicBubbleShowing();
 	}
 });
-centerScreenBtn.element.addEventListener('click', async (event) => {
-	if (!userData.isMasterMnemonicFilled()) {
-		openModal('inputMasterMnemonic');
-		await randomizeMnemonic(eHTML.modals.inputMasterMnemonic, true);
-		eHTML.modals.inputMasterMnemonic.mnemonicGridInputs[0].focus();
-		return;
-	}
-
-	// if master mnemonic is already filled
-	toggleDashboard();
-});
+centerScreenBtn.element.addEventListener('click', async (event) => { await centerScreenBtnAction(); });
 // DASHBOARD : MNEMOLINKS LIST
 document.addEventListener('mousedown', (event) => {
 	if (!event.target.classList.contains('mnemolinkInput')) { return; }
@@ -1171,7 +1248,29 @@ eHTML.dashboard.mnemolinksList.addEventListener('keydown', (event) => {
 	}
 });
 // MODAL : MASTER MNEMONIC
-eHTML.modals.wrap.addEventListener('click', (event) => { if (event.target === eHTML.modals.wrap) { closeModal(); } });
+eHTML.modals.wrap.addEventListener('click', (event) => {
+	if (event.target === eHTML.modals.wrap) { closeModal(); } 
+
+	if (eHTML.modals.inputMasterMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
+	if (eHTML.modals.inputMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
+
+	const eventTargetIsCopyBtn = event.target === eHTML.modals.inputMasterMnemonic.copyMnemonicBtn || event.target === eHTML.modals.inputMnemonic.copyMnemonicBtn;
+	if (eventTargetIsCopyBtn) {
+		const mnemonic = tempData.mnemonic.getMnemonicStr();
+		navigator.clipboard.writeText(mnemonic);
+		modalInfo(eHTML.modals.inputMasterMnemonic, 'Mnemonic copied to clipboard');
+		modalInfo(eHTML.modals.inputMnemonic, 'Mnemonic copied to clipboard');
+	}
+
+	const eventTargetIsDownloadBtn = event.target === eHTML.modals.inputMasterMnemonic.downloadMnemonicBtn || event.target === eHTML.modals.inputMnemonic.downloadMnemonicBtn;
+	if (eventTargetIsDownloadBtn) {
+		const indexedMnemonicStr = tempData.mnemonic.getIndexedMnemonicStr();
+		const fileName = event.target === eHTML.modals.inputMasterMnemonic.downloadMnemonicBtn ? "master_mnemonic.txt" : "mnemonic.txt";
+		downloadStringAsFile(indexedMnemonicStr, fileName);
+		modalInfo(eHTML.modals.inputMasterMnemonic, 'Mnemonic downloaded');
+		modalInfo(eHTML.modals.inputMnemonic, 'Mnemonic downloaded');
+	}
+});
 eHTML.modals.inputMasterMnemonic.previousLanguageBtn.addEventListener('click', async (event) => {
 	if (eHTML.modals.inputMasterMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
 	const languageBtn = eHTML.modals.inputMasterMnemonic.randomizeBtn;
@@ -1307,33 +1406,6 @@ eHTML.modals.inputMasterMnemonic.mnemonicGrid.addEventListener('click', (event) 
 		if (extracted.allWordsAreValid) { tempData.mnemonic = extracted.mnemonic; }
 	}
 });
-eHTML.modals.inputMasterMnemonic.copyMnemonicBtn.addEventListener('click', (event) => {
-	if (eHTML.modals.inputMasterMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
-	//const indexedMnemonicStr = tempData.mnemonic.getIndexedMnemonicStr();
-	//if (!indexedMnemonicStr) { return; }
-	const mnemonicStr = tempData.mnemonic.getMnemonicStr();
-	if (!mnemonicStr) { return; }
-
-	navigator.clipboard.writeText(mnemonicStr);
-	modalInfo(eHTML.modals.inputMasterMnemonic, 'Mnemonic copied to clipboard');
-});
-eHTML.modals.inputMasterMnemonic.downloadMnemonicBtn.addEventListener('click', (event) => {
-	if (eHTML.modals.inputMasterMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
-	const indexedMnemonicStr = tempData.mnemonic.getIndexedMnemonicStr();
-	if (!indexedMnemonicStr) { return; }
-	
-	const blob = new Blob([indexedMnemonicStr], { type: "text/plain" });
-	const url = URL.createObjectURL(blob);
-	const a = document.createElement('a');
-	a.href = url;
-	a.download = "master_mnemonic.txt";
-	document.body.appendChild(a);
-	a.click();
-	setTimeout(() => {
-		document.body.removeChild(a);
-		URL.revokeObjectURL(url);
-	}, 0);
-});
 eHTML.modals.inputMasterMnemonic.confirmBtn.addEventListener('click', async (event) => {
 	if (eHTML.modals.inputMasterMnemonic.confirmBtn.classList.contains('busy')) { return; }
 	if (eHTML.modals.inputMasterMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
@@ -1353,9 +1425,6 @@ eHTML.modals.inputMasterMnemonic.confirmBtn.addEventListener('click', async (eve
 	eHTML.modals.inputMasterMnemonic.confirmBtn.classList.remove('busy');
 });
 // MODAL : INPUT MNEMONIC - used to add a new mnemonic or show an existing one
-eHTML.modals.inputMnemonic.wrap.addEventListener('click', (event) => {
-	if (event.target === eHTML.modals.inputMnemonic.wrap) { closeModal(); }
-});
 eHTML.modals.inputMnemonic.nextLanguageBtn.addEventListener('click', async (event) => {
 	const languageBtn = eHTML.modals.inputMnemonic.randomizeBtn;
 	const languages = emptyMnemoLinker.getAvailableLanguages();
@@ -1464,33 +1533,6 @@ eHTML.modals.inputMnemonic.mnemonicGrid.addEventListener('input', (event) => {
 		suggestionsHTML.appendChild(suggestionHTML);
 	}
 	input.parentElement.appendChild(suggestionsHTML);
-});
-eHTML.modals.inputMnemonic.copyMnemonicBtn.addEventListener('click', (event) => {
-	if (eHTML.modals.inputMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
-
-	const mnemonic = tempData.mnemonic.getMnemonicStr();
-	if (!mnemonic) { return; }
-
-	navigator.clipboard.writeText(mnemonic);
-	modalInfo(eHTML.modals.inputMnemonic, 'Mnemonic copied to clipboard');
-});
-eHTML.modals.inputMnemonic.downloadMnemonicBtn.addEventListener('click', (event) => {
-	if (eHTML.modals.inputMnemonic.mnemonicGrid.classList.contains('busy')) { return; }
-
-	const mnemonic = tempData.mnemonic.getMnemonicStr();
-	if (!mnemonic) { return; }
-
-	const blob = new Blob([mnemonic], { type: "text/plain" });
-	const url = URL.createObjectURL(blob);
-	const a = document.createElement('a');
-	a.href = url;
-	a.download = "mnemonic.txt";
-	document.body.appendChild(a);
-	a.click();
-	setTimeout(() => {
-		document.body.removeChild(a);
-		URL.revokeObjectURL(url);
-	}, 0);
 });
 eHTML.modals.inputMnemonic.confirmBtn.addEventListener('click', async (event) => {
 	if (eHTML.modals.inputMnemonic.confirmBtn.classList.contains('busy')) { return; }
