@@ -195,17 +195,17 @@ class userDataClass {
 		return str;
 	}
 }
-class mnemoLinkBubbleObject {
+class mnemoBubbleObject {
 	constructor(label, element, x = 0, y = 0) {
 		/** @type {HTMLElement} */
 		this.element = element;
 		this.label = label;
-		this.isShowing = false;
+		this.updatePositionPause = false;
 		
 		this.x = x;
 		this.y = y;
 		this.vector = { x: 0, y: 0 };
-		this.posSaved = { x: 0, y: 0 };
+		this.initPos = { x: x, y: y };
 	}
 	setPosition(x = 0, y = 0) {
 		this.x = x;
@@ -214,33 +214,36 @@ class mnemoLinkBubbleObject {
 		this.element.style.top = `${y}px`;
 	}
 	updatePosition() {
-		if ( this.isShowing ) { return; }
+		if ( this.updatePositionPause ) { return; }
 		this.setPosition(this.x + this.vector.x, this.y + this.vector.y);
 	}
-	toCenterScreen() {
-		const x = window.innerWidth / 2;
-		const y = window.innerHeight / 2;
-		if (this.x === x && this.y === y) { return; }
+	async #toCenterContainer(duration = 240) {
+		const mnemolinksBubblesContainer = eHTML.dashboard.mnemolinksBubblesContainer;
+		const x = mnemolinksBubblesContainer.offsetWidth / 2;
+		const y = mnemolinksBubblesContainer.offsetHeight / 2;
+		if (this.x === x && this.y === y) { return true; }
 		
 		this.vector = { x: 0, y: 0 };
-		this.posSaved = { x: this.x, y: this.y };
-		centerScreenBtn.hide(240);
+		centerScreenBtn.hide(duration);
 		anime({
 			targets: this.element,
-			left: "50%",
-			top: "50%",
-			duration: 240,
+			left: `${x}px`, //"50%",
+			top: `${y}px`, // "50%",
+			duration: duration,
 			easing: 'easeOutQuad',
 		});
+		await new Promise(r => setTimeout(r, duration * .4));
+		return true;
 	}
-	showMnemonicInBubble(label, mnemonicStr) {
-		if (this.isShowing) { console.error('bubble already showing !'); return; }
+	async prepareBubbleToShow(label, mnemonicStr, fakeCipher = true) {
 		if (this.label !== label) { console.error('label mismatch !'); return; }
+		if (this.updatePositionPause) { console.error('bubble already showing !'); return; }
+		this.updatePositionPause = true;
+		await this.#toCenterContainer();
 		
 		// clear bubble
 		this.element.innerHTML = '';
 		this.element.classList.add('showing');
-		this.isShowing = true;
 	
 		// title
 		const emptyDiv = document.createElement('div');
@@ -249,43 +252,214 @@ class mnemoLinkBubbleObject {
 		emptyDiv.appendChild(titleH2);
 		
 		// mnemonic grid
+		const mnemonic = mnemonicStr.split(' ');
 		const gridHtml = document.createElement('div');
 		gridHtml.classList.add('miniMnemonicGrid');
-		const mnemonic = mnemonicStr.split(' ');
-		mnemonic.forEach(word => {
+		for (let i = 0; i < mnemonic.length; i++) {
 			const wordDiv = document.createElement('div');
-			wordDiv.innerText = word;
+			wordDiv.innerText = fakeCipher ? this.#generateRndString( mnemonic[i].length ) : mnemonic[i];
 			gridHtml.appendChild(wordDiv);
-		});
-	
+		};
+
 		emptyDiv.appendChild(gridHtml);
-	
+		
 		// copy and download buttons
-		emptyDiv.innerHTML += `<div class="buttonsWrap">
-			<div class="copyBtn" id="bubbleCopyBtn">Copy</div>
-			<div class="downloadBtn" id="bubbleDownloadBtn">Download</div>
+		const activeClassBtnsWrap = fakeCipher ? '' : ' active';
+		emptyDiv.innerHTML += `<div class="buttonsWrap${activeClassBtnsWrap}">
+		<div class="copyBtn" id="bubbleCopyBtn">Copy</div>
+		<div class="downloadBtn" id="bubbleDownloadBtn">Download</div>
 		</div>`;
-	
+		
 		emptyDiv.classList.add('mnemonicBubbleContent');
 		this.element.appendChild(emptyDiv);
 	}
-	stopShowing() {
-		if (!this.isShowing) { return; }
-		centerScreenBtn.show(240);
-		//this.element.classList.remove('showing');
-		this.element.innerHTML = '';
-		anime({
-			targets: this.element,
-			left: `${this.posSaved.x}px`,
-			top: `${this.posSaved.y}px`,
-			duration: 240,
-			easing: 'easeOutQuad',
-			complete: () => { 
-				this.element.classList.remove('showing');
-				this.isShowing = false;
+	#generateRndString(length = 12) {
+		let rndStr = "";
+		for (let i = 0; i < length; i++) {
+			// choose a rnd char from the base64 Table : A-Z and a-z and 0-9
+			const rnd1 = rnd(0, 2);
+			const fakeChar = String.fromCharCode( rnd1 === 0 ? rnd(65, 90) : rnd1 === 1 ? rnd(97, 122) : rnd(48, 57) );
+			rndStr += fakeChar;
+		}
+		return rndStr;
+	}
+	async decipherMiniMnemonicGrid(mnemonicStr) {
+		const miniMnemonicGrid = document.getElementsByClassName("miniMnemonicGrid")[0];
+		if (!miniMnemonicGrid) { return; }
+
+		const words = mnemonicStr.split(' ');
+		const miniMnemonicGridDivs = miniMnemonicGrid.querySelectorAll('div');
+		if (words.length !== miniMnemonicGridDivs.length) { console.error('words.length !== miniMnemonicGridDivs.length'); return; }
+
+		for (let i = 0; i < words.length; i++) {
+			for (let j = 0; j < words[i].length; j++) {
+				const char = words[i].charAt(j);
+				// replace the "fake cipher" char at position j by the real char
+				miniMnemonicGridDivs[i].innerText = miniMnemonicGridDivs[i].innerText.substring(0, j) + char + miniMnemonicGridDivs[i].innerText.substring(j + 1);
+				await new Promise(r => setTimeout(r, settings.delayBeetweenChar));
 			}
-		});
-		//this.isShowing = false;
+		}
+
+		const buttonsWrap = this.element.getElementsByClassName('buttonsWrap')[0];
+		if (!buttonsWrap) { return; }
+		buttonsWrap.classList.add('active');
+		return true;
+	}
+	stopShowing() {
+		if (!this.updatePositionPause) { return; }
+
+		centerScreenBtn.show(120);
+		this.element.innerHTML = '';
+
+		this.x = this.initPos.x;
+		this.y = this.initPos.y;
+		this.vector = { x: 0, y: 0 };
+		this.element.classList.remove('showing');
+		this.updatePositionPause = false;
+	}
+}
+class svgLineObject {
+	constructor(arrayOfSVGPath = []) {
+		/** @type {SVGPathElement[]} */
+		this.arrayOfSVGPath = arrayOfSVGPath;
+		this.maxOffsetDecay = 10; // how much the line derivate from the straightest path
+
+		this.pattern = {
+			strokeOpacities: [],
+			coveredDistanceMultipliers: [],
+			offsets: [],
+			curveOffsets: [],
+		}
+	}
+	randomizePattern() {
+		const arrayOfSVGPath = this.arrayOfSVGPath;
+		for (let i = 0; i < arrayOfSVGPath.length; i++) {
+			// ex: { 0.6 + 0.4 > 60% to 100% opacity }
+			this.pattern.strokeOpacities[i] = Math.random() * 0.2 + 0.21; // should never be under 0.21
+
+			// ex: { rnd(20, 60) > 20% to 60% of the remaining distance }
+			this.pattern.coveredDistanceMultipliers[i] = rnd(20, 60) / 100;
+			
+			// ex: { maxOffsetDecay = 10 > -PI/20 to PI/20 angle deviation } for more organic look
+			this.pattern.offsets[i] = Math.PI / this.maxOffsetDecay * (Math.random() - 0.5);
+
+			const negativeCurve = rnd(0, 1) === 0 ? -1 : 1; // A higher value will make the curve more pronounced
+			this.pattern.curveOffsets[i] = rnd(0, this.maxOffsetDecay) * negativeCurve;
+		}
+	}
+	linkPathWithCurve(path, startX, startY, targetX, targetY, curveOffset, strokeOpacity = 1, opacityVariation = 0.2) {
+		const curveX = startX + (targetX - startX) / 2;
+		const curveY = startY + (targetY - startY) / 2;
+
+		const curveAngle = Math.atan2(targetY - startY, targetX - startX);
+		
+		const curveTargetX = curveX + Math.cos(curveAngle + Math.PI / 2) * curveOffset;
+		const curveTargetY = curveY + Math.sin(curveAngle + Math.PI / 2) * curveOffset;
+
+		path.setAttribute('d', `M ${startX} ${startY} Q ${curveTargetX} ${curveTargetY} ${targetX} ${targetY}`);
+		path.setAttribute('stroke-opacity', strokeOpacity - (Math.random() * opacityVariation));
+	}
+	linkPathWithStraightLine(path, startX, startY, targetX, targetY) {
+		path.setAttribute('d', `M ${startX} ${startY} L ${targetX} ${targetY}`);
+	}
+}
+class mnemoLinkSVGObject {
+	constructor(elementSVG, targetX, targetY, patternChangeSequence = [4, 10, 60]) {
+		this.element = elementSVG;
+		this.containerHalfWidth = 0;
+		this.containerHalfHeight = 0;
+		this.targetX = targetX;
+		this.targetY = targetY;
+
+		this.patternChangeSequence = patternChangeSequence; // ex: [4, 60] change pattern at frame 4, 60
+		this.frame = 0;
+		/** @type {svgLineObject[]} */
+		this.lines = [];
+	}
+	#initLines(nbOfLines = 3) {
+		if (this.lines.length === nbOfLines) { return; }
+
+		this.element.innerHTML = '';
+		this.lines = [];
+
+		for (let i = 0; i < nbOfLines; i++) {
+			const segments = rnd(2, 4);
+			const strokeWidth = Math.random() * 1.5 + 0.5;
+			const color = 'black';
+			const arrayOfSVGPath = this.#createArrayOfSVGPath(segments, color, strokeWidth);
+
+			const svgLineObj = new svgLineObject(arrayOfSVGPath);
+			svgLineObj.randomizePattern();
+			this.lines.push(svgLineObj);
+		}
+	}
+	#createArrayOfSVGPath(nbPath = 3, color = 'black', strokeWidth = 1) {
+		const paths = [];
+		for (let i = 0; i < nbPath; i++) {
+			const path =  document.createElementNS('http://www.w3.org/2000/svg', 'path');
+			this.element.appendChild(path);
+			paths.push(path);
+			path.setAttribute('stroke', color);
+			path.setAttribute('stroke-width', strokeWidth);
+			path.setAttribute('fill', 'none');
+		}
+		return paths;
+	}
+	#calculateDistance(startX, startY, targetX, targetY) {
+		const deltaX = targetX - startX;
+		const deltaY = targetY - startY;
+		return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+	}
+	/** @param {svgLineObject} svgLineObj */
+	#drawTheLine(svgLineObj, angle) {
+		const arrayOfSVGPath = svgLineObj.arrayOfSVGPath;
+		if (!arrayOfSVGPath) {console.error('arrayOfSVGPath not found !'); return;}
+
+		let delta = this.#calculateDistance(this.containerHalfWidth, this.containerHalfHeight, this.targetX, this.targetY);
+		let startX = this.containerHalfWidth + Math.cos(angle) * delta * 0.24; // skip 24% of the distance
+		let startY = this.containerHalfHeight + Math.sin(angle) * delta * 0.24;
+
+		// line from start to bubble split in X parts
+		for (let i = 0; i < arrayOfSVGPath.length; i++) {
+			const path = arrayOfSVGPath[i];
+			const strokeOpacity = svgLineObj.pattern.strokeOpacities[i];
+			const curveOffset = svgLineObj.pattern.curveOffsets[i];
+			
+			if (i === arrayOfSVGPath.length - 1) {
+				svgLineObj.linkPathWithCurve(path, startX, startY, this.targetX, this.targetY, curveOffset, strokeOpacity);
+				break;
+			}
+			
+			delta = this.#calculateDistance(startX, startY, this.targetX, this.targetY);
+			const coveredDistance = delta * svgLineObj.pattern.coveredDistanceMultipliers[i];
+			
+			const offset = svgLineObj.pattern.offsets[i];
+			const offestAngle = angle + offset;
+			const targetX = startX + Math.cos(offestAngle) * coveredDistance;
+			const targetY = startY + Math.sin(offestAngle) * coveredDistance;
+
+			// curve line
+			svgLineObj.linkPathWithCurve(path, startX, startY, targetX, targetY, curveOffset, strokeOpacity);
+
+			startX = targetX;
+			startY = targetY;
+		}
+	}
+	update() {
+		const nbOfLines = this.patternChangeSequence.length;
+		this.#initLines(nbOfLines);
+
+		for (let i = 0; i < nbOfLines; i++) {
+			const svgLineObj = this.lines[i];
+			
+			if (this.frame === this.patternChangeSequence[i]) { svgLineObj.randomizePattern(); }
+			
+			const angle = Math.atan2(this.targetY - this.containerHalfHeight, this.targetX - this.containerHalfWidth);
+			this.#drawTheLine(svgLineObj, angle);
+		}
+		
+		this.frame++;
+		if (this.frame > this.patternChangeSequence[nbOfLines - 1]) { this.frame = 0; }
 	}
 }
 //#endregion
@@ -310,8 +484,10 @@ const settings = {
 
 const mousePos = { x: 0, y: 0 };
 const timeOuts = {};
-/** @type {mnemoLinkBubbleObject[]} */
-let mnemoBubbles = [];
+/** @type {mnemoBubbleObject[]} */
+let mnemoBubblesObj = [];
+/** @type {mnemoLinkSVGObject[]} */
+let mnemoLinkSVGsObj = [];
 const centerScreenBtn = new centerScreenBtnClass();
 const userData = new userDataClass();
 const tempData = {
@@ -332,6 +508,8 @@ const eHTML = {
 		element: document.getElementById('dashboard'),
 		mnemolinksList: document.getElementById('mnemolinksList'),
 		mnemolinksBubblesContainer: document.getElementById('mnemolinksBubblesContainer'),
+		linksWrap: document.getElementById('mnemolinksBubblesContainer').children[0],
+		bubblesWrap: document.getElementById('mnemolinksBubblesContainer').children[1],
 	},
 	modals: {
 		wrap: document.getElementsByClassName('modalsWrap')[0],
@@ -463,10 +641,12 @@ function toggleDarkMode(element) {
 		document.body.classList.add('dark-mode');
 		eHTML.dashboard.element.classList.add('invertColors');
 		eHTML.modals.wrap.classList.add('invertColors');
+		eHTML.dashboard.linksWrap.classList.add('invertColors');
 	} else {
 		document.body.classList.remove('dark-mode');
 		eHTML.dashboard.element.classList.remove('invertColors');
 		eHTML.modals.wrap.classList.remove('invertColors');
+		eHTML.dashboard.linksWrap.classList.remove('invertColors');
 	}
 
 	userData.preferences.darkMode = element.checked;
@@ -679,9 +859,9 @@ function downloadStringAsFile(string, filename) {
 function toggleDashboard() {
 	const dashboard = eHTML.dashboard.element;
 	const appTitleWrap = document.getElementById('appTitleWrap');
-	if (dashboard.classList.contains('open')) { 
+	if (dashboard.classList.contains('open')) {
 		dashboard.classList.remove('open');
-		timeOuts["appTitleWrapVisible"] = setTimeout(() => { appTitleWrap.classList.add('visible'); }, 400);
+		timeOuts["appTitleWrapVisible"] = setTimeout(() => { appTitleWrap.classList.add('visible'); }, 800);
 	} else {
 		dashboard.classList.add('open');
 		// cancel the timeout to show the app title
@@ -871,79 +1051,9 @@ function createMnemoLinkBubbleElement() {
 	
 	return newMnemoLink;
 }
-function initMnemoLinkBubbles(intRadiusInFractionOfVH = 0.054, angleDecay = -1.5) {
-	const radius = window.innerHeight * intRadiusInFractionOfVH;
-	const center_x = mnemolinksBubblesContainer.offsetWidth / 2;
-	const center_y = mnemolinksBubblesContainer.offsetHeight / 2;
-	
-	const mnemolinksBubblesWrap = eHTML.dashboard.mnemolinksBubblesContainer.children[0];
-	mnemolinksBubblesWrap.innerHTML = '';
-	const monemoLinksLabels = userData.getListOfMnemoLinks();
-	const total = settings.mnemolinkBubblesMinCircleSpots > monemoLinksLabels.length ? settings.mnemolinkBubblesMinCircleSpots : monemoLinksLabels.length;
-	
-	mnemoBubbles = [];
-	for (let i = 0; i < monemoLinksLabels.length; i++) {
-		const element = createMnemoLinkBubbleElement();
-		mnemolinksBubblesWrap.appendChild(element);
-
-		const angle = (i / total) * (2 * Math.PI) + angleDecay; // Angle for each element
-		
-		const x = center_x + radius * Math.cos(angle);
-		const y = center_y + radius * Math.sin(angle);
-
-		const mnemoLinkBubbleObj = new mnemoLinkBubbleObject(monemoLinksLabels[i], element, x, y);
-		mnemoBubbles.push(mnemoLinkBubbleObj);
-	}
-}
-function positionMnemoLinkBubbles(intRadiusInFractionOfVH = 0.054, extRadiusInFractionOfVH = 0.3, centerMagnet = true) {
-	const isModalOpen = !eHTML.modals.wrap.classList.contains('fold');
-	//intRadiusInFractionOfVH = 0.084
-	const isDashboardOpen = eHTML.dashboard.element.classList.contains('open');
-	let circleRadius = window.innerHeight * (isDashboardOpen ? extRadiusInFractionOfVH : intRadiusInFractionOfVH);
-	if (isModalOpen) { circleRadius *= 0.5; }
-	const maxSpeed = .1;
-	const mnemolinksBubblesContainer = eHTML.dashboard.mnemolinksBubblesContainer;
-	const center_x = mnemolinksBubblesContainer.offsetWidth / 2;
-	const center_y = mnemolinksBubblesContainer.offsetHeight / 2;
-	
-	for (let i = 0; i < mnemoBubbles.length; i++) {
-		/** @type {mnemoLinkBubbleObject} */
-		const  mnemoBubble = mnemoBubbles[i];
-
-		const isOutCircle = Math.sqrt((mnemoBubble.x - center_x) ** 2 + (mnemoBubble.y - center_y) ** 2) > circleRadius;
-		const remainingDistance = Math.sqrt((mnemoBubble.x - center_x) ** 2 + (mnemoBubble.y - center_y) ** 2) + ( isOutCircle ? -circleRadius : circleRadius );
-
-		const dx = isOutCircle ? center_x - mnemoBubble.x : mnemoBubble.x - center_x;
-		const dy = isOutCircle ? center_y - mnemoBubble.y : mnemoBubble.y - center_y;
-		const angle = Math.atan2(dy, dx);
-		const isOppositeSpeed = Math.sign(mnemoBubble.vector.x) !== Math.sign(dx) || Math.sign(mnemoBubble.vector.y) !== Math.sign(dy);
-		
-		let speed = Math.min(maxSpeed, Math.sqrt(dx * dx + dy * dy) * 0.1);
-		speed = isOppositeSpeed ? Math.sqrt(speed, 1.68) : speed;
-
-		let speedMultiplicator = rnd(.9, 1) * ( isOutCircle ? (remainingDistance / circleRadius * 8) : (remainingDistance / circleRadius * 1) );
-		if (isDashboardOpen) {
-			//speedMultiplicator = isOutCircle && remainingDistance < .02 ? Math.pow(speedMultiplicator, .1) : speedMultiplicator;
-			speedMultiplicator = isOutCircle ? Math.pow(speedMultiplicator, .1) : speedMultiplicator;
-		} else {
-			speedMultiplicator = 2;
-		}
-
-		mnemoBubble.vector.x += Math.cos(angle) * speed * speedMultiplicator;
-		mnemoBubble.vector.y += Math.sin(angle) * speed * speedMultiplicator;
-
-		// stop bubbles when they are in the center
-		if (centerMagnet && !isDashboardOpen && !isOutCircle) {
-			mnemoBubble.vector.x = 0;
-			mnemoBubble.vector.y = 0;
-		}
-		
-		mnemoBubble.updatePosition()
-	};
-}
 function clearMnemonicBubbleShowing() {
-	mnemoBubbles.forEach((mnemoBubble) => {
-		mnemoBubble.stopShowing();
+	mnemoBubblesObj.forEach((mnemoBubbleObj) => {
+		mnemoBubbleObj.stopShowing();
 	});
 
 	// reset showBtns
@@ -952,8 +1062,140 @@ function clearMnemonicBubbleShowing() {
 		showBtns[i].classList.remove('showing');
 	}
 }
+function initMnemoLinkBubbles(intRadiusInFractionOfVH = 0.054, angleDecay = -1.5) {
+	const mnemolinksBubblesContainer = eHTML.dashboard.mnemolinksBubblesContainer;
+	const radius = window.innerHeight * intRadiusInFractionOfVH;
+	const center_x = mnemolinksBubblesContainer.offsetWidth / 2;
+	const center_y = mnemolinksBubblesContainer.offsetHeight / 2;
+	
+	const bubblesWrap = eHTML.dashboard.bubblesWrap;
+	bubblesWrap.innerHTML = '';
+	const monemoLinksLabels = userData.getListOfMnemoLinks();
+	const total = settings.mnemolinkBubblesMinCircleSpots > monemoLinksLabels.length ? settings.mnemolinkBubblesMinCircleSpots : monemoLinksLabels.length;
+	
+	mnemoBubblesObj = [];
+	for (let i = 0; i < monemoLinksLabels.length; i++) {
+		const element = createMnemoLinkBubbleElement();
+		bubblesWrap.appendChild(element);
+
+		const angle = (i / total) * (2 * Math.PI) + angleDecay; // Angle for each element
+		
+		const x = center_x + radius * Math.cos(angle);
+		const y = center_y + radius * Math.sin(angle);
+
+		const mnemoBubbleObj = new mnemoBubbleObject(monemoLinksLabels[i], element, x, y);
+		mnemoBubblesObj.push(mnemoBubbleObj);
+	}
+
+	initMnemoLinkSVGs();
+}
+function initMnemoLinkSVGs() {
+	const linksWrap = eHTML.dashboard.linksWrap;
+	const mnemolinkLinks = linksWrap.getElementsByClassName('mnemolinkLink');
+
+	// sequence = [4, 10, 60] => [4, 14, 0] => [8, 18, 4] => ... => [0, 10, 60]
+	let sequence = [2, 4, 20];
+	const sequenceFrames = sequence[sequence.length - 1];
+	const sequenceIncrement = sequence[0];
+	function updateSequence(sequenceIncrement) {
+		let newSquence = [];
+		for (let i = 0; i < sequence.length; i++) {
+			let newFrame = sequence[i] + sequenceIncrement;
+			while (newFrame > sequenceFrames) {
+				newFrame -= sequenceFrames;
+			}
+			newSquence.push(newFrame);
+		}
+
+		return newSquence;
+	}
+
+	if (mnemolinkLinks.length !== mnemoBubblesObj.length) {
+		console.log('re create links svg');
+		mnemoLinkSVGsObj = [];
+		linksWrap.innerHTML = '';
+		for (let i = 0; i < mnemoBubblesObj.length; i++) {
+			const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+			svg.classList.add('mnemolinkLink');
+			linksWrap.appendChild(svg);
+
+			const mnemoLinkSVG = new mnemoLinkSVGObject(svg, mnemoBubblesObj[i].x, mnemoBubblesObj[i].y, sequence);
+			mnemoLinkSVGsObj.push(mnemoLinkSVG);
+			updateSequence(sequenceIncrement);
+		};
+	}
+}
+function positionMnemoLinkBubbles(intRadiusInFractionOfVH = 0.054, extRadiusInFractionOfVH = 0.26, centerMagnet = true) {
+	const isModalOpen = !eHTML.modals.wrap.classList.contains('fold');
+	const isDashboardOpen = eHTML.dashboard.element.classList.contains('open');
+	let circleRadius = window.innerHeight * (isDashboardOpen ? extRadiusInFractionOfVH : intRadiusInFractionOfVH);
+	if (isModalOpen) { circleRadius *= 0.5; }
+
+	const maxSpeed = .4;
+	const acceleration = 0.004;
+	const mnemolinksBubblesContainer = eHTML.dashboard.mnemolinksBubblesContainer;
+	const center_x = mnemolinksBubblesContainer.offsetWidth / 2;
+	const center_y = mnemolinksBubblesContainer.offsetHeight / 2;
+	
+	for (let i = 0; i < mnemoBubblesObj.length; i++) {
+		/** @type {mnemoBubbleObject} */
+		const  mnemoBubbleObj = mnemoBubblesObj[i];
+
+		const isOutCircle = Math.sqrt((mnemoBubbleObj.x - center_x) ** 2 + (mnemoBubbleObj.y - center_y) ** 2) > circleRadius;
+		const isOutCirclePlus = Math.sqrt((mnemoBubbleObj.x - center_x) ** 2 + (mnemoBubbleObj.y - center_y) ** 2) > circleRadius * 1.2;
+		const remainingDistance = Math.sqrt((mnemoBubbleObj.x - center_x) ** 2 + (mnemoBubbleObj.y - center_y) ** 2) + ( isOutCircle ? -circleRadius : circleRadius );
+
+		const dx = isOutCircle ? center_x - mnemoBubbleObj.x : mnemoBubbleObj.x - center_x;
+		const dy = isOutCircle ? center_y - mnemoBubbleObj.y : mnemoBubbleObj.y - center_y;
+		const angle = Math.atan2(dy, dx);
+		const isOppositeSpeed = Math.sign(mnemoBubbleObj.vector.x) !== Math.sign(dx) || Math.sign(mnemoBubbleObj.vector.y) !== Math.sign(dy);
+		
+		//if (i === 0) { console.log( Math.sqrt(dx * dx + dy * dy) ) }
+		let speed = Math.min(maxSpeed, Math.sqrt(dx * dx + dy * dy) * acceleration);
+		speed = isOppositeSpeed ? speed * 6 : speed;
+
+		const rnd_ = isOutCirclePlus ? 1 : rnd(0, 1) < .4 ? 0 : 1;
+		let speedMultiplicator = rnd_ * ( isOutCircle ? (remainingDistance / circleRadius * 8) : (remainingDistance / circleRadius * 1) );
+		if (isDashboardOpen) {
+			//speedMultiplicator = isOutCircle && remainingDistance < .02 ? Math.pow(speedMultiplicator, .1) : speedMultiplicator;
+			speedMultiplicator = isOutCircle ? Math.pow(speedMultiplicator, .1) : speedMultiplicator;
+		} else {
+			speedMultiplicator = 2;
+		}
+
+		mnemoBubbleObj.vector.x += Math.cos(angle) * speed * speedMultiplicator;
+		mnemoBubbleObj.vector.y += Math.sin(angle) * speed * speedMultiplicator;
+
+		// stop bubbles when they are in the center
+		if (centerMagnet && !isDashboardOpen && !isOutCircle) {
+			mnemoBubbleObj.vector.x = 0;
+			mnemoBubbleObj.vector.y = 0;
+		}
+		
+		mnemoBubbleObj.updatePosition()
+	};
+}
+function positionLinkSVGs() {
+	/** @type {HTMLElement} */
+	const linksWrapContainer = eHTML.dashboard.linksWrap;
+	const mnemolinksBubblesContainer = eHTML.dashboard.mnemolinksBubblesContainer;
+	const widthRatio = mnemolinksBubblesContainer.offsetWidth / linksWrapContainer.offsetWidth;
+	const heightRatio = mnemolinksBubblesContainer.offsetHeight / linksWrapContainer.offsetHeight;
+	const halfWidth = mnemolinksBubblesContainer.offsetWidth * widthRatio;
+	const halfHeight = mnemolinksBubblesContainer.offsetHeight * heightRatio;
+
+	for (let i = 0; i < mnemoLinkSVGsObj.length; i++) {
+		const mnemoLinkSVGObj = mnemoLinkSVGsObj[i];
+		mnemoLinkSVGObj.containerHalfWidth = linksWrapContainer.offsetWidth / 2;
+		mnemoLinkSVGObj.containerHalfHeight = linksWrapContainer.offsetHeight / 2;
+		mnemoLinkSVGObj.targetX = mnemoBubblesObj[i].x + halfWidth;
+		mnemoLinkSVGObj.targetY = mnemoBubblesObj[i].y + halfHeight;
+		mnemoLinkSVGObj.update();
+	}
+}
 async function UXupdateLoop() {
 	positionMnemoLinkBubbles();
+	positionLinkSVGs();
 
 	requestAnimationFrame(UXupdateLoop);
 }
@@ -1080,22 +1322,22 @@ document.addEventListener('click', (event) => {
 
 	const isTargetBubbleOrShowBtn = event.target.classList.contains('mnemolinkBubble') || event.target.classList.contains('showBtn');
 	if (!isTargetBubbleOrShowBtn) {
-		/** @type {mnemoLinkBubbleObject} */
-		const bubbleShowing = mnemoBubbles.find((mnemoBubble) => mnemoBubble.isShowing);
+		/** @type {mnemoBubbleObject} */
+		const bubbleShowing = mnemoBubblesObj.find((mnemoBubbleObj) => mnemoBubbleObj.isShowing);
 		if (!bubbleShowing) { return; }
 		
-		const mnemolinkBubble = bubbleShowing.element;
-		function getMnemonicFromBubble() {
-			const gridChildren = mnemolinkBubble.querySelector('.miniMnemonicGrid').children;
+		const mnemonic = (() => {
+			if (!event.target.parentElement.classList.contains('active')) { return false; }
+			const gridChildren = bubbleShowing.element.getElementsByClassName('miniMnemonicGrid')[0].children;
 			let mnemonicStr = '';
 			for (let i = 0; i < gridChildren.length; i++) {
 				mnemonicStr += gridChildren[i].innerText + ' ';
 			}
 			return mnemonicStr;
-		}
+		})();
+
 		const mnemolinkBubbleCopyBtn = document.getElementById('bubbleCopyBtn');
-		if (event.target === mnemolinkBubbleCopyBtn) {
-			const mnemonic = getMnemonicFromBubble();
+		if (mnemonic && event.target === mnemolinkBubbleCopyBtn) {
 			navigator.clipboard.writeText(mnemonic);
 			anime({
 				targets: mnemolinkBubbleCopyBtn,
@@ -1108,8 +1350,7 @@ document.addEventListener('click', (event) => {
 		}
 			
 		const mnemolinkBubbleDownloadBtn = document.getElementById('bubbleDownloadBtn');
-		if (event.target === mnemolinkBubbleDownloadBtn) {
-			const mnemonic = getMnemonicFromBubble();
+		if (mnemonic && event.target === mnemolinkBubbleDownloadBtn) {
 			const blob = new Blob([mnemonic], { type: "text/plain" });
 			const url = URL.createObjectURL(blob);
 			const a = document.createElement('a');
@@ -1131,6 +1372,8 @@ document.addEventListener('click', (event) => {
 			return;
 		}
 		
+		// close bubble if click outside
+		const mnemolinkBubble = bubbleShowing.element;
 		let element = event.target;
 		for (let i = 0; i < 4; i++) {
 			if (!element) { break; }
@@ -1171,14 +1414,14 @@ document.addEventListener('focusout', (event) => {
 	mnemolinkInput.readOnly = true;
 });
 eHTML.dashboard.mnemolinksList.addEventListener('mouseover', (event) => {
-	mnemoBubbles.forEach((bubble) => { bubble.element.classList.remove('hoverFromList'); });
+	mnemoBubblesObj.forEach((mnemoBubbleObj) => { mnemoBubbleObj.element.classList.remove('hoverFromList'); });
 	const mnemolinkInputs = document.getElementsByClassName('mnemolinkInput')
 	for (let i = 0; i < mnemolinkInputs.length; i++) { mnemolinkInputs[i].classList.remove('hoverFromList'); }
 	const mnemolink = event.target.classList.contains('mnemolink') ? event.target : event.target.parentElement;
 	if (!mnemolink.classList.contains('mnemolink')) { return; }
 
 	const index = Array.from(mnemolink.parentElement.children).indexOf(mnemolink);
-	const bubble = mnemoBubbles[index];
+	const bubble = mnemoBubblesObj[index];
 	if (!bubble) { return; }
 
 	bubble.element.classList.add('hoverFromList');
@@ -1187,7 +1430,7 @@ eHTML.dashboard.mnemolinksList.addEventListener('mouseover', (event) => {
 	mnemolinkInput.classList.add('hoverFromList');
 });
 eHTML.dashboard.mnemolinksList.addEventListener('mouseout', (event) => {
-	mnemoBubbles.forEach((bubble) => { bubble.element.classList.remove('hoverFromList'); });
+	mnemoBubblesObj.forEach((mnemoBubbleObj) => { mnemoBubbleObj.element.classList.remove('hoverFromList'); });
 	const mnemolinkInputs = document.getElementsByClassName('mnemolinkInput')
 	for (let i = 0; i < mnemolinkInputs.length; i++) { mnemolinkInputs[i].classList.remove('hoverFromList'); }
 });
@@ -1228,11 +1471,12 @@ eHTML.dashboard.mnemolinksList.addEventListener('click', async (event) => {
 			const index = Array.from(event.target.parentElement.parentElement.children).indexOf(event.target.parentElement);
 			const listOfMnemoLinksLabel = userData.getListOfMnemoLinks();
 			const label = listOfMnemoLinksLabel[index];
-			const mnemonic = await userData.getMnemoLinkDecrypted(label, true);
-			if (!mnemonic) { console.error(`Unable to get decrypted mnemonic for MnemoLink: ${label}`); return; }
+			const mnemonicStr = await userData.getMnemoLinkDecrypted(label, true);
+			if (!mnemonicStr) { console.error(`Unable to get decrypted mnemonicStr for MnemoLink: ${label}`); return; }
 			
-			mnemoBubbles[index].showMnemonicInBubble(label, mnemonic);
-			mnemoBubbles[index].toCenterScreen();
+			await mnemoBubblesObj[index].prepareBubbleToShow(label, mnemonicStr);
+			await mnemoBubblesObj[index].decipherMiniMnemonicGrid(mnemonicStr);
+			
 			return;
 		} else {
 			event.target.classList.remove('showing');

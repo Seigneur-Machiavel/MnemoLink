@@ -5,6 +5,9 @@
     --text-color: rgb(0, 0, 0);
     --placeholder-color: rgb(125, 125, 125);
     /*--modal-background-color: rgb(255, 255, 255);*/
+
+    --dashboard-open-child-transition-delay: 0.2s;
+    --dashboard-close-child-transition-delay: 0.6s;
 }
 .dark-mode {
     --background-color: rgb(0, 0, 0);
@@ -153,6 +156,9 @@ button {
     height: 48vh;
     transform: translate(-50%, -50%);
 }
+#mnemolinksBubblesContainer .wrap {
+    position: absolute;
+}
 .mnemolinkBubble {
     /*z-index: -1;*/
     pointer-events: all;
@@ -201,8 +207,28 @@ button {
     border-top: #8a8a8a36 solid 1px;
     border-bottom: #8a8a8a36 solid 1px;
     border-color: var(--placeholder-color);
+    min-width: 14vh;
+}
+.linksWrap {
+    transform: translate(-25%, -25%);
+    width: 200%;
+    height: 200%;
+    transition: filter 0.24s ease-in-out;
+    transition-delay: 0.48s;
+}
+.linksWrap.invertColors {
+    filter: invert(1);
+}
+.linksWrap svg {
+    pointer-events: none;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    transition: filter 0.24s ease-in-out;
+    transition-delay: 0.48s;
 }
 .buttonsWrap {
+    pointer-events: none;
     display: flex;
     justify-content: space-evenly;
     align-items: center;
@@ -210,13 +236,19 @@ button {
     padding-top: 1vh;
     font-weight: bold;
     width: 100%;
+    opacity: .4;
+    transition: opacity 0.12s ease-in-out;
+}
+.buttonsWrap.active {
+    pointer-events: all;
+    opacity: 1;
 }
 .buttonsWrap div {
     cursor: pointer;
     border-bottom: 1px solid transparent;
     transition: border-bottom 0.12s ease-in-out;
 }
-.buttonsWrap div:hover {
+.buttonsWrap.active div:hover {
     border-bottom: 1px solid var(--text-color);
 }
 
@@ -229,10 +261,12 @@ button {
     width: 27.625vh;
     height: 26vh;
     transition: width 0.8s ease-in-out, height 0.8s ease-in-out;
+    transition-delay: var(--dashboard-open-child-transition-delay);
 }
 #dashboard.open {
     width: 84%;
     height: 84%;
+    transition-delay: 0s;
 }
 #dashboardFrameWrap {
     position: absolute;
@@ -274,14 +308,13 @@ button {
     font-size: 3vh;
     opacity: 0;
     transition: opacity 0.36s ease-in-out, background-color 0.24s ease-in-out, color 0.24s ease-in-out;
-    transition-delay: 0.4s;
+    transition-delay: var(--dashboard-close-child-transition-delay);
 }
 #dashboard.open #dashboardTopBar {
     opacity: 1;
-    transition-delay: 0.4s;
 }
 #dashboard:not(.open) #dashboardTopBar {
-    transition-delay: 0s;
+    transition-delay: var(--dashboard-open-child-transition-delay);
 }
 .dashboardTopBarBtn {
     pointer-events: all;
@@ -302,14 +335,14 @@ button {
     right: 0;
     opacity: 0;
     transition: opacity 0.28s ease-in-out, pointer-events 0.28s ease-in-out;
+    transition-delay: var(--dashboard-close-child-transition-delay);
 }
 #dashboard.open #dashboardMnemolinksList {
     pointer-events: all;
     opacity: 1;
-    transition-delay: 0.4s;
 }
 #dashboard:not(.open) #dashboardMnemolinksList {
-    transition-delay: 0s;
+    transition-delay: var(--dashboard-open-child-transition-delay);
 }
 #mnemolinksList {
     overflow-y: scroll;
