@@ -340,8 +340,33 @@ class MnemoLinker {
 	}
 
 	// PUBLIC METHODS
+	async genPublicId(desiredLength = 10) {
+		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
+
+		const encodedPseudoMnemonicBase64Str = this.#encodeMnemonic(this.pseudo.mnemonic, 24);
+		const fixedSalt = new Uint16Array([0, 2, 1, 3]);
+		const fixedIV = new Uint8Array([0, 1, 2, 3, 5, 4, 6, 7, 8, 9, 11, 10, 12, 13, 14, 15]);
+		const key = await this.#deriveK(encodedPseudoMnemonicBase64Str, fixedSalt);
+		const id = await this.#encryptText(encodedPseudoMnemonicBase64Str, key, fixedIV);
+		const controlBase64Str = await this.#decryptText(id, key, fixedIV);
+		const decodedStr = this.#decodeMnemonic(controlBase64Str, this.origin.bip, this.origin.language);
+		if (!this.pseudo.mnemonic.join(' ') === decodedStr) { console.error('Decrypted ID is not valid'); return false; }
+
+		let reducedId = '';
+		const acceptedChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+		for (let i = 0; i < id.length; i++) {
+			const char = id[i];
+			if (acceptedChars.includes(char)) { reducedId += char; }
+			if (reducedId.length >= desiredLength) { break; }
+		}
+
+		if (reducedId.length !== desiredLength) { console.error('reducedId length is not desiredLength'); return false; }
+
+		return reducedId;
+	}
 	async encryptMnemonic() {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
+		await this.genPublicId();
 		
 		const salt = this.#generateSalt();
 		const encodedPseudoMnemonicBase64Str = this.#encodeMnemonic(this.pseudo.mnemonic, 24);

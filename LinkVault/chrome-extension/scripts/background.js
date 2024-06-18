@@ -1,4 +1,4 @@
-chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+/*chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     //console.log(`Message received: ${JSON.stringify(request)}`);
     if (request.action === "openPage") {
         let password = request.password;
@@ -18,8 +18,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             );
         });
     }
-});
-/*chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+});*/
+chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.action === "openPage") {
         let password = request.password;
         chrome.tabs.create({'url': chrome.runtime.getURL('views/index.html')}, function(tab) {
@@ -41,4 +41,4 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         // open popup for authentication
         chrome.runtime.sendMessage({action: "openPage", data: {password: request.data.password}});
     }
-});*/
+});

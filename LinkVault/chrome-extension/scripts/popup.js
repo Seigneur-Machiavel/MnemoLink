@@ -62,7 +62,10 @@ document.getElementById('passwordCreationForm').addEventListener('submit', async
         alert('Password must be at least 6 characters long');
     } else {
         await setNewPassword(password);
-        setVisibleForm('loginForm');
+        document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].value = '';
+        document.getElementById('passwordCreationForm').getElementsByTagName('input')[1].value = '';
+        //setVisibleForm('loginForm');
+        chrome.runtime.sendMessage({action: "openPage", password: password});
     }
     
     busy.splice(busy.indexOf('passwordCreationForm'), 1);

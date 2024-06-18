@@ -10,7 +10,7 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
 document.addEventListener('DOMContentLoaded', function() {
 	chrome.runtime.sendMessage({action: "getPassword"}, function(response) {
 		if (response && response.password) {
-			console.log(`Password received: ${JSON.stringify(response.password)}`)
+			//console.log(`Password received: ${JSON.stringify(response.password)}`)
 			chrome.storage.local.get(['hashedPassword'], async function(result) {
 				const { hash, saltBase64, ivBase64 } = result.hashedPassword;
 				const res = await cryptoLight.init(response.password, saltBase64, ivBase64);
@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', function() {
 					openModal('authentification');
 					return;
 				}
+				console.log('Valid password, Ready to decrypt!'); 
 				await asyncInitLoad(true);
 			});
 		} else {
@@ -33,9 +34,149 @@ const urlprefix = ""
 // .src = `${urlprefix}sprites/cloud`
 
 //#region - CLASSES
-class centerScreenBtnClass {
+class lockCircleObject {
+	constructor(element, dTransitionMs = 120, strokeTransitionMs = 120, opacityTransitionMs = 120) {
+		this.dTransitionMs = dTransitionMs;
+		this.strokeTransitionMs = strokeTransitionMs;
+		this.opacityTransitionMs = opacityTransitionMs;
+		this.shape = 'hexagon';
+		this.wrap = element.parentElement;
+		/** @type {HTMLElement} */
+		this.element = element;
+		this.lines = [];
+		this.paths = [];
+
+		this.shapes = {
+			hexagon: [
+				'M 27 5 Q 50 5 73 5',
+				'M 27 5 Q 50 5 60 5',
+				'M 40 5 Q 50 5 73 5'
+			],
+			circle: [
+				'M 27 5 Q 50 -6 73 5',
+				'M 27 5 Q 44.5 -2.5 60 1',
+				'M 40 1 Q 55.5 -2.5 73 5'
+			],
+			dot: 'M 50 5 Q 50 5 50 5',
+			lineA: 'M 45 2 Q 50 0 55 2',
+			lineB: 'M 40 0 Q 50 2 60 0',
+		}
+		this.strokeOpacities = { hexagon: .4, circle: .4, dot: .12, lineA: .04, lineB: .06 };
+	}
+
+	init(angle = 0, closed = false) {
+		this.element.innerHTML = '';
+		this.lines = [];
+		const nbOfLines = 6;
+		let shapeIndex = 0;
+		for (let i = 0; i < nbOfLines; i++) {
+			shapeIndex = closed ? 0 : ( i > 2 ? 0 : i );
+			this.element.innerHTML += `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+                   <path d="${this.shapes.hexagon[shapeIndex]}" stroke-opacity="${this.strokeOpacities.hexagon}" style="transition: d ${this.dTransitionMs}ms ease-in-out, stroke ${this.strokeTransitionMs}ms ease-in-out, stroke-opacity ${this.opacityTransitionMs}ms ease-in-out;" />
+                </svg>`;
+		}
+		this.paths = this.element.getElementsByTagName('path');
+		this.rotate(angle);
+	}
+	rotate(angle = 0) { this.wrap.style.transform = `rotate(${angle}deg)`; }
+	setShape(shape = 'hexagon', closed = false) {
+		this.shape = shape;
+
+		let shapeIndex = 0;
+		for (let i = 0; i < this.paths.length; i++) {
+			shapeIndex = closed ? 0 : ( i > 2 ? 0 : i );
+			const isIdleShape = shape !== 'hexagon' && shape !== 'circle';
+			const pathStr = isIdleShape ? this.shapes[shape] : this.shapes[shape][shapeIndex];
+			const path = this.paths[i];
+			path.setAttribute('d', pathStr);
+			path.setAttribute('stroke-opacity', this.strokeOpacities[shape]);
+		}
+	}
+}
+class centerScreenBtnObject {
 	constructor() {
+		this.transitionMs = 240;
+		this.delayBeforeIdleAnimationIfLocked = 20000;
+		this.idleAnimationLoopMs = 4000;
+		this.state = 'locked'; // 'locked' or 'unlocked' or 'welcome'
+		this.elementWrap = document.getElementById('centerScreenBtn').parentElement;
 		this.element = document.getElementById('centerScreenBtn');
+
+		/** @type {lockCircleObject[]} */
+		this.lockCircles = [];
+		//this.lockCirclesPos = [ 0, 60, 120, 180, 240, 300, 0 ];
+		this.lockCirclesPos = [ 0, 240, 60, 180, 300, 120, 240 ];
+		this.lockCirclesIdlePos = [ 0, 60, 120, 180, 240, 300 ];
+		this.dTransitionMs = 120;
+		this.wrapTransitionMs = 120;
+	}
+	init(nbOfLockCircles = 7) {
+		this.elementWrap.style.transition = `transform ${this.transitionMs}ms ease-in-out`;
+		this.lockCircles = [];
+		this.element.innerHTML = '';
+		for (let i = 0; i < nbOfLockCircles; i++) {
+			const angle = this.lockCirclesPos[i];
+			const lockCircleDiv = document.createElement('div');
+			lockCircleDiv.classList.add('lockCircle');
+
+			const wrap = document.createElement('div');
+			wrap.classList.add('wrap');
+			wrap.style.transition = `transform ${this.wrapTransitionMs}ms ease-in-out`;
+			wrap.appendChild(lockCircleDiv);
+			
+			const lockCircle = new lockCircleObject( lockCircleDiv, this.dTransitionMs );
+			lockCircle.init(angle, this.state === 'welcome');
+			this.lockCircles.push(lockCircle);
+			this.element.appendChild(wrap);
+		}
+		this.idleAnimation();
+	}
+	rotate(angle = 0) { this.elementWrap.style.transform = `rotate(${angle}deg)`; }
+	async unlock() {
+		this.state = 'unlocking';
+		this.rotate(0);
+		this.lockCircles.forEach( lc => lc.setShape('hexagon') );
+
+		for (let i = 0; i < this.lockCircles.length; i++) {
+			await new Promise(r => setTimeout(r, this.wrapTransitionMs));
+			if (this.state !== 'unlocking') { return; }
+			
+			const lockCircle = this.lockCircles[i];
+			lockCircle.setShape('circle');
+			
+			await new Promise(r => setTimeout(r, this.dTransitionMs));
+			if (this.state !== 'unlocking') { return; }
+
+			lockCircle.rotate(0);
+		}
+		
+		await new Promise(r => setTimeout(r, this.wrapTransitionMs * 4));
+		this.lockCircles.forEach( lc => lc.setShape('dot') );
+
+		this.state = 'unlocked';
+	}
+	async lock() {
+		this.state = 'locking';
+		this.rotate(0);
+		this.lockCircles.forEach( lc => lc.setShape('circle') );
+
+		for (let i = this.lockCircles.length -1; i >= 0; i--) {
+			await new Promise(r => setTimeout(r, this.dTransitionMs));
+			if (this.state !== 'locking') { return; }
+
+			const lockCircle = this.lockCircles[i];
+			lockCircle.setShape('hexagon');
+			
+			await new Promise(r => setTimeout(r, this.wrapTransitionMs));
+			if (this.state !== 'locking') { return; }
+
+			lockCircle.rotate(this.lockCirclesPos[i]);
+		}
+
+		this.state = 'locked';
+	}
+	setShape(shape = 'hexagon') {
+		this.lockCircles.forEach( lc => lc.setShape(shape) );
 	}
 	show(speed = 200) {
 		this.element.classList.remove('hidden');
@@ -56,8 +197,98 @@ class centerScreenBtnClass {
 			complete: () => { this.element.style.zIndex = -1; this.element.classList.add('hidden'); }
 		});
 	}
+	async idleAnimation() {
+		await new Promise(r => setTimeout(r, 2400));
+
+		let lockedSince = Date.now();
+		while (true) {
+			if (this.state !== 'locked' && this.state !== 'unlocked') { lockedSince = Date.now(); }
+			if (this.state === 'locked' && Date.now() > lockedSince + this.delayBeforeIdleAnimationIfLocked) { this.state = 'welcome'; }
+
+			const startTimestamp = Date.now();
+
+			await this.popCircleAnimation(['welcome']); //, 'locked']);
+			await this.turningAnimation(['welcome']); //, 'locked']);
+
+			await this.popDotAnimation(['unlocked']);
+			
+			// console.log('idleAnimation duration:', Date.now() - startTimestamp);
+			await new Promise(r => setTimeout(r, this.idleAnimationLoopMs - ( Date.now() - startTimestamp )));
+		}
+	}
+	async turningAnimation(authorizedStates = ['welcome']) {
+		if (!authorizedStates.includes(this.state)) { return }
+
+		const rndFloor = rnd(0, this.lockCircles.length - 1);
+		const rndAngleIndex = rnd(0, this.lockCirclesIdlePos.length - 1);
+		const rndAngle = this.lockCirclesIdlePos[rndAngleIndex];
+
+		this.lockCircles.forEach( (lc, i) => { lc.setShape(i <= rndFloor ? 'circle' : 'hexagon', this.state === 'welcome' ? rnd(0, 1) : false); } );
+
+		await new Promise(r => setTimeout(r, this.dTransitionMs * 2));
+		if (!authorizedStates.includes(this.state)) { return }
+
+		this.lockCircles.forEach( (lc, i) => { if (i <= rndFloor) { lc.rotate(rndAngle) }; } );
+
+		await new Promise(r => setTimeout(r, this.wrapTransitionMs * 2));
+		if (!authorizedStates.includes(this.state)) { return }
+
+		this.lockCircles.forEach( lc => lc.setShape('hexagon', this.state === 'welcome' ? true : false) );
+	}
+	async popCircleAnimation (authorizedStates = ['welcome']) {
+		if (!authorizedStates.includes(this.state)) { return }
+
+		this.lockCircles.forEach( lc => lc.setShape('hexagon', this.state === 'welcome' ? true : false) );
+
+		for (let i = 0; i < this.lockCircles.length; i++) {
+			await new Promise(r => setTimeout(r, this.dTransitionMs));
+			if (!authorizedStates.includes(this.state)) { return }
+
+			this.lockCircles[i].setShape('circle', this.state === 'welcome' ? true : false);
+			
+			await new Promise(r => setTimeout(r, this.wrapTransitionMs));
+			if (!authorizedStates.includes(this.state)) { return }
+		}
+	}
+	async popDotAnimation(authorizedStates = ['unlocked']) {
+		if (!authorizedStates.includes(this.state)) { return }
+
+		for (let i = this.lockCircles.length - 1; i >= 0; i--) {
+			this.lockCircles[i].setShape('dot');
+			await new Promise(r => setTimeout(r, this.dTransitionMs));
+			if (!authorizedStates.includes(this.state)) { return }
+		}
+		
+		for (let i = 0; i < this.lockCircles.length; i++) {
+			this.lockCircles[i].setShape('lineA');
+			await new Promise(r => setTimeout(r, this.wrapTransitionMs));
+			if (!authorizedStates.includes(this.state)) { return }
+		}
+
+		for (let i = 0; i < this.lockCircles.length; i++) {
+			this.lockCircles[i].setShape('dot');
+			await new Promise(r => setTimeout(r, this.dTransitionMs));
+			if (!authorizedStates.includes(this.state)) { return }
+		}
+
+		await new Promise(r => setTimeout(r, this.wrapTransitionMs * 2));
+		
+		for (let i = this.lockCircles.length - 1; i >= 0; i--) {
+			this.lockCircles[i].setShape('lineB');
+			await new Promise(r => setTimeout(r, this.wrapTransitionMs));
+			if (!authorizedStates.includes(this.state)) { return }
+		}
+
+		for (let i = this.lockCircles.length - 1; i >= 0; i--) {
+			this.lockCircles[i].setShape('dot');
+			await new Promise(r => setTimeout(r, this.dTransitionMs));
+			if (!authorizedStates.includes(this.state)) { return }
+		}
+
+		await new Promise(r => setTimeout(r, this.wrapTransitionMs * 2));
+	}
 }
-class mnemonicObject {
+class mnemonicClass {
 	constructor(mnemonic = [], bip = "BIP-0039", language = "english") {
 		this.mnemonic = mnemonic;
 		this.bip = bip;
@@ -80,6 +311,7 @@ class mnemonicObject {
 }
 class userDataClass {
 	constructor() {
+		this.id = "";
 		this.encryptedMasterMnemonicsStr = "";
 		this.encryptedMnemoLinksStr = {};
 		this.preferences = {
@@ -128,7 +360,15 @@ class userDataClass {
 	isMasterMnemonicFilled() { return this.encryptedMasterMnemonicsStr === "" ? false : true; }
 	// MnemoLinks
 	addMnemoLink(mnemoLink, label = '') {
-		if (label === '') { label = `key${Object.keys(this.encryptedMnemoLinksStr).length + 1}`; }
+		if (label === '') {
+			let newIndex = Object.keys(this.encryptedMnemoLinksStr).length + 1;
+			label = `key${newIndex}`;
+			while (this.encryptedMnemoLinksStr[label]) {
+				newIndex++;
+				label = `key${newIndex}`;
+			}
+		}
+		console.log(`new label: ${label}`);
 		this.encryptedMnemoLinksStr[label] = mnemoLink;
 	}
 	removeMnemoLink(label) {
@@ -200,12 +440,16 @@ class mnemoBubbleObject {
 		/** @type {HTMLElement} */
 		this.element = element;
 		this.label = label;
-		this.updatePositionPause = false;
+		this.positionLock = false;
 		
+		this.animation = null;
 		this.x = x;
 		this.y = y;
 		this.vector = { x: 0, y: 0 };
-		this.initPos = { x: x, y: y };
+		this.initPosPerc = { 
+			x: x / eHTML.dashboard.mnemolinksBubblesContainer.offsetWidth * 100,
+			y: y / eHTML.dashboard.mnemolinksBubblesContainer.offsetHeight * 100,
+		};
 	}
 	setPosition(x = 0, y = 0) {
 		this.x = x;
@@ -214,32 +458,42 @@ class mnemoBubbleObject {
 		this.element.style.top = `${y}px`;
 	}
 	updatePosition() {
-		if ( this.updatePositionPause ) { return; }
+		if ( this.positionLock ) { return; }
 		this.setPosition(this.x + this.vector.x, this.y + this.vector.y);
 	}
-	async #toCenterContainer(duration = 240) {
+	toCenterContainer(duration = 240) {
+		this.positionLock = true;
+
 		const mnemolinksBubblesContainer = eHTML.dashboard.mnemolinksBubblesContainer;
 		const x = mnemolinksBubblesContainer.offsetWidth / 2;
 		const y = mnemolinksBubblesContainer.offsetHeight / 2;
 		if (this.x === x && this.y === y) { return true; }
 		
 		this.vector = { x: 0, y: 0 };
-		centerScreenBtn.hide(duration);
-		anime({
-			targets: this.element,
-			left: `${x}px`, //"50%",
-			top: `${y}px`, // "50%",
+		if (duration === 0) { this.setPosition(x, y); return true; }
+		const animatedPosition = {
+			x: this.x,  // Valeur initiale de x
+			y: this.y,  // Valeur initiale de y
+		};
+		this.animation = anime({
+			targets: animatedPosition,
+			x: x,
+			y: y,
 			duration: duration,
 			easing: 'easeOutQuad',
+			update: () => { 
+				this.setPosition(animatedPosition.x, animatedPosition.y);
+			}
 		});
-		await new Promise(r => setTimeout(r, duration * .4));
 		return true;
 	}
 	async prepareBubbleToShow(label, mnemonicStr, fakeCipher = true) {
 		if (this.label !== label) { console.error('label mismatch !'); return; }
-		if (this.updatePositionPause) { console.error('bubble already showing !'); return; }
-		this.updatePositionPause = true;
-		await this.#toCenterContainer();
+
+		const duration = 240;
+		centerScreenBtn.hide(duration);
+		this.toCenterContainer(duration);
+		await new Promise(r => setTimeout(r, duration * .4));
 		
 		// clear bubble
 		this.element.innerHTML = '';
@@ -305,24 +559,38 @@ class mnemoBubbleObject {
 		buttonsWrap.classList.add('active');
 		return true;
 	}
-	stopShowing() {
-		if (!this.updatePositionPause) { return; }
+	stopShowing(affectCenterScreenBtn = true) {
+		if (!this.positionLock) { return; }
+		this.stopDeleteExistingAnimation();
 
-		centerScreenBtn.show(120);
+		if (affectCenterScreenBtn) { centerScreenBtn.show(120); }
 		this.element.innerHTML = '';
 
-		this.x = this.initPos.x;
-		this.y = this.initPos.y;
+		const h2 = document.createElement('h2');
+		h2.innerText = this.label;
+		this.element.appendChild(h2);
+
+		this.resetPosition();
 		this.vector = { x: 0, y: 0 };
 		this.element.classList.remove('showing');
-		this.updatePositionPause = false;
+		this.positionLock = false;
+	}
+	resetPosition() {
+		this.x = this.initPosPerc.x * eHTML.dashboard.mnemolinksBubblesContainer.offsetWidth / 100;
+		this.y = this.initPosPerc.y * eHTML.dashboard.mnemolinksBubblesContainer.offsetHeight / 100;
+	}
+	stopDeleteExistingAnimation() {
+		if (!this.animation) { return; }
+		this.animation.pause(); 
+		this.animation = null;
 	}
 }
-class svgLineObject {
-	constructor(arrayOfSVGPath = []) {
+class svgLinkObject {
+	constructor(arrayOfSVGPath = [], minOpacity = 0) {
 		/** @type {SVGPathElement[]} */
 		this.arrayOfSVGPath = arrayOfSVGPath;
-		this.maxOffsetDecay = 10; // how much the line derivate from the straightest path
+		this.maxOffsetDecay = 27; // intial: 10 // how much the line derivate from the straightest path
+		this.minOpacity = minOpacity;
 
 		this.pattern = {
 			strokeOpacities: [],
@@ -336,6 +604,7 @@ class svgLineObject {
 		for (let i = 0; i < arrayOfSVGPath.length; i++) {
 			// ex: { 0.6 + 0.4 > 60% to 100% opacity }
 			this.pattern.strokeOpacities[i] = Math.random() * 0.2 + 0.21; // should never be under 0.21
+			if (this.minOpacity > this.pattern.strokeOpacities[i]) { this.pattern.strokeOpacities[i] = this.minOpacity; }
 
 			// ex: { rnd(20, 60) > 20% to 60% of the remaining distance }
 			this.pattern.coveredDistanceMultipliers[i] = rnd(20, 60) / 100;
@@ -362,6 +631,16 @@ class svgLineObject {
 	linkPathWithStraightLine(path, startX, startY, targetX, targetY) {
 		path.setAttribute('d', `M ${startX} ${startY} L ${targetX} ${targetY}`);
 	}
+	setTransitions(d = 32) {
+		const arrayOfSVGPath = this.arrayOfSVGPath;
+		for (let i = 0; i < arrayOfSVGPath.length; i++) {
+			const path = arrayOfSVGPath[i];
+			//path.setAttribute('transition', `d ${d}ms ease-in-out, stroke 120s ease-in-out, stroke-opacity 120ms ease-in-out;`);
+			path.style.transition = `d ${d}ms ease-in-out, stroke 120ms ease-in-out, stroke-opacity 120ms ease-in-out`;
+			//path.style.backgroundColor = 'red';
+		}
+		//console.log(`setTransitions to ${arrayOfSVGPath.length} paths -> ${d}ms`);
+	}
 }
 class mnemoLinkSVGObject {
 	constructor(elementSVG, targetX, targetY, patternChangeSequence = [4, 10, 60]) {
@@ -370,11 +649,15 @@ class mnemoLinkSVGObject {
 		this.containerHalfHeight = 0;
 		this.targetX = targetX;
 		this.targetY = targetY;
+		this.deltaBetweenLastTarget = 0;
+		this.fastModeMaintain = 240;
 
 		this.patternChangeSequence = patternChangeSequence; // ex: [4, 60] change pattern at frame 4, 60
 		this.frame = 0;
-		/** @type {svgLineObject[]} */
+		/** @type {svgLinkObject[]} */
 		this.lines = [];
+		this.pauseAnimation = false;
+		this.angle = 0;
 	}
 	#initLines(nbOfLines = 3) {
 		if (this.lines.length === nbOfLines) { return; }
@@ -384,78 +667,91 @@ class mnemoLinkSVGObject {
 
 		for (let i = 0; i < nbOfLines; i++) {
 			const segments = rnd(2, 4);
-			const strokeWidth = Math.random() * 1.5 + 0.5;
-			const color = 'black';
-			const arrayOfSVGPath = this.#createArrayOfSVGPath(segments, color, strokeWidth);
+			//const strokeWidth = Math.random() * 1.5 + 0.5;
+			let strokeWidth = Math.random() * 1 + 0.5;
+			if (i === 0) { strokeWidth = 2; }
 
-			const svgLineObj = new svgLineObject(arrayOfSVGPath);
-			svgLineObj.randomizePattern();
-			this.lines.push(svgLineObj);
+			const arrayOfSVGPath = this.#createArrayOfSVGPath(segments, strokeWidth);
+			
+			const svgLink = new svgLinkObject(arrayOfSVGPath, i === 0 ? 0.22 : 0);
+			svgLink.randomizePattern();
+			this.lines.push(svgLink);
 		}
 	}
-	#createArrayOfSVGPath(nbPath = 3, color = 'black', strokeWidth = 1) {
+	#createArrayOfSVGPath(nbPath = 3, strokeWidth = 1) {
 		const paths = [];
 		for (let i = 0; i < nbPath; i++) {
-			const path =  document.createElementNS('http://www.w3.org/2000/svg', 'path');
+			const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
 			this.element.appendChild(path);
 			paths.push(path);
-			path.setAttribute('stroke', color);
 			path.setAttribute('stroke-width', strokeWidth);
 			path.setAttribute('fill', 'none');
 		}
 		return paths;
 	}
-	#calculateDistance(startX, startY, targetX, targetY) {
+	calculateDistance(startX, startY, targetX, targetY) {
 		const deltaX = targetX - startX;
 		const deltaY = targetY - startY;
 		return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 	}
-	/** @param {svgLineObject} svgLineObj */
-	#drawTheLine(svgLineObj, angle) {
-		const arrayOfSVGPath = svgLineObj.arrayOfSVGPath;
+	/** @param {svgLinkObject} svgLink */
+	#drawTheLine(svgLink) {
+		const arrayOfSVGPath = svgLink.arrayOfSVGPath;
 		if (!arrayOfSVGPath) {console.error('arrayOfSVGPath not found !'); return;}
 
-		let delta = this.#calculateDistance(this.containerHalfWidth, this.containerHalfHeight, this.targetX, this.targetY);
-		let startX = this.containerHalfWidth + Math.cos(angle) * delta * 0.24; // skip 24% of the distance
-		let startY = this.containerHalfHeight + Math.sin(angle) * delta * 0.24;
+		let delta = this.calculateDistance(this.containerHalfWidth, this.containerHalfHeight, this.targetX, this.targetY);
+		let startX = this.containerHalfWidth + Math.cos(this.angle) * delta * 0.24; // skip 24% of the distance
+		let startY = this.containerHalfHeight + Math.sin(this.angle) * delta * 0.24;
+		if (isNaN(startX) || isNaN(startY)) { return; }
 
 		// line from start to bubble split in X parts
 		for (let i = 0; i < arrayOfSVGPath.length; i++) {
 			const path = arrayOfSVGPath[i];
-			const strokeOpacity = svgLineObj.pattern.strokeOpacities[i];
-			const curveOffset = svgLineObj.pattern.curveOffsets[i];
+			const strokeOpacity = svgLink.pattern.strokeOpacities[i];
+			const curveOffset = svgLink.pattern.curveOffsets[i];
 			
 			if (i === arrayOfSVGPath.length - 1) {
-				svgLineObj.linkPathWithCurve(path, startX, startY, this.targetX, this.targetY, curveOffset, strokeOpacity);
+				svgLink.linkPathWithCurve(path, startX, startY, this.targetX, this.targetY, curveOffset, strokeOpacity);
 				break;
 			}
 			
-			delta = this.#calculateDistance(startX, startY, this.targetX, this.targetY);
-			const coveredDistance = delta * svgLineObj.pattern.coveredDistanceMultipliers[i];
+			delta = this.calculateDistance(startX, startY, this.targetX, this.targetY);
+			const coveredDistance = delta * svgLink.pattern.coveredDistanceMultipliers[i];
 			
-			const offset = svgLineObj.pattern.offsets[i];
-			const offestAngle = angle + offset;
+			const offset = svgLink.pattern.offsets[i];
+			const offestAngle = this.angle + offset;
 			const targetX = startX + Math.cos(offestAngle) * coveredDistance;
 			const targetY = startY + Math.sin(offestAngle) * coveredDistance;
 
 			// curve line
-			svgLineObj.linkPathWithCurve(path, startX, startY, targetX, targetY, curveOffset, strokeOpacity);
+			svgLink.linkPathWithCurve(path, startX, startY, targetX, targetY, curveOffset, strokeOpacity);
 
 			startX = targetX;
 			startY = targetY;
 		}
 	}
 	update() {
+		if (this.pauseAnimation) { return; }
 		const nbOfLines = this.patternChangeSequence.length;
 		this.#initLines(nbOfLines);
 
 		for (let i = 0; i < nbOfLines; i++) {
-			const svgLineObj = this.lines[i];
+			const svgLink = this.lines[i];
+			// adapt transition speed to avoid unconnected links
+			if (this.deltaBetweenLastTarget > 10) {
+				this.fastModeMaintain = 360;
+				svgLink.setTransitions(16);
+			} else if (this.fastModeMaintain > 120) {
+				svgLink.setTransitions(32);
+			} else if (this.fastModeMaintain > 0) {
+				svgLink.setTransitions(64);
+			} else { svgLink.setTransitions(128); }
+			if (this.fastModeMaintain > 0) { this.fastModeMaintain--; }
 			
-			if (this.frame === this.patternChangeSequence[i]) { svgLineObj.randomizePattern(); }
+			if (this.frame === this.patternChangeSequence[i]) { svgLink.randomizePattern(); }
 			
-			const angle = Math.atan2(this.targetY - this.containerHalfHeight, this.targetX - this.containerHalfWidth);
-			this.#drawTheLine(svgLineObj, angle);
+			this.angle = Math.atan2(this.targetY - this.containerHalfHeight, this.targetX - this.containerHalfWidth);
+			this.#drawTheLine(svgLink);
 		}
 		
 		this.frame++;
@@ -488,17 +784,17 @@ const timeOuts = {};
 let mnemoBubblesObj = [];
 /** @type {mnemoLinkSVGObject[]} */
 let mnemoLinkSVGsObj = [];
-const centerScreenBtn = new centerScreenBtnClass();
+const centerScreenBtn = new centerScreenBtnObject();
 const userData = new userDataClass();
 const tempData = {
 	rndMnemonic: [],
 	rndButtonsPressed: 0,
-	mnemonic: new mnemonicObject(),
+	mnemonic: new mnemonicClass(),
 
 	init() {
 		this.rndMnemonic = [];
 		this.rndButtonsPressed = 0;
-		this.mnemonic = new mnemonicObject();
+		this.mnemonic = new mnemonicClass();
 	}
 };
 const eHTML = {
@@ -520,9 +816,18 @@ const eHTML = {
 			input: document.getElementById('authentificationModalWrap').getElementsByTagName('input')[0],
 			button: document.getElementById('authentificationModalWrap').getElementsByTagName('button')[0],
 		},
+		confirmation: {
+			wrap : document.getElementById('confirmChoiceModalWrap'),
+			modal: document.getElementById('confirmChoiceModalWrap').getElementsByClassName('modal')[0],
+			text: document.getElementById('confirmChoiceModalWrap').getElementsByClassName('modalText')[0],
+			yesButton: document.getElementById('confirmChoiceModalWrap').getElementsByClassName('modalButton')[0],
+			noButton: document.getElementById('confirmChoiceModalWrap').getElementsByClassName('modalButton')[1],
+		},
 		inputMasterMnemonic: {
 			wrap : document.getElementById('masterMnemonicModalWrap'),
 			element: document.getElementById('masterMnemonicModalWrap').getElementsByClassName('modal')[0],
+			seedWordsValueStr: document.getElementById('masterMnemonicModalWrap').getElementsByClassName('seedWordsValueStr')[0],
+			seedWordsRange: document.getElementById('masterMnemonicModalWrap').getElementsByClassName('seedWordsRangeWrap')[0].getElementsByTagName('input')[0],
 			/*bipList : document.getElementById('masterMnemonicModalWrap').getElementsByClassName('optionsList')[0],
 			languageList : document.getElementById('masterMnemonicModalWrap').getElementsByClassName('optionsList')[1],*/
 			previousLanguageBtn : document.getElementById('masterMnemonicModalWrap').getElementsByClassName('arrowButton')[0],
@@ -540,6 +845,8 @@ const eHTML = {
 		inputMnemonic: {
 			wrap : document.getElementById('mnemonicModalWrap'),
 			element: document.getElementById('mnemonicModalWrap').getElementsByClassName('modal')[0],
+			seedWordsValueStr: document.getElementById('mnemonicModalWrap').getElementsByClassName('seedWordsValueStr')[0],
+			seedWordsRange: document.getElementById('mnemonicModalWrap').getElementsByClassName('seedWordsRangeWrap')[0].getElementsByTagName('input')[0],
 			previousLanguageBtn : document.getElementById('mnemonicModalWrap').getElementsByClassName('arrowButton')[0],
 			randomizeBtn : document.getElementById('mnemonicModalWrap').getElementsByClassName('languageSelectionBtn')[0],
 			nextLanguageBtn : document.getElementById('mnemonicModalWrap').getElementsByClassName('arrowButton')[1],
@@ -566,6 +873,10 @@ const save = {
 			await save[functionName](); // can be promises all, but actually fast.
 		}
 	},
+	async userId() {
+		const userId = userData.id;
+		await this.storeDataLocally('id', userId, save.logs);
+	},
 	async userEncryptedMnemonicsStr() {
 		const masterMnemonicStr = userData.encryptedMasterMnemonicsStr;
 		await this.storeDataLocally('encryptedMasterMnemonicsStr', masterMnemonicStr, save.logs);
@@ -580,8 +891,9 @@ const save = {
 	},
 	async storeDataLocally(key = "toto", data, logs = false) {
 		try {
-			const result = await chrome.storage.local.set({ [key]: data })
-			console.log(result);
+			//const result = await chrome.storage.local.set({ [key]: data });
+			//console.log(result);
+			await chrome.storage.local.set({ [key]: data });
 			if (logs) { console.log(`${key} stored, data: ${JSON.stringify(data)}`); }
 		} catch (error) {
 			if (logs) { console.error(`Error while storing ${key}, data: ${data}`); }
@@ -597,6 +909,14 @@ const load = {
 			const functionName = loadFunctions[i];
 			await load[functionName](); // can be promises all, but actually fast.
 		}
+	},
+	async userId() {
+		const data = await this.getDataLocally('id')
+		const logMsg = !data ? 'No id found !' : 'id loaded !';
+		if (load.logs) { console.log(logMsg); }
+		if (!data) { return; }
+
+		userData.id = data;
 	},
 	async userEncryptedMnemonicsStr() {
 		const data = await this.getDataLocally('encryptedMasterMnemonicsStr')
@@ -634,19 +954,26 @@ const load = {
 async function loadMnemoLinkerLatestVersion() {
 	MnemoLinkerLastest = await window.MnemoLinker["v" + window.MnemoLinker.latestVersion];
 	emptyMnemoLinker = new MnemoLinkerLastest();
-	if (userData.preferences.darkMode) { eHTML.toggleDarkModeButton.checked = true; toggleDarkMode(eHTML.toggleDarkModeButton); }
 }; loadMnemoLinkerLatestVersion();
+(async () => {
+	await load.all();
+	if (userData.preferences.darkMode) { eHTML.toggleDarkModeButton.checked = true; toggleDarkMode(eHTML.toggleDarkModeButton); }
+	if (!userData.isMasterMnemonicFilled()) { centerScreenBtn.state = 'welcome'; }
+	centerScreenBtn.init(7);
+})();
 function toggleDarkMode(element) {
 	if (element.checked) {
 		document.body.classList.add('dark-mode');
 		eHTML.dashboard.element.classList.add('invertColors');
 		eHTML.modals.wrap.classList.add('invertColors');
 		eHTML.dashboard.linksWrap.classList.add('invertColors');
+		centerScreenBtn.element.classList.add('invertColors');
 	} else {
 		document.body.classList.remove('dark-mode');
 		eHTML.dashboard.element.classList.remove('invertColors');
 		eHTML.modals.wrap.classList.remove('invertColors');
 		eHTML.dashboard.linksWrap.classList.remove('invertColors');
+		centerScreenBtn.element.classList.remove('invertColors');
 	}
 
 	userData.preferences.darkMode = element.checked;
@@ -676,22 +1003,12 @@ setTimeout(async () => {
 
 //#region - SIMPLE FUNCTIONS
 async function asyncInitLoad(logs = false) {
-	await load.all();
 	fillMnemoLinkList();
 	initMnemoLinkBubbles();
 	requestAnimationFrame(UXupdateLoop);
 	if (logs) { console.log('Ready to decrypt!'); }
 	return true;
 };
-function generateBIP39Mnemonic(mnemonicLength = 12, language = "english") {
-	const entropy = mnemonicLength === 12 ? 128 : 256;
-
-	bip39.setDefaultWordlist(language);
-
-	const mnemonicStr = bip39.generateMnemonic(entropy);
-	const mnemonic = mnemonicStr.split(' ');
-	return mnemonic;
-}
 function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1) + min); }
 function cryptoRnd(min, max) {
 	const crypto = window.crypto;
@@ -806,7 +1123,7 @@ function extractMnemonicFromInputs(modal = eHTML.modals.inputMasterMnemonic) {
 	const wordsList = emptyMnemoLinker.getWordsTable(bip, language);
 	if (!wordsList) { return; }
 
-	const result = { allWordsAreValid: true, mnemonic: new mnemonicObject() };
+	const result = { allWordsAreValid: true, mnemonic: new mnemonicClass() };
 	const mnemonic = [];
 	for (let i = 0; i < mnemonicGridInputs.length; i++) {
 		const input = mnemonicGridInputs[i];
@@ -820,7 +1137,7 @@ function extractMnemonicFromInputs(modal = eHTML.modals.inputMasterMnemonic) {
 		if (!wordsList.includes(mnemonic[i])) { result.allWordsAreValid = false; break; }
 	}
 
-	result.mnemonic = new mnemonicObject(mnemonic, bip, language);
+	result.mnemonic = new mnemonicClass(mnemonic, bip, language);
 
 	return result;
 }
@@ -832,12 +1149,13 @@ async function centerScreenBtnAction() {
 
 	if (!userData.isMasterMnemonicFilled()) {
 		openModal('inputMasterMnemonic');
+		
 		await randomizeMnemonic(eHTML.modals.inputMasterMnemonic, true);
 		eHTML.modals.inputMasterMnemonic.mnemonicGridInputs[0].focus();
 		return;
 	}
 
-	// if master mnemonic is already filled
+	// if master mnemonic is already filled - and password is correct
 	toggleDashboard();
 }
 function downloadStringAsFile(string, filename) {
@@ -856,18 +1174,37 @@ function downloadStringAsFile(string, filename) {
 //#endregion
 
 //#region - UX FUNCTIONS
-function toggleDashboard() {
+async function toggleDashboard() {
 	const dashboard = eHTML.dashboard.element;
 	const appTitleWrap = document.getElementById('appTitleWrap');
-	if (dashboard.classList.contains('open')) {
-		dashboard.classList.remove('open');
-		timeOuts["appTitleWrapVisible"] = setTimeout(() => { appTitleWrap.classList.add('visible'); }, 800);
-	} else {
+
+	const isClose = !dashboard.classList.contains('open');
+	if (isClose) {
+		clearTimeout(timeOuts["appTitleWrapVisible"]); // cancel the timeout to show the app title
+		
+		await centerScreenBtn.unlock();
 		dashboard.classList.add('open');
-		// cancel the timeout to show the app title
-		clearTimeout(timeOuts["appTitleWrapVisible"]);
 		appTitleWrap.classList.remove('visible');
+		
+		//initMnemoLinkBubbles();
+		eHTML.dashboard.mnemolinksBubblesContainer.classList.add('visible');
+		mnemoBubblesObj.forEach((bubble) => { bubble.stopShowing(false); });
+	} else {
+		timeOuts["appTitleWrapVisible"] = setTimeout(() => { 
+			appTitleWrap.classList.add('visible'); 
+			centerScreenBtn.lock();
+		}, 800);
+		
+		dashboard.classList.remove('open');
+		mnemoBubblesObj.forEach((bubble) => { bubble.toCenterContainer(480); });
+		eHTML.dashboard.mnemolinksBubblesContainer.classList.remove('visible');
 	}
+}
+function prepareConfirmationModal(text = "Are you sure?", yesCallback = () => {}, noCallback = () => { closeModal(); }) {
+	const modal = eHTML.modals.confirmation;
+	modal.text.innerText = text;
+	modal.yesButton.onclick = yesCallback;
+	modal.noButton.onclick = noCallback;
 }
 function openModal(modalName = '') {
 	const modals = eHTML.modals;
@@ -913,6 +1250,8 @@ function closeModal() {
 	// clear inputs
 	initMnemonicInputs(eHTML.modals.inputMasterMnemonic.mnemonicGridInputs);
 	initMnemonicInputs(eHTML.modals.inputMnemonic.mnemonicGridInputs);
+	switchBtnsIfMnemonicGridIsFilled('masterMnemonicModalWrap');
+	switchBtnsIfMnemonicGridIsFilled('mnemonicModalWrap');
 
 	const modalsWrap = eHTML.modals.wrap;
 	if (modalsWrap.classList.contains('fold')) { return false; }
@@ -979,6 +1318,16 @@ function initMnemonicInputs(wrapInputsElmnts, readOnly = false) {
 		input.classList.add('disabled');
 	});
 }
+function setNumberOfVisibleWordsInMnemonicGrid(mnemonicGridInputs, nbOfWords = 12) {
+	for (let i = 0; i < mnemonicGridInputs.length; i++) {
+		const input = mnemonicGridInputs[i];
+		if (i < nbOfWords) {
+			input.parentElement.classList.remove('hidden');
+		} else {
+			input.parentElement.classList.add('hidden');
+		}
+	}
+}
 function switchBtnsIfMnemonicGridIsFilled(modalWrapID = "masterMnemonicModalWrap") {
 	const modals = Object.keys(eHTML.modals);
 	let modal = null;
@@ -987,13 +1336,12 @@ function switchBtnsIfMnemonicGridIsFilled(modalWrapID = "masterMnemonicModalWrap
 		if (!eHTML.modals[modals[i]].wrap) { continue; }
 		if (eHTML.modals[modals[i]].wrap.id === modalWrapID) { modal = eHTML.modals[modals[i]]; break; }
 	}
-	if (!modal) { 
+	if (!modal) {
 		console.error('switchBtnsIfMnemonicGridIsFilled: modal not found');
-		return { allWordsAreValid: false, mnemonic: new mnemonicObject() };
+		return { allWordsAreValid: false, mnemonic: new mnemonicClass() };
 	}
 
 	const extracted = extractMnemonicFromInputs(modal)
-
 	if (!extracted.allWordsAreValid) {
 		setModalBottomButtonsState(modal, false);
 		return extracted;
@@ -1045,9 +1393,13 @@ function fillMnemoLinkList() {
 	linkNewMnemonicBtnWrap.innerHTML = '<div id="linkNewMnemonicBtn">+</div>';
 	eHTML.dashboard.mnemolinksList.appendChild(linkNewMnemonicBtnWrap);
 }
-function createMnemoLinkBubbleElement() {
+function createMnemoLinkBubbleElement(label = 'toto') {
 	const newMnemoLink = document.createElement('div');
 	newMnemoLink.classList.add('mnemolinkBubble');
+
+	const h2 = document.createElement('h2');
+	h2.innerText = label;
+	newMnemoLink.appendChild(h2);
 	
 	return newMnemoLink;
 }
@@ -1062,7 +1414,7 @@ function clearMnemonicBubbleShowing() {
 		showBtns[i].classList.remove('showing');
 	}
 }
-function initMnemoLinkBubbles(intRadiusInFractionOfVH = 0.054, angleDecay = -1.5) {
+function initMnemoLinkBubbles(intRadiusInFractionOfVH = 0.074, angleDecay = -1.5) {
 	const mnemolinksBubblesContainer = eHTML.dashboard.mnemolinksBubblesContainer;
 	const radius = window.innerHeight * intRadiusInFractionOfVH;
 	const center_x = mnemolinksBubblesContainer.offsetWidth / 2;
@@ -1084,6 +1436,7 @@ function initMnemoLinkBubbles(intRadiusInFractionOfVH = 0.054, angleDecay = -1.5
 		const y = center_y + radius * Math.sin(angle);
 
 		const mnemoBubbleObj = new mnemoBubbleObject(monemoLinksLabels[i], element, x, y);
+		mnemoBubbleObj.toCenterContainer(0);
 		mnemoBubblesObj.push(mnemoBubbleObj);
 	}
 
@@ -1094,7 +1447,9 @@ function initMnemoLinkSVGs() {
 	const mnemolinkLinks = linksWrap.getElementsByClassName('mnemolinkLink');
 
 	// sequence = [4, 10, 60] => [4, 14, 0] => [8, 18, 4] => ... => [0, 10, 60]
-	let sequence = [2, 4, 20];
+	let sequence = [8, 16, 32];
+	//let sequence = [20, 40, 200];
+	//let sequence = [4, 30, 60];
 	const sequenceFrames = sequence[sequence.length - 1];
 	const sequenceIncrement = sequence[0];
 	function updateSequence(sequenceIncrement) {
@@ -1125,13 +1480,13 @@ function initMnemoLinkSVGs() {
 		};
 	}
 }
-function positionMnemoLinkBubbles(intRadiusInFractionOfVH = 0.054, extRadiusInFractionOfVH = 0.26, centerMagnet = true) {
+let MnemoBubblesNaNError = 0;
+function positionMnemoLinkBubbles(extRadiusInFractionOfVH = 0.26) {
 	const isModalOpen = !eHTML.modals.wrap.classList.contains('fold');
-	const isDashboardOpen = eHTML.dashboard.element.classList.contains('open');
-	let circleRadius = window.innerHeight * (isDashboardOpen ? extRadiusInFractionOfVH : intRadiusInFractionOfVH);
+	let circleRadius = window.innerHeight * extRadiusInFractionOfVH;
 	if (isModalOpen) { circleRadius *= 0.5; }
 
-	const maxSpeed = .4;
+	const maxSpeed = .32;
 	const acceleration = 0.004;
 	const mnemolinksBubblesContainer = eHTML.dashboard.mnemolinksBubblesContainer;
 	const center_x = mnemolinksBubblesContainer.offsetWidth / 2;
@@ -1139,10 +1494,13 @@ function positionMnemoLinkBubbles(intRadiusInFractionOfVH = 0.054, extRadiusInFr
 	
 	for (let i = 0; i < mnemoBubblesObj.length; i++) {
 		/** @type {mnemoBubbleObject} */
-		const  mnemoBubbleObj = mnemoBubblesObj[i];
+		const mnemoBubbleObj = mnemoBubblesObj[i];
+		if (mnemoBubbleObj.positionLock) { continue; }
 
 		const isOutCircle = Math.sqrt((mnemoBubbleObj.x - center_x) ** 2 + (mnemoBubbleObj.y - center_y) ** 2) > circleRadius;
 		const isOutCirclePlus = Math.sqrt((mnemoBubbleObj.x - center_x) ** 2 + (mnemoBubbleObj.y - center_y) ** 2) > circleRadius * 1.2;
+		const isInCircleMinus = Math.sqrt((mnemoBubbleObj.x - center_x) ** 2 + (mnemoBubbleObj.y - center_y) ** 2) < circleRadius * .8;
+		const isInPerfectRange = !isOutCirclePlus && !isInCircleMinus;
 		const remainingDistance = Math.sqrt((mnemoBubbleObj.x - center_x) ** 2 + (mnemoBubbleObj.y - center_y) ** 2) + ( isOutCircle ? -circleRadius : circleRadius );
 
 		const dx = isOutCircle ? center_x - mnemoBubbleObj.x : mnemoBubbleObj.x - center_x;
@@ -1151,25 +1509,25 @@ function positionMnemoLinkBubbles(intRadiusInFractionOfVH = 0.054, extRadiusInFr
 		const isOppositeSpeed = Math.sign(mnemoBubbleObj.vector.x) !== Math.sign(dx) || Math.sign(mnemoBubbleObj.vector.y) !== Math.sign(dy);
 		
 		//if (i === 0) { console.log( Math.sqrt(dx * dx + dy * dy) ) }
-		let speed = Math.min(maxSpeed, Math.sqrt(dx * dx + dy * dy) * acceleration);
+		const maxSpeed_ = isInPerfectRange ? maxSpeed * .2 : maxSpeed;
+		let speed = Math.min(maxSpeed_, Math.sqrt(dx * dx + dy * dy) * acceleration);
 		speed = isOppositeSpeed ? speed * 6 : speed;
 
 		const rnd_ = isOutCirclePlus ? 1 : rnd(0, 1) < .4 ? 0 : 1;
 		let speedMultiplicator = rnd_ * ( isOutCircle ? (remainingDistance / circleRadius * 8) : (remainingDistance / circleRadius * 1) );
-		if (isDashboardOpen) {
-			//speedMultiplicator = isOutCircle && remainingDistance < .02 ? Math.pow(speedMultiplicator, .1) : speedMultiplicator;
-			speedMultiplicator = isOutCircle ? Math.pow(speedMultiplicator, .1) : speedMultiplicator;
-		} else {
-			speedMultiplicator = 2;
-		}
+		speedMultiplicator = isOutCircle ? Math.pow(speedMultiplicator, .1) : speedMultiplicator;
 
 		mnemoBubbleObj.vector.x += Math.cos(angle) * speed * speedMultiplicator;
 		mnemoBubbleObj.vector.y += Math.sin(angle) * speed * speedMultiplicator;
-
-		// stop bubbles when they are in the center
-		if (centerMagnet && !isDashboardOpen && !isOutCircle) {
-			mnemoBubbleObj.vector.x = 0;
-			mnemoBubbleObj.vector.y = 0;
+		if (isNaN(mnemoBubbleObj.vector.x) || isNaN(mnemoBubbleObj.vector.y)) {
+			MnemoBubblesNaNError++;
+			if (MnemoBubblesNaNError > 30) {
+				MnemoBubblesNaNError = 0;
+				initMnemoLinkBubbles();
+				if (!eHTML.dashboard.element.classList.contains('open')) { return; }
+				mnemoBubblesObj.forEach((bubble) => { bubble.stopShowing(false);})
+				return;
+			}
 		}
 		
 		mnemoBubbleObj.updatePosition()
@@ -1178,18 +1536,14 @@ function positionMnemoLinkBubbles(intRadiusInFractionOfVH = 0.054, extRadiusInFr
 function positionLinkSVGs() {
 	/** @type {HTMLElement} */
 	const linksWrapContainer = eHTML.dashboard.linksWrap;
-	const mnemolinksBubblesContainer = eHTML.dashboard.mnemolinksBubblesContainer;
-	const widthRatio = mnemolinksBubblesContainer.offsetWidth / linksWrapContainer.offsetWidth;
-	const heightRatio = mnemolinksBubblesContainer.offsetHeight / linksWrapContainer.offsetHeight;
-	const halfWidth = mnemolinksBubblesContainer.offsetWidth * widthRatio;
-	const halfHeight = mnemolinksBubblesContainer.offsetHeight * heightRatio;
 
 	for (let i = 0; i < mnemoLinkSVGsObj.length; i++) {
 		const mnemoLinkSVGObj = mnemoLinkSVGsObj[i];
 		mnemoLinkSVGObj.containerHalfWidth = linksWrapContainer.offsetWidth / 2;
 		mnemoLinkSVGObj.containerHalfHeight = linksWrapContainer.offsetHeight / 2;
-		mnemoLinkSVGObj.targetX = mnemoBubblesObj[i].x + halfWidth;
-		mnemoLinkSVGObj.targetY = mnemoBubblesObj[i].y + halfHeight;
+		mnemoLinkSVGObj.deltaBetweenLastTarget = mnemoLinkSVGObj.calculateDistance(mnemoLinkSVGObj.targetX, mnemoLinkSVGObj.targetY, mnemoBubblesObj[i].x, mnemoBubblesObj[i].y);
+		mnemoLinkSVGObj.targetX = mnemoBubblesObj[i].x;
+		mnemoLinkSVGObj.targetY = mnemoBubblesObj[i].y;
 		mnemoLinkSVGObj.update();
 	}
 }
@@ -1202,6 +1556,15 @@ async function UXupdateLoop() {
 //#endregion
 
 //#region - EVENT LISTENERS
+window.addEventListener('resize', () => {
+	initMnemoLinkBubbles();
+	
+	// release bubbles
+	setTimeout(() => {
+		if (!eHTML.dashboard.element.classList.contains('open')) { return; }
+		mnemoBubblesObj.forEach((bubble) => { bubble.stopShowing(false);}) 
+	}, 600);
+});
 eHTML.modals.authentification.loginForm.addEventListener('submit', function(e) {
 	e.preventDefault();
 
@@ -1222,6 +1585,9 @@ eHTML.modals.authentification.loginForm.addEventListener('submit', function(e) {
 		input.value = '';
 		await asyncInitLoad(true);
 		closeModal();
+		centerScreenBtn.lock();
+
+		await new Promise(r => setTimeout(r, 600));
 
 		await centerScreenBtnAction();
 	});
@@ -1317,13 +1683,14 @@ document.addEventListener('click', (event) => {
 	const isTargetSuggestion = event.target.classList.contains('suggestion') || event.target.classList.contains('suggestions');
 	if (!isTargetSuggestion) {
 		deleteExistingSuggestionsHTML();
-		if (event.target.id === 'linkNewMnemonicBtn') { openModal('inputMnemonic'); }
 	}
 
+	if (event.target.id === 'linkNewMnemonicBtn') { openModal('inputMnemonic'); return }
+	
 	const isTargetBubbleOrShowBtn = event.target.classList.contains('mnemolinkBubble') || event.target.classList.contains('showBtn');
 	if (!isTargetBubbleOrShowBtn) {
 		/** @type {mnemoBubbleObject} */
-		const bubbleShowing = mnemoBubblesObj.find((mnemoBubbleObj) => mnemoBubbleObj.isShowing);
+		const bubbleShowing = mnemoBubblesObj.find((mnemoBubbleObj) => mnemoBubbleObj.element.classList.contains('showing'));
 		if (!bubbleShowing) { return; }
 		
 		const mnemonic = (() => {
@@ -1372,7 +1739,7 @@ document.addEventListener('click', (event) => {
 			return;
 		}
 		
-		// close bubble if click outside
+		// close bubble if click outside mnemolinkBubble modal
 		const mnemolinkBubble = bubbleShowing.element;
 		let element = event.target;
 		for (let i = 0; i < 4; i++) {
@@ -1385,7 +1752,83 @@ document.addEventListener('click', (event) => {
 		clearMnemonicBubbleShowing();
 	}
 });
-centerScreenBtn.element.addEventListener('click', async (event) => { await centerScreenBtnAction(); });
+document.addEventListener('input', (event) => {
+	const isSeedWordsRange = event.target.name === "seedWords";
+	if (!isSeedWordsRange) { return; }
+
+	const parentModalWrap = event.target.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement;
+	const isMasterMnemonicModal = parentModalWrap.id === eHTML.modals.inputMasterMnemonic.wrap.id;
+	if (isMasterMnemonicModal) {
+		console.log(parseInt(event.target.value));
+		const nbOfWords = parseInt(event.target.value) < 12 ? 12 : parseInt(event.target.value);
+		eHTML.modals.inputMasterMnemonic.seedWordsValueStr.innerText = nbOfWords;
+		setNumberOfVisibleWordsInMnemonicGrid(eHTML.modals.inputMasterMnemonic.mnemonicGridInputs, nbOfWords);
+		switchBtnsIfMnemonicGridIsFilled('masterMnemonicModalWrap');
+	}
+	
+	const isMnemonicModal = parentModalWrap.id === eHTML.modals.inputMnemonic.wrap.id;
+	if (isMnemonicModal) {
+		const mnemonicLengths = [12, 15, 18, 21, 24];
+		const nbOfWords = mnemonicLengths[parseInt(event.target.value) -1] ? mnemonicLengths[parseInt(event.target.value) -1] : 12;
+		eHTML.modals.inputMnemonic.seedWordsValueStr.innerText = nbOfWords;
+		setNumberOfVisibleWordsInMnemonicGrid(eHTML.modals.inputMnemonic.mnemonicGridInputs, nbOfWords);
+		switchBtnsIfMnemonicGridIsFilled('mnemonicModalWrap');
+	}
+});
+document.addEventListener('paste', (event) => {
+	const target = event.target;
+	if (target.tagName !== 'INPUT') { return; }
+
+	const modalWrapId = target.parentElement.parentElement.parentElement.parentElement.parentElement.id;
+	const isMasterMnemonicModal = modalWrapId === eHTML.modals.inputMasterMnemonic.wrap.id;
+	const isMnemonicModal = modalWrapId === eHTML.modals.inputMnemonic.wrap.id;
+	if (!isMasterMnemonicModal && !isMnemonicModal) { return; }
+	
+	const pastedText = event.clipboardData.getData('text');
+	const pastedWords = pastedText.split(' ');
+	
+	const cleanedPastedWords = [];
+	for (let i = 0; i < pastedWords.length; i++) {
+		const word = pastedWords[i];
+		if (word.length < 2 || word.match(/[^a-zA-Z]/g)) { continue; }
+		cleanedPastedWords.push(word);
+	}
+	
+	// control number of words
+	if (cleanedPastedWords.length < 12) { modalInfo(eHTML.modals.inputMasterMnemonic, "Mnemonic must contain at least 12 words!", 3000); return; }
+	if (isMasterMnemonicModal) {
+		eHTML.modals.inputMasterMnemonic.seedWordsRange.value = cleanedPastedWords.length;
+		eHTML.modals.inputMasterMnemonic.seedWordsValueStr.innerText = cleanedPastedWords.length; 
+	}
+	if (isMnemonicModal) { 
+		const mnemonicLengths = [12, 15, 18, 21, 24];
+		if (!mnemonicLengths.includes(cleanedPastedWords.length)) { modalInfo(eHTML.modals.inputMnemonic, "Mnemonic must contain 12, 15, 18, 21 or 24 words!", 3000); return; }
+		eHTML.modals.inputMnemonic.seedWordsRange.value = mnemonicLengths.indexOf(cleanedPastedWords.length);
+		eHTML.modals.inputMnemonic.seedWordsValueStr.innerText = cleanedPastedWords.length; 
+	}
+
+	// control language
+	const randomizeBtn = isMasterMnemonicModal ? eHTML.modals.inputMasterMnemonic.randomizeBtn : eHTML.modals.inputMnemonic.randomizeBtn;
+	const result = emptyMnemoLinker.getBIPTableFromMnemonic(cleanedPastedWords);
+	const initialLanguage = randomizeBtn.classList[1];
+	if (!result.language) { modalInfo(eHTML.modals.inputMasterMnemonic, "Language can't be detected!", 3000); return; }
+	randomizeBtn.classList.remove(initialLanguage);
+	randomizeBtn.classList.add(result.language);
+	
+	event.preventDefault();
+	const targetGrid = isMnemonicModal ? eHTML.modals.inputMnemonic.mnemonicGridInputs : eHTML.modals.inputMasterMnemonic.mnemonicGridInputs;
+	setNumberOfVisibleWordsInMnemonicGrid(targetGrid, cleanedPastedWords.length);
+	
+	for (let i = 0; i < cleanedPastedWords.length; i++) {
+		const input = targetGrid[i];
+		input.value = cleanedPastedWords[i];
+	}
+
+	const extracted = switchBtnsIfMnemonicGridIsFilled(modalWrapId);
+	if (!extracted.allWordsAreValid) { return; }
+	tempData.mnemonic = extracted;
+});
+centerScreenBtn.element.addEventListener('click', async (event) => { event.preventDefault(); await centerScreenBtnAction(); });
 // DASHBOARD : MNEMOLINKS LIST
 document.addEventListener('mousedown', (event) => {
 	if (!event.target.classList.contains('mnemolinkInput')) { return; }
@@ -1396,6 +1839,7 @@ document.addEventListener('focusout', (event) => {
 	// console.log(`focusout: ${event.target.tagName}`);
 	if (!event.target.classList.contains('mnemolinkInput')) { return; }
 
+	/** @type {HTMLInputElement} */
 	const mnemolinkInput = event.target;
 	const editBtn = mnemolinkInput.parentElement.getElementsByClassName('editBtn')[0];
 	const rect = editBtn.getBoundingClientRect();
@@ -1408,6 +1852,10 @@ document.addEventListener('focusout', (event) => {
 		mnemolinkInput.defaultValue = value;
 		fillMnemoLinkList();
 		initMnemoLinkBubbles();
+	} else {
+		mnemolinkInput.classList.add('wrong');
+		mnemolinkInput.value = mnemolinkInput.defaultValue;
+		setTimeout(() => { mnemolinkInput.classList.remove('wrong'); }, 500);
 	}
 	
 	editBtn.classList.remove('trash');
@@ -1420,11 +1868,17 @@ eHTML.dashboard.mnemolinksList.addEventListener('mouseover', (event) => {
 	const mnemolink = event.target.classList.contains('mnemolink') ? event.target : event.target.parentElement;
 	if (!mnemolink.classList.contains('mnemolink')) { return; }
 
+	// if mnemolink hover
 	const index = Array.from(mnemolink.parentElement.children).indexOf(mnemolink);
-	const bubble = mnemoBubblesObj[index];
-	if (!bubble) { return; }
 
-	bubble.element.classList.add('hoverFromList');
+	const mnemoBubbleObj = mnemoBubblesObj[index];
+	if (!mnemoBubbleObj) { console.error(`mnemoBubbleObj not found for index: ${index}`); return; }
+	mnemoBubbleObj.element.classList.add('hoverFromList');
+	
+	/*const mnemoLinkSVGObj = mnemoLinkSVGsObj[index]; // ABORTED - USELESS DESIGN...
+	if (!mnemoLinkSVGObj) { console.error(`mnemoLinkSVGObj not found for index: ${index}`); return; }
+	const angle360 = (mnemoLinkSVGObj.angle + Math.PI) * 180 / Math.PI;
+	centerScreenBtn.rotate(angle360);*/
 
 	const mnemolinkInput = mnemolink.getElementsByClassName('mnemolinkInput')[0];
 	mnemolinkInput.classList.add('hoverFromList');
@@ -1452,12 +1906,29 @@ eHTML.dashboard.mnemolinksList.addEventListener('click', async (event) => {
 			const index = Array.from(event.target.parentElement.parentElement.children).indexOf(event.target.parentElement);
 			const listOfMnemoLinksLabel = userData.getListOfMnemoLinks();
 			const label = listOfMnemoLinksLabel[index];
-			userData.removeMnemoLink(label);
-			save.userMnemoLinks();
 
-			fillMnemoLinkList();
-			initMnemoLinkBubbles();
+			prepareConfirmationModal(
+				`Delete MnemoLink: ${label}?`,
+				async () => {
+					closeModal();
+					userData.removeMnemoLink(label);
+					save.userMnemoLinks();
+		
+					fillMnemoLinkList();
+					initMnemoLinkBubbles();
+					
+					// release bubbles
+					setTimeout(() => { mnemoBubblesObj.forEach((bubble) => { bubble.stopShowing(false);}) }, 600);
+				},
+				() => { 
+					closeModal();
+					event.target.classList.remove('trash');
+					const mnemolinkInput = event.target.parentElement.getElementsByClassName('mnemolinkInput')[0];
+					mnemolinkInput.readOnly = true;
+				}
+			);
 
+			openModal('confirmation');
 			return;
 		}
 	}
@@ -1665,6 +2136,14 @@ eHTML.modals.inputMasterMnemonic.confirmBtn.addEventListener('click', async (eve
 	tempData.init();
 	
 	closeModal();
+	setTimeout(() => { centerScreenBtnAction() }, 600);
+	setTimeout(async () => { 
+		/** @type {MnemoLinker} */
+		const mnemoLinker = new MnemoLinkerLastest( { pseudoMnemonic: mnemonic } );
+		const id = await mnemoLinker.genPublicId();
+		userData.id = id;
+		save.userId();
+	}, 200);
 
 	eHTML.modals.inputMasterMnemonic.confirmBtn.classList.remove('busy');
 });
@@ -1796,11 +2275,15 @@ eHTML.modals.inputMnemonic.confirmBtn.addEventListener('click', async (event) =>
 
 	userData.addMnemoLink(mnemoLink);
 	await save.userMnemoLinks();
+	//console.log('MnemoLink added and saved');
+
 	fillMnemoLinkList();
 	initMnemoLinkBubbles();
 	tempData.init();
 
 	closeModal();
+	// release bubbles
+	setTimeout(() => { mnemoBubblesObj.forEach((bubble) => { bubble.stopShowing(false);}) }, 600);
 
 	eHTML.modals.inputMnemonic.confirmBtn.classList.remove('busy');
 });

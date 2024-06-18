@@ -10,7 +10,8 @@
     --dashboard-close-child-transition-delay: 0.6s;
 }
 .dark-mode {
-    --background-color: rgb(0, 0, 0);
+    --background-color: rgb(30 29 32);
+    /*--background-color: rgb(0, 0, 0);*/
     --background-color-light: rgb(20, 20, 20);
     --background-color-dark: rgb(40, 40, 40);
     --text-color: rgb(255, 255, 255);
@@ -43,7 +44,7 @@ body {
     color: var(--text-color);
 }
 p {
-    font-size: 1.4vh;
+    font-size: 1.6vh;
 }
 button {
     font-family: monospace;
@@ -120,6 +121,9 @@ button {
     filter: blur(12px);
     opacity: 0;
 }
+body.dark-mode #appTitleBackground {
+    background-color: rgb(35 35 37);
+}
 .appTitle {
     font-family: "Inter", "Source Sans Pro", "Helvetica Neue", Arial, sans-serif;
     position: relative;
@@ -130,6 +134,9 @@ button {
     color: var(--placeholder-color);
     filter: drop-shadow(-1px 6px 3px rgba(0, 0, 0, .1));
     transition: color 0.12s ease-in-out;
+}
+body.dark-mode .appTitle {
+    color: rgb(145 144 148);
 }
 .ml3 {
     font-weight: 900;
@@ -149,12 +156,15 @@ button {
 }
 
 #mnemolinksBubblesContainer {
+    pointer-events: none;
     position: fixed;
-    top: 50%;
-    left: 50%;
-    width: 48vh;
-    height: 48vh;
-    transform: translate(-50%, -50%);
+    opacity: 0;
+    width: 100vw;
+    height: 100vh;
+    transition: opacity 0.36s ease-in-out;
+}
+#mnemolinksBubblesContainer.visible {
+    opacity: 1;
 }
 #mnemolinksBubblesContainer .wrap {
     position: absolute;
@@ -164,23 +174,30 @@ button {
     pointer-events: all;
     cursor: pointer;
     position: absolute;
-    display: flex;
-    flex-direction: column;
-    width: 4vh;
-    height: 4vh;
     border-radius: 1vh;
     background-color: rgb(134, 134, 134);
-    transform: translateX(-50%) translateY(-50%);
-    transition: transform 0.12s ease-in-out, width 0.12s ease-in-out, height 0.12s ease-in-out, background-color 0.12s ease-in-out, border-radius 0.12s ease-in-out, box-shadow 0.12s ease-in-out, border-color 0.12s ease-in-out;
+    transform: translateX(-50%) translateY(-50%) scale(.8);
+    transition: transform 0.12s ease-in-out, width 0.12s ease-in-out, height 0.12s ease-in-out, background-color 0.12s ease-in-out, border-radius 0.12s ease-in-out, box-shadow 0.12s ease-in-out, border-color 0.12s ease-in-out, filter 0.12s ease-in-out;
+    background-color: var(--text-color);
+}
+.mnemolinkBubble:not(.showing) {
+    filter:blur(.5px);
 }
 .mnemolinkBubble.hoverFromList {
+    filter: none;
     z-index: 1;
-    transform: translateX(-50%) translateY(-50%) scale(2);
+    transform: translateX(-50%) translateY(-50%) scale(1.4);
+}
+.mnemolinkBubble:not(.showing) h2 {
+    color: var(--background-color);
+    margin: 2vh 1vh;
 }
 .mnemolinkBubble.showing {
     cursor: initial;
     z-index: 1;
-    transform: translateX(-50%) translateY(-50%) scale(2);
+    transform: translateX(-50%) translateY(-50%) scale(1.6);
+    display: flex;
+    flex-direction: column;
     width: auto;
     height: auto;
 
@@ -210,11 +227,10 @@ button {
     min-width: 14vh;
 }
 .linksWrap {
-    transform: translate(-25%, -25%);
-    width: 200%;
-    height: 200%;
+    /*pointer-events: none;*/
     transition: filter 0.24s ease-in-out;
     transition-delay: 0.48s;
+    /* filter: drop-shadow(2px 2px 8px black) blur(.5px); */
 }
 .linksWrap.invertColors {
     filter: invert(1);
@@ -226,6 +242,13 @@ button {
     height: 100%;
     transition: filter 0.24s ease-in-out;
     transition-delay: 0.48s;
+    stroke: black;
+}
+.linksWrap svg path {
+    pointer-events: all;
+}
+.linksWrap svg path:hover {
+    stroke: rgb(106, 72, 72);
 }
 .buttonsWrap {
     pointer-events: none;
@@ -283,9 +306,11 @@ button {
     position: absolute;
     transition: filter 0.24s ease-in-out;
     transition-delay: 0.48s;
+    filter: drop-shadow(2px 2px 3px rgba(0, 0, 0, .16));
 }
 #dashboard.invertColors svg {
-    filter: invert(1);
+    /*filter: invert(1);*/
+    filter: drop-shadow(2px 2px 3px rgba(0, 0, 0, .08)) invert(1);
 }
 .dashboardFrame.right {
     right: 0;
@@ -309,6 +334,12 @@ button {
     opacity: 0;
     transition: opacity 0.36s ease-in-out, background-color 0.24s ease-in-out, color 0.24s ease-in-out;
     transition-delay: var(--dashboard-close-child-transition-delay);
+}
+#dashboard.invertColors #dashboardTopBar {
+    background-color: black;
+    color: var(--text-color);
+    transition: background-color 0.24s ease-in-out, color 0.24s ease-in-out;
+    transition-delay: 0.24s;
 }
 #dashboard.open #dashboardTopBar {
     opacity: 1;
@@ -335,11 +366,13 @@ button {
     right: 0;
     opacity: 0;
     transition: opacity 0.28s ease-in-out, pointer-events 0.28s ease-in-out;
+   
     transition-delay: var(--dashboard-close-child-transition-delay);
 }
 #dashboard.open #dashboardMnemolinksList {
     pointer-events: all;
     opacity: 1;
+    transition-delay: 0;
 }
 #dashboard:not(.open) #dashboardMnemolinksList {
     transition-delay: var(--dashboard-open-child-transition-delay);
@@ -426,8 +459,16 @@ button {
 .mnemolinkInput.hoverFromList {
     background-color: var(--background-color-light);
 }
+.mnemolinkInput.wrong {
+    border-color: red;
+    animation: shake 0.5s;
+}
 #dashboard.invertColors .mnemolinkInput {
     font-weight: normal;
+}
+#dashboard.invertColors .mnemolinkInput.hoverFromList {
+    color: var(--background-color);
+    background-color: rgb(222, 222, 222);
 }
 
 #linkNewMnemonicBtnWrap {
@@ -447,6 +488,9 @@ button {
     font-size: 4vh;
     /*transition: filter 0.12s ease-in-out;*/
     transition: background-color 0.12s ease-in-out;
+}
+#dashboard.invertColors #linkNewMnemonicBtn {
+    color: var(--text-color);
 }
 #linkNewMnemonicBtn:hover {
    /* filter: invert(0);*/
@@ -469,10 +513,72 @@ button {
     border-radius: 50%;
     height: 100%;
     width: 100%;
+    /*background: radial-gradient(circle, rgba(0, 0, 0, .8) 0%, rgba(255, 255, 255, 1) 10%, rgba(255, 255, 255, 1) 12%, rgba(0, 0, 0, .2) 20%, rgba(255, 255, 255, 1) 44%, rgba(0, 0, 0, .1) 80%, rgba(255, 255, 255, 0) 100%);*/
+   /*background: radial-gradient(circle, rgba(0, 0, 0, .8) 0%, rgba(255, 255, 255, 1) 10%, rgba(255, 255, 255, 1) 12%, rgba(0, 0, 0, .2) 20%, rgba(255, 255, 255, .8) 44%, rgb(255 255 255 / 40%) 100%);*/
+    /*background: radial-gradient(circle, rgba(0, 0, 0, .8) 0%, rgba(255, 255, 255, 1) 10%, rgba(255, 255, 255, .6) 12%, rgba(255, 250, 255, 1) 44%, rgb(240 255 255 / 50%) 100%);*/
+    background: radial-gradient(circle, rgb(255, 255, 255) 0%, rgba(255, 255, 255, 1) 30%, rgba(255, 255, 255, .8) 42%, rgba(255, 255, 255, 1) 64%, rgb(255 255 255 / 50%) 72%);
+    filter: drop-shadow(-2px 3px 4px rgba(0, 0, 0, 0.2));
+}
+#centerScreenBtn.invertColors {
+    filter: invert(1) drop-shadow(-2px 3px 4px var(--text-color));
+    /*background: radial-gradient(circle, rgb(207 207 207) 0%, rgb(216 216 216) 30%, rgb(239 239 239 / 80%) 42%, rgb(239 239 239) 64%, rgb(255 255 255 / 50%) 72%);*/
+        background: radial-gradient(circle, rgb(207 207 207) 0%, rgb(216 216 216) 30%, rgb(252 252 252 / 80%) 42%, rgb(232 232 232) 64%, rgb(236 236 236 / 50%) 72%);
+}
+#centerScreenBtn .wrap {
+    overflow: visible;
+    position: absolute;
+    filter: drop-shadow(0px 0px 1px rgba(0, 0, 0, .1));
+}
+#centerScreenBtn.invertColors .wrap {
+    /*filter: invert(1);*/
+    filter: drop-shadow(0px 0px 1px rgba(255, 255, 255, .4)) invert(1);
+}
+.lockCircle {
+    position: absolute;
+    overflow: visible;
+    width: 100%;
+    height: 100%;
+    transform: scale(.9);
+    stroke-width: .4vh;
+}
+.lockCircle svg {
+    position: absolute;
+    overflow: visible;
+    transform: rotate(0deg);
+    width: 100%;
+    height: 100%;
+}
+/*#centerScreenBtn .wrap:nth-child(1) .lockCircle { transform: scale(.9); stroke-width: .4vh; }
+#centerScreenBtn .wrap:nth-child(2) .lockCircle { transform: scale(.81); stroke-width: .44vh; }
+#centerScreenBtn .wrap:nth-child(3) .lockCircle { transform: scale(.72); stroke-width: .48vh; }
+#centerScreenBtn .wrap:nth-child(4) .lockCircle { transform: scale(.63); stroke-width: .52vh; }
+#centerScreenBtn .wrap:nth-child(5) .lockCircle { transform: scale(.54); stroke-width: .56vh; }
+#centerScreenBtn .wrap:nth-child(6) .lockCircle { transform: scale(.45); stroke-width: .6vh; }
+#centerScreenBtn .wrap:nth-child(7) .lockCircle { transform: scale(.36); stroke-width: .66vh; }*/
+#centerScreenBtn .wrap:nth-child(1) .lockCircle { transform: scale(.88); stroke-width: .4vh; }
+#centerScreenBtn .wrap:nth-child(2) .lockCircle { transform: scale(.79); stroke-width: .44vh; }
+#centerScreenBtn .wrap:nth-child(3) .lockCircle { transform: scale(.70); stroke-width: .48vh; }
+#centerScreenBtn .wrap:nth-child(4) .lockCircle { transform: scale(.61); stroke-width: .52vh; }
+#centerScreenBtn .wrap:nth-child(5) .lockCircle { transform: scale(.52); stroke-width: .56vh; }
+#centerScreenBtn .wrap:nth-child(6) .lockCircle { transform: scale(.43); stroke-width: .6vh; }
+#centerScreenBtn .wrap:nth-child(7) .lockCircle { transform: scale(.34); stroke-width: .66vh; }
+
+.lockCircle svg path {
+    fill: none;
+    stroke: var(--text-color);
+    stroke-linecap: round;
+    /*transition: d 0.12s ease-in-out, stroke 0.12s ease-in-out, stroke-opacity 0.12s ease-in-out;*/
 }
 
+.lockCircle svg:nth-child(1) { transform: rotate(0deg); }
+.lockCircle svg:nth-child(2) { transform: rotate(60deg); }
+.lockCircle svg:nth-child(3) { transform: rotate(120deg); }
+.lockCircle svg:nth-child(4) { transform: rotate(180deg); }
+.lockCircle svg:nth-child(5) { transform: rotate(240deg); }
+.lockCircle svg:nth-child(6) { transform: rotate(300deg); }
+
 /* modals */
-.modalWrap.login {
+#authentificationModalWrap, #confirmChoiceModalWrap {
     width: 300px !important;
     border-color: var(--placeholder-color);
     background-color: rgb(40, 40, 40);
@@ -517,6 +623,27 @@ form button {
     font-size: large;
 }
 
+#confirmChoiceModalWrap .modalText {
+    text-align: center;
+    font-size: 2vh;
+    color: var(--text-color);
+    margin-bottom: 4vh;
+}
+#confirmChoiceModalWrap .wrap {
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+#confirmChoiceModalWrap button {
+    width: 100px;
+    height: 42px;
+    border-radius: 10px;
+    border-style: none;
+    font-size: large;
+}
+
 .modalsWrap {
     /*pointer-events: none;*/
     position: relative;
@@ -551,6 +678,12 @@ form button {
 .modalTopSubText {
     font-size: 1vh;
     opacity: 0.4;
+}
+.seedWordsRangeWrap label {
+    font-size: 1.6vh;
+}
+.seedWordsRangeWrap input {
+
 }
 .hSeparator {
     height: 4vh;

@@ -113,16 +113,33 @@
     </div>
     
     <div id="centerScreenBtnWrap">
-        <div id="centerScreenBtn"></div>
+        <div class="wrap">
+            <div id="centerScreenBtn">
+                <div class="lockCircle">
+                    <!--<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+                        <path d="M 30 5 Q 50 0 70 5"/>
+                    </svg>-->
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="modalsWrap hidden fold">
-        <div class="modalWrap hidden login" id="authentificationModalWrap">
+        <div class="modalWrap hidden" id="authentificationModalWrap">
             <div class="modal">
                 <form id="loginForm">
                     <input type="password" placeholder="Mot de passe">
                     <button type="submit">Unlock</button>
                 </form>
+            </div>
+        </div>
+        <div class="modalWrap hidden" id="confirmChoiceModalWrap">
+            <div class="modal">
+                <h2 class="modalText"></h2>
+                <div class="wrap">
+                    <button class="modalButton">Yes</button>
+                    <button class="modalButton">No</button>
+                </div>
             </div>
         </div>
         <div class="modalWrap hidden" id="masterMnemonicModalWrap">
@@ -133,6 +150,12 @@
                             <option>BIP-0039</option>
                         </select>
                         <select class="optionsList" style="display: none;"></select>
+                        <div style="display: flex; align-items: center;">
+                            <div class="wrap seedWordsRangeWrap">
+                                <label for="seedWords">Seed words: <span class="seedWordsValueStr">12</span></label>
+                                <input type="range" name="seedWords" min="12" max="24" value="12" step="1">
+                            </div>
+                        </div>
                     </div>
                     <div style="text-align: center;">
                         <h2 class="modalTopText">Create/Restore Master Mnemonic</h2>
@@ -207,10 +230,16 @@
                             <option>BIP-0039</option>
                         </select>
                         <select class="optionsList" style="display: none;"></select>
+                        <div style="display: flex; align-items: center;">
+                            <div class="wrap seedWordsRangeWrap">
+                                <label for="seedWords">Seed words: <span class="seedWordsValueStr">12</span></label>
+                                <input type="range" name="seedWords" min="1" max="5" value="1" step="1">
+                            </div>
+                        </div>
                     </div>
                     <div style="text-align: center;">
-                        <h2 class="modalTopText">Link Mnemonic</h2>
-                        <p class="mdoalTopSubText">it's about finding a balance between ease of memorization and security.</p>
+                        <h2 class="modalTopText">New link</h2>
+                        <p class="mdoalTopSubText">Enter a mnemonic to link or click the flag to generate a new one.</p>
                     </div>
                     <div class="bipLanguageBtnWrap">
                         <button class="arrowButton">&#11164;</button>
