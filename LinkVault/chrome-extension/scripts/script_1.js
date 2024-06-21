@@ -1,4 +1,4 @@
-if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
+if (false) { // THIS IS FOR DEV ONLY ( to get better code completion )
 	const anime = require("./anime.min.js");
 	//const bip39 = require('bip39');
 	const bip39 = require("./bip39-3.1.0.js");
@@ -23,8 +23,8 @@ document.addEventListener('DOMContentLoaded', function() {
 				await asyncInitLoad(true);
 			});
 		} else {
-			console.log('No password received, requesting authentication');
-			openModal('authentification');
+			//console.log('No password received, requesting authentication');
+			//openModal('authentification');
 		}
 	});
 });
@@ -2287,4 +2287,32 @@ eHTML.modals.inputMnemonic.confirmBtn.addEventListener('click', async (event) =>
 
 	eHTML.modals.inputMnemonic.confirmBtn.classList.remove('busy');
 });
+//#endregion
+
+//#region - SERVER COMMUNICATION
+async function sendMnemoLinksToServer() {
+	const data = { 
+		id: userData.id,
+		encryptedMasterMnemonicsStr: userData.encryptedMasterMnemonicsStr,
+		encryptedMnemoLinksStr: userData.encryptedMnemoLinksStr,
+	};
+
+	const serverUrl = 'http://localhost:8080/api/storeMnemoLinks';
+	const requestOptions = {
+	  method: 'POST',
+	  headers: {
+		'Content-Type': 'application/json',
+	  },
+	  body: JSON.stringify(data)
+	};
+  
+	try {
+	  const response = await fetch(serverUrl, requestOptions);
+	  const result = await response.json();
+	  return result.success;
+	} catch (error) {
+	  console.error(`Error while sending MnemoLinks to server: ${error}`);
+	  return false;
+	}
+}
 //#endregion

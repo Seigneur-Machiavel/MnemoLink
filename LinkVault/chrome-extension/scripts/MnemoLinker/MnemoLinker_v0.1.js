@@ -294,7 +294,7 @@ export class MnemoLinker {
 	}
 	async #deriveK(pseudoMnemonic, saltUnit16Array) {
 		const salt = saltUnit16Array;
-		const iterations = 100000 + this.version[1];
+		const iterations = 100000;
 		const keyMaterial = await this.cryptoLib.subtle.importKey(
 			"raw",
 			new TextEncoder().encode(pseudoMnemonic),
@@ -372,7 +372,7 @@ export class MnemoLinker {
 	}
 
 	// PUBLIC METHODS
-	async genPublicId(desiredLength = 10) {
+	async genPublicId(desiredLength = 32) {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 
 		const encodedPseudoMnemonicBase64Str = this.#encodeMnemonic(this.pseudo.mnemonic, 24);
@@ -380,6 +380,7 @@ export class MnemoLinker {
 		const fixedIV = new Uint8Array([0, 1, 2, 3, 5, 4, 6, 7, 8, 9, 11, 10, 12, 13, 14, 15]);
 		const key = await this.#deriveK(encodedPseudoMnemonicBase64Str, fixedSalt);
 		const id = await this.#encryptText(encodedPseudoMnemonicBase64Str, key, fixedIV);
+
 		const controlBase64Str = await this.#decryptText(id, key, fixedIV);
 		const decodedStr = this.#decodeMnemonic(controlBase64Str, this.origin.bip, this.origin.language);
 		if (!this.pseudo.mnemonic.join(' ') === decodedStr) { console.error('Decrypted ID is not valid'); return false; }
