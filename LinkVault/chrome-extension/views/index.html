@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 
 <!--
     Flags Icons made by Freepik from www.flaticon.com
@@ -12,7 +12,9 @@
     <title>LinkVault</title>
     <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAOwAAADsAEnxA+tAAACeklEQVR42mNgoAz4A3E3EM8C4mwgZmKgMVAH4odA/B8N/0Hj/wPiUGpaDPLZM6jhP6A+x+VbAyA+AlX7F4hdKLXcDslXPCToYwbiG1C9l8m1PARqwA4sciDHdADxXSBeDcTKOMywhJrxmlTLtaAae7HIVSLF9z1o6ODzqShU/gApDgBpuI5F3AYqV4YmLg0VP4jDPCWovCMxlu+GKkYHAtBE+AiHPgu03GCGJr8Oh7kogAOqyBpJzBfNYFaouD0Qnwbi9WgJFGTGRqhaOywhW4PPAfVornSF8rcBMR+SnCdS7oA5jBnNrDPQrIgM9kPLDbxxvxKNfwaLOl4gjkJTV4UjXTChlSn/CTnAGSkv/4caRAi8hRbHoOhZjOYAISx2hONzACeaa2WwqAsEYhYs4opI0XEBKXrQ7ViEzwHIABTHt5H4akiGxiPpASU6LiD+BtUDK5bloPLL0OzYSqwDYFnrKBBLQQ0/jabGFi2XSKDJgyqw52h2bMFmuRyOBGKMZgEu4IxD/g+0uEZ2wBRsBlwB4i9ElJC7CMj/R0of73GkAQdcmqcTcEAolvbAVqQygB2IXyHJfUPLBbhCmcGHmGISqSbMAeIGIG6D6vtKpN5r0OIcA3wE4l9kVtvsUEfwElDHClWniy4hBpXgYSAfYDUYDTzAUjSj1O8MNHSAClSNHDZJEaREA4pLbTIc8BtaWeGTv0vIECmkdhy1AcjMZGIUamKpwajlAG1SUrQgDRygSs0Uja/pRrED/iLV6fjAS2j5QXUHnEKqUnEBI6ihArRwQBpUA6gxyo+GQeX6Hqj8SVqlARBYhaXS+Y/U58ulZSJkoFE5oIguCAAu5tauhE0TJAAAAABJRU5ErkJggg==" type="image/x-icon">
     <link rel="stylesheet" href="../styles/main-styles.css">
+    <script src="../scripts/secureModule.js"></script>
     <script src="../scripts/anime.min.js"></script>
+    <script src="../scripts/classes.js"></script>
     <script src="../scripts/mnemoLinkerLoader.js" type="module"></script>
     <script src="../scripts/cryptoLight.js"></script>
     <script src="../scripts/script_1.js" defer></script>
@@ -25,21 +27,6 @@
         <input type="checkbox" id="dark-mode-toggle">
         <span class="slider"></span>
     </label>
-
-    <div id="mnemolinksBubblesContainer">
-        <div class="wrap linksWrap">
-            <!-- Filled in script_1.js, just an example of how it could look like
-            <svg class="mnemolinkLink"></svg>
-            <svg class="mnemolinkLink"></svg>
-            <svg class="mnemolinkLink"></svg>-->
-        </div>
-        <div class="wrap">
-            <!-- Filled in script_1.js, just an example of how it could look like
-            <div class="mnemolinkBubble"></div>
-            <div class="mnemolinkBubble"></div>
-            <div class="mnemolinkBubble"></div>-->
-        </div>
-    </div>
 
     <div id="appTitleWrap" class="visible">
         <div id="appTitleBackground"></div>
@@ -112,15 +99,36 @@
         </div>
     </div>
     
-    <div id="centerScreenBtnWrap">
-        <div class="wrap">
-            <div id="centerScreenBtn">
-                <div class="lockCircle">
-                    <!--<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
-                        <path d="M 30 5 Q 50 0 70 5"/>
-                    </svg>-->
+    <div id="inVaultWrap">
+        <div id="vault">
+            <div id="mnemolinksBubblesContainer">
+                <div class="wrap linksWrap">
+                    <!-- Filled in script_1.js, just an example of how it could look like
+                    <svg class="mnemolinkLink"></svg>
+                    <svg class="mnemolinkLink"></svg>
+                    <svg class="mnemolinkLink"></svg>-->
+                </div>
+                <div class="wrap">
+                    <!-- Filled in script_1.js, just an example of how it could look like
+                    <div class="mnemolinkBubble"></div>
+                    <div class="mnemolinkBubble"></div>
+                    <div class="mnemolinkBubble"></div>-->
                 </div>
             </div>
+            <div id="centerScreenBtnWrap">
+                <div class="wrap">
+                    <div id="centerScreenBtn">
+                        <div class="lockCircle">
+                            <!--<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+                                <path d="M 30 5 Q 50 0 70 5"/>
+                            </svg>-->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="game" class="tidy">
+
         </div>
     </div>
 

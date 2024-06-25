@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LinkVault",
   "version": "1.0",
-  "description": "Safeguard and seamlessly connect your mnemonic keys with LinkVault: Your bridge to secure, effortless mnemonic management.",
+  "description": "Your bridge to secure, effortless mnemonic management.",
   "action": {
     "default_popup": "views/popup.html",
     "default_icon": {
