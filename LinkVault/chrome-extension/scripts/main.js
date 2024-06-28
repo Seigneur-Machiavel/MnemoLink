@@ -11,7 +11,10 @@ document.addEventListener('DOMContentLoaded', function() {
 		if (response && response.password) {
 			//console.log(`Password received: ${JSON.stringify(response.password)}`)
 			chrome.storage.local.get(['hashedPassword'], async function(result) {
-				const { hash, saltBase64, ivBase64 } = result.hashedPassword;
+				const { hash, saltBase64, ivBase64 } = sanitize(result.hashedPassword);
+				if (!hash || !saltBase64 || !ivBase64) { alert('Password data corrupted'); return; }
+				if (typeof hash !== 'string' || typeof saltBase64 !== 'string' || typeof ivBase64 !== 'string') { alert('Password data corrupted'); return; }
+				
 				const res = await cryptoLight.init(response.password, saltBase64, ivBase64);
 				if (res.hash !== hash) { 
 					console.info('Wrong password, requesting authentication');
@@ -34,9 +37,9 @@ const urlprefix = ""
 
 //#region - VARIABLES
 /** @type {MnemoLinker} */
-let MnemoLinkerLastest = null;
+let MnemoLinkerLastest = null; // FOR FAST ACCESS TO THE LATEST VERSION
 /** @type {MnemoLinker} */
-let emptyMnemoLinker = null;
+let emptyMnemoLinker = null; // ONLY USED FOR BASIC USAGE, NEVER USE THIS GLOBAL VARIABLE FOR CRYPTOGRAPHY !!
 
 const settings = {
 	mnemoLinkerVersion: window.MnemoLinker.latestVersion,
@@ -73,6 +76,14 @@ const eHTML = {
 		mnemolinksBubblesContainer: document.getElementById('mnemolinksBubblesContainer'),
 		linksWrap: document.getElementById('mnemolinksBubblesContainer').children[0],
 		bubblesWrap: document.getElementById('mnemolinksBubblesContainer').children[1],
+	},
+	games: {
+		element: document.getElementById('games'),
+		gamesCategoriesTopBar: document.getElementById('gamesCategoriesTopBar'),
+		ScribeQuestBtn: document.getElementsByClassName('gamesCategoryBtn')[0],
+		CipherCircuit: document.getElementsByClassName('gamesCategoryBtn')[1],
+		ByteBard: document.getElementsByClassName('gamesCategoryBtn')[2],
+		CategoryToolTip: document.getElementById('gamesCategoriesTopBar').getElementsByClassName('toolTip')[0],
 	},
 	game: {
 		element: document.getElementById('game'),
@@ -859,25 +870,33 @@ async function UXupdateLoop() {
 	requestAnimationFrame(UXupdateLoop);
 }
 function setInVaultPage(pageName = 'vault') {
+	cleanUpGame();
+	eHTML.dashboard.dashboardMnemolinksList.classList.add('tidy');
+	eHTML.vault.element.classList.add('tidy');
+	eHTML.games.element.classList.add('tidy');
+	eHTML.game.element.classList.add('tidy');
+	
 	if (pageName === 'vault') {
-		eHTML.game.element.classList.add('tidy');
 		eHTML.vault.element.classList.remove('tidy');
 		eHTML.dashboard.dashboardMnemolinksList.classList.remove('tidy');
-
-		cleanUpGame();
+	}
+	
+	if (pageName === 'games') {
+		eHTML.games.element.classList.remove('tidy');
 	}
 
 	if (pageName === 'game') {
 		eHTML.game.element.classList.remove('tidy');
-		eHTML.vault.element.classList.add('tidy');
-		eHTML.dashboard.dashboardMnemolinksList.classList.add('tidy');
-
 		loadGame();
 	}
 }
 //#endregion
 
 //#region - GAME FUNCTIONS
+function setCategoryToolTipText(text = 'toto') {
+	const tooltip = eHTML.games.CategoryToolTip;
+	tooltip.innerText = text;
+}
 async function loadGame(gameName = 'game1') {
 	const gameContainer = eHTML.game.element;
 	const content = await fetch(`../games/${gameName}/index.html`)
@@ -912,6 +931,8 @@ async function loadGame(gameName = 'game1') {
 	}
 }
 function cleanUpGame() {
+	if (!gameController.isGameActive) { return; }
+
 	try {
 		gameController.isGameActive = false; // Step 1
 		gameController.cleanUpGamePauses(); // Step 2
@@ -1070,7 +1091,10 @@ document.addEventListener('click', (event) => {
 
 	if (event.target.id === 'linkNewMnemonicBtn') { openModal('inputMnemonic'); return }
 	if (event.target.id === 'vaultBtn') { setInVaultPage('vault'); }
-	if (event.target.id === 'gamesBtn') { setInVaultPage('game'); }
+	if (event.target.id === 'gamesBtn') { setInVaultPage('games'); }
+	if (event.target === eHTML.games.ScribeQuestBtn) { }
+	if (event.target === eHTML.games.CipherCircuit) { }
+	if (event.target === eHTML.games.ByteBard) { }
 	
 	const isTargetBubbleOrShowBtn = event.target.classList.contains('mnemolinkBubble') || event.target.classList.contains('showBtn');
 	if (!isTargetBubbleOrShowBtn) {

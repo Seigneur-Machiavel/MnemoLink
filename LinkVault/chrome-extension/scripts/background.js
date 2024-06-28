@@ -20,6 +20,8 @@
     }
 });*/
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+    if (typeof request.action !== "string") { return; }
+    
     if (request.action === "openPage") {
         let password = request.password;
         chrome.tabs.create({'url': chrome.runtime.getURL('views/index.html')}, function(tab) {
@@ -27,6 +29,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 
             // Declaration of the listener as a named function to be able to remove it later
             const passwordListener = function(request, sender, sendResponse) {
+                if (typeof request.action !== "string") { return; }
                 if (request.action == "getPassword") {
                     sendResponse({password: password});
                     password = null;

@@ -1,4 +1,4 @@
-if (false) {
+if (false) { // THIS IS FOR DEV ONLY ( to get better code completion )
     const { gameControllerClass } = require("../../scripts/classes.js");
     const gameController = new gameControllerClass();
 }
@@ -118,7 +118,6 @@ if (false) {
         removeReadOnly() { this.input.readOnly = false; }
         isLengthEqualToWordLength() { return this.input.value.length === this.word.length; }
     };
-
     class carouselControllerClass {
         constructor(mnemonic, carouselElement = document.getElementById("quizCarousel")) {
             /** @type {Array<string>} */
@@ -319,8 +318,7 @@ if (false) {
     const carouselElement = document.getElementById("quizCarousel");
     const carouselController = new carouselControllerClass(mnemonic, carouselElement);
     carouselController.init();
-    await carouselController.showAllThenHideAndComeBackToFirst(100); // 800, 100);
+    //await carouselController.showAllThenHideAndComeBackToFirst(100); // fast mode for dev purpose
+    await carouselController.showAllThenHideAndComeBackToFirst(1000);
     if (!gameController.isGameActive) { return; }
-
-
 })();

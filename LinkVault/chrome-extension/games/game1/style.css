@@ -75,14 +75,6 @@
         stroke-dashoffset: 0;
     }
 }
-/*@keyframes countdown {
-    from {
-        stroke-dashoffset: 283;
-    }
-    to {
-        stroke-dashoffset: 0;
-    }
-}*/
 .quizWord input[type="text"] {
     font-family: monospace;
     text-align: center;

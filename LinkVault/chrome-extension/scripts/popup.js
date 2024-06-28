@@ -38,7 +38,7 @@ function resetApplication() {
 }
 function showFormDependingOnStoredPassword() {
     chrome.storage.local.get(['hashedPassword'], function(result) {
-        if (result.hashedPassword) {
+        if (result.hashedPassword && typeof result.hashedPassword === 'string') {
             setVisibleForm('loginForm');
             document.getElementById('loginForm').getElementsByTagName('input')[0].focus();
         } else {
@@ -86,6 +86,7 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
     chrome.storage.local.get(['hashedPassword'], async function(result) {
         const { hash, saltBase64, ivBase64 } = result.hashedPassword;
         if (!hash || !saltBase64 || !ivBase64) { alert('Password not set'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+        if (typeof hash !== 'string' || typeof saltBase64 !== 'string' || typeof ivBase64 !== 'string') { alert('Password data corrupted'); busy.splice(busy.indexOf('loginForm'), 1); return; }
         //console.log(`Password-retrieved, salt: ${saltBase64}, iv: ${ivBase64}`)
         //console.log(`Password-retrieved hash: ${hash}`);
 
