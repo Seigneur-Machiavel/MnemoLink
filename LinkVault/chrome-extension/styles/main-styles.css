@@ -458,15 +458,11 @@ body.dark-mode .categorySheet.active {
     border-radius: 50%;
     height: 100%;
     width: 100%;
-    /*background: radial-gradient(circle, rgba(0, 0, 0, .8) 0%, rgba(255, 255, 255, 1) 10%, rgba(255, 255, 255, 1) 12%, rgba(0, 0, 0, .2) 20%, rgba(255, 255, 255, 1) 44%, rgba(0, 0, 0, .1) 80%, rgba(255, 255, 255, 0) 100%);*/
-   /*background: radial-gradient(circle, rgba(0, 0, 0, .8) 0%, rgba(255, 255, 255, 1) 10%, rgba(255, 255, 255, 1) 12%, rgba(0, 0, 0, .2) 20%, rgba(255, 255, 255, .8) 44%, rgb(255 255 255 / 40%) 100%);*/
-    /*background: radial-gradient(circle, rgba(0, 0, 0, .8) 0%, rgba(255, 255, 255, 1) 10%, rgba(255, 255, 255, .6) 12%, rgba(255, 250, 255, 1) 44%, rgb(240 255 255 / 50%) 100%);*/
     background: radial-gradient(circle, rgb(255, 255, 255) 0%, rgba(255, 255, 255, 1) 30%, rgba(255, 255, 255, .8) 42%, rgba(255, 255, 255, 1) 64%, rgb(255 255 255 / 50%) 72%);
     filter: drop-shadow(-2px 3px 4px rgba(0, 0, 0, 0.2));
 }
 #centerScreenBtn.invertColors {
     filter: invert(1) drop-shadow(-2px 3px 4px var(--text-color));
-    /*background: radial-gradient(circle, rgb(207 207 207) 0%, rgb(216 216 216) 30%, rgb(239 239 239 / 80%) 42%, rgb(239 239 239) 64%, rgb(255 255 255 / 50%) 72%);*/
     background: radial-gradient(circle, rgb(207 207 207) 0%, rgb(216 216 216) 30%, rgb(252 252 252 / 80%) 42%, rgb(232 232 232) 64%, rgb(236 236 236 / 50%) 72%);
 }
 #centerScreenBtn .wrap {

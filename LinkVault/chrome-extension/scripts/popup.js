@@ -7,7 +7,7 @@ const centerScreenBtn = new centerScreenBtnObject();
 centerScreenBtn.state = 'welcome';
 centerScreenBtn.init(7);
 
-const hardcodedPassword = '123456'; // should be "" in production
+const hardcodedPassword = ''; // '123456'; // should be "" in production
 const busy = [];
 function setVisibleForm(formId) {
     const forms = document.getElementsByTagName('form');

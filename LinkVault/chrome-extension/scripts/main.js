@@ -31,10 +31,6 @@ document.addEventListener('DOMContentLoaded', function() {
 	});
 });
 
-const urlprefix = ""
-// Dont forget to use the "urlprefix" while fetching, example :
-// .src = `${urlprefix}sprites/cloud`
-
 //#region - VARIABLES
 /** @type {MnemoLinker} */
 let MnemoLinkerLastest = null; // FOR FAST ACCESS TO THE LATEST VERSION (need to be use as : new MnemoLinkerLastest()
@@ -154,7 +150,7 @@ const eHTML = {
 }
 eHTML.footerVersion.innerText = "v" + window.MnemoLinker.latestVersion;
 //#endregion
-const hardcodedPassword = '123456'; // should be "" in production
+const hardcodedPassword = ''; // '123456'; // should be "" in production
 eHTML.modals.authentification.input.value = hardcodedPassword;
 
 //#region - STORAGE FUNCTIONS
