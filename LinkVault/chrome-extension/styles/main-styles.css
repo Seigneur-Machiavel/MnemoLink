@@ -181,64 +181,147 @@ body.dark-mode .appTitle {
     width: 82vw;
     position: fixed;
 }
+#games {
+    filter: drop-shadow(0px 6px 10px rgba(0, 0, 0, .14));
+    /*animation: categoryBtnGlitch .12s;*/
+}
 #vault.tidy, #games.tidy, #game.tidy {
     top: 100vh;
+    /*animation: none;*/
 }
 
-#gamesCategoriesTopBar {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-top: 4vh;
-    height: 5vh;
+#gamesCategoryToolTip {
+    z-index: 2;
+    position: absolute;
+    top: 19%;
+    right: 6%;
+    font-size: 1.8vh;
+    padding: 0.4vh 1vh;
+    color: var(--background-color);
+    background-color: var(--text-color);
 }
-.gamesCategoryBtn {
+.categorySheet {
+    position: absolute;
+    overflow: hidden;
+    height: 86%;
+    width: 86%;
+    bottom: 4%;
+    right: 4%;
+    border-bottom-left-radius: 20px;
+    border-bottom-right-radius: 20px;
+    background-color: var(--background-color-dark);
+}
+body.dark-mode .categorySheet {
+    background-color: var(--background-color-light);
+}
+.categorySheet.active {
+    z-index: 1;
+    background-color: var(--background-color-light);
+}
+body.dark-mode .categorySheet.active {
+    background-color: var(--background-color-dark);
+}
+#games .categorySheet:nth-child(1) { clip-path: polygon(0 8%, 80% 8%, 79% 0%, 99% 0%, 100% 8%, 100% 100%, 0% 100%); }
+#games .categorySheet:nth-child(2) { clip-path: polygon(0 8%, 60% 8%, 59% 0%, 78% 0%, 79% 8%, 100% 8%, 100% 100%, 0% 100%); }
+#games .categorySheet:nth-child(3) { clip-path: polygon(0 8%, 40% 8%, 39% 0%, 58% 0%, 59% 8%, 100% 8%, 100% 100%, 0% 100%); }
+.categorySheet .categoryBtn {
+    position: absolute;
     pointer-events: all;
     cursor: pointer;
-    margin: 1vh;
-    padding: 1vh;
+    text-align: center;
+    transform: skewX(11deg) translateX(-4%);
+    padding: 1.6vh 0;
     font-size: 2vh;
     font-weight: bold;
+    width: 20%;
 }
-#gamesCategoriesTopBar .toolTip {
-    opacity: 0;
+.categorySheet .categoryBtn .wrap {
     pointer-events: none;
+}
+.categorySheet .categoryBtn:hover > .wrap {
+    animation: categoryBtnGlitch .12s;
+}
+@keyframes categoryBtnGlitch {
+    0% {
+        transform: skewX(11deg) translateX(-4%);
+        filter: blur(1px);
+    }
+    50% {
+        transform: skewX(-6deg) translateX(-6%) translateY(-4%);
+        filter: blur(3px);
+    }
+    80% {
+        transform: skewX(16deg) translateX(-4%) translateY(6%);
+        filter: blur(.5px);
+    }
+    90%{
+        transform: skewX(20deg) translateX(10%) translateY(12%);
+        filter: blur(5px);
+    }
+    100% {
+        transform: skewX(11deg) translateX(-4%) translateY(0%);
+        filter: blur(0px);
+    }
+}
+.categorySheet:nth-child(1) .categoryBtn { right: 0; }
+.categorySheet:nth-child(2) .categoryBtn { right: 20%; }
+.categorySheet:nth-child(3) .categoryBtn { right: 40%; }
+.sheetBackground {
     position: absolute;
-    background-color: var(--text-color);
-    color: var(--background-color);
-    padding: 2vh;
-    font-size: 1.6vh;
-    top: 10vh;
-    filter: drop-shadow(0px 8px 4px rgba(0, 0, 0, .2));
+    height: 106%;
+    width: 108%;
+    transform: translate(-4%, -3%);
+    font-size: 4vh;
+    opacity: .042;
+    filter: blur(1px);
 }
-.gamesCategoryBtn:hover {
-    border-bottom: 2px solid var(--text-color);
-}
-.gamesCategoryBtn:hover .toolTip {
-    opacity: 1;
-}
-#gamesList {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(20vh, 1fr));
-    gap: 2vh;
-    padding: 2vh;
+.gamesList {
+    position: relative;
     overflow-y: scroll;
-    height: 70vh;
+    display: grid;
+    margin-top: 6%;
+    grid-template-columns: repeat(auto-fill, minmax(40vh, 1fr));
+    gap: 4vh;
+    padding: 4vh;
+    height: 82%;
 }
-#gamesList .wrap {
-
+.gamesList .gameSheet {
+    pointer-events: all;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    height: 31vh;
+    filter: drop-shadow(3px 5px 6px rgba(0, 0, 0, .1));
+    transition: transform 0.08s ease-in-out, filter 0.08s ease-in-out;
 }
-#gamesList .gameMiniatureWrap {
-
+.gamesList .gameSheet:hover {
+    transform: scale(1.02);
+    filter: drop-shadow(3px 5px 8px rgba(0, 0, 0, .2));
 }
-#gamesList .gameMiniature {
-
+.gameMiniature {
+    position: absolute;
+    width: 100%;
+    border-radius: 2vh;
 }
-#gamesList .gameTitle {
-
+.gameTitleDescriptionWrap {
+    position: absolute;
+    padding: 2vh 3vh;
+    margin: 1vh 2vh;
+    border-radius: 0 10px 0 10px;
+    background-color: #f2f2f2;
+    bottom: 0;
+    filter: drop-shadow(-4px 4px 1px rgba(0, 0, 0, .1));
 }
-#gamesList .gameDescription {
-
+.gameSheet .gameTitle {
+    font-size: 2.4vh;
+    font-weight: bold;
+    margin-bottom: 1vh;
+    color: black;
+}
+.gameSheet .gameDescription {
+    font-size: 1.6vh;
+    color: var(--placeholder-color);
 }
 
 #mnemolinksBubblesContainer {

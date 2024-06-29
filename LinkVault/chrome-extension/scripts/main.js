@@ -4,8 +4,8 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion )
 	const { MnemoLinker } = require("./MnemoLinker/MnemoLinker_v0.1.js");
 	const { cryptoLight } = require("./cryptoLight.js");
 	const { lockCircleObject, centerScreenBtnObject, mnemonicClass, userDataClass, tempDataClass, mnemoBubbleObject, svgLinkObject, mnemoLinkSVGObject, gameControllerClass } = require("./classes.js");
+	const { gamesInfoByCategory, GameInfoClass, CategoryInfoClass } = require("../games/gamesinfo.js");
 }
-
 document.addEventListener('DOMContentLoaded', function() {
 	chrome.runtime.sendMessage({action: "getPassword"}, function(response) {
 		if (response && response.password) {
@@ -37,7 +37,7 @@ const urlprefix = ""
 
 //#region - VARIABLES
 /** @type {MnemoLinker} */
-let MnemoLinkerLastest = null; // FOR FAST ACCESS TO THE LATEST VERSION
+let MnemoLinkerLastest = null; // FOR FAST ACCESS TO THE LATEST VERSION (need to be use as : new MnemoLinkerLastest()
 /** @type {MnemoLinker} */
 let emptyMnemoLinker = null; // ONLY USED FOR BASIC USAGE, NEVER USE THIS GLOBAL VARIABLE FOR CRYPTOGRAPHY !!
 
@@ -51,7 +51,6 @@ const settings = {
 	saveLogs: true,
 	mnemolinkBubblesMinCircleSpots: 6,
 }
-
 const mousePos = { x: 0, y: 0 };
 const timeOuts = {};
 /** @type {mnemoBubbleObject[]} */
@@ -79,15 +78,27 @@ const eHTML = {
 	},
 	games: {
 		element: document.getElementById('games'),
-		gamesCategoriesTopBar: document.getElementById('gamesCategoriesTopBar'),
-		ScribeQuestBtn: document.getElementsByClassName('gamesCategoryBtn')[0],
-		CipherCircuit: document.getElementsByClassName('gamesCategoryBtn')[1],
-		ByteBard: document.getElementsByClassName('gamesCategoryBtn')[2],
-		CategoryToolTip: document.getElementById('gamesCategoriesTopBar').getElementsByClassName('toolTip')[0],
+		gamesCategoryToolTip: document.getElementById('gamesCategoryToolTip'),
+		ScribeQuest: {
+			sheet: document.getElementsByClassName('categorySheet')[0],
+			sheetBackground: document.getElementsByClassName('sheetBackground')[0],
+			sheetBtn: document.getElementsByClassName('categoryBtn')[0],
+			gamesList: document.getElementsByClassName('gamesList')[0],
+		},
+		CipherCircuit: {
+			sheet: document.getElementsByClassName('categorySheet')[1],
+			sheetBackground: document.getElementsByClassName('sheetBackground')[1],
+			sheetBtn: document.getElementsByClassName('categoryBtn')[1],
+			gamesList: document.getElementsByClassName('gamesList')[1],
+		},
+		ByteBard: {
+			sheet: document.getElementsByClassName('categorySheet')[2],
+			sheetBackground: document.getElementsByClassName('sheetBackground')[2],
+			sheetBtn: document.getElementsByClassName('categoryBtn')[2],
+			gamesList: document.getElementsByClassName('gamesList')[2],
+		},
 	},
-	game: {
-		element: document.getElementById('game'),
-	},
+	gameContainer: document.getElementById('game'),
 	modals: {
 		wrap: document.getElementsByClassName('modalsWrap')[0],
 		authentification: {
@@ -281,6 +292,22 @@ function toggleDarkMode(element) {
 	userData.preferences.darkMode = element.checked;
 	save.userPreferences();
 }
+function fillGamesLists() {
+	const gamesCategories = Object.keys(gamesInfoByCategory);
+	for (let i = 0; i < gamesCategories.length; i++) {
+		const category = gamesCategories[i];
+
+		/** @type {CategoryInfoClass} */
+		const categoryInfo = gamesInfoByCategory[category];
+		eHTML.games[category].sheetBackground.innerText = categoryInfo.sheetBackground;
+
+		for (let i = 0; i < Object.keys(categoryInfo.games).length; i++) {
+			const gameInfo = categoryInfo.games[Object.keys(categoryInfo.games)[i]];
+			const gameSheet = createGameSheetElement(category, gameInfo.folderName, gameInfo.title, gameInfo.description);
+			eHTML.games[category].gamesList.appendChild(gameSheet);
+		}
+	}
+}; fillGamesLists();
 //#endregion
 
 //#region - WELCOME ANIMATIONS
@@ -860,7 +887,7 @@ function positionLinkSVGs() {
 }
 async function UXupdateLoop() {
 	const pageVault = !eHTML.vault.element.classList.contains('tidy');
-	const pageGame = !eHTML.game.element.classList.contains('tidy');
+	const gameContainer = !eHTML.gameContainer.classList.contains('tidy');
 
 	if (pageVault) {
 		positionMnemoLinkBubbles();
@@ -874,7 +901,7 @@ function setInVaultPage(pageName = 'vault') {
 	eHTML.dashboard.dashboardMnemolinksList.classList.add('tidy');
 	eHTML.vault.element.classList.add('tidy');
 	eHTML.games.element.classList.add('tidy');
-	eHTML.game.element.classList.add('tidy');
+	eHTML.gameContainer.classList.add('tidy');
 	
 	if (pageName === 'vault') {
 		eHTML.vault.element.classList.remove('tidy');
@@ -882,24 +909,74 @@ function setInVaultPage(pageName = 'vault') {
 	}
 	
 	if (pageName === 'games') {
+		const category = userData.preferences.gameCategory || 'ScribeQuest';
+		setGameCategory(category);
 		eHTML.games.element.classList.remove('tidy');
 	}
 
 	if (pageName === 'game') {
-		eHTML.game.element.classList.remove('tidy');
-		loadGame();
+		eHTML.gameContainer.classList.remove('tidy');
+	}
+}
+function setGameCategory(category = 'ScribeQuest') {
+	eHTML.games.ScribeQuest.sheet.classList.remove('active');
+	eHTML.games.CipherCircuit.sheet.classList.remove('active');
+	eHTML.games.ByteBard.sheet.classList.remove('active');
+
+	eHTML.games[category].sheet.classList.add('active');
+}
+function createGameSheetElement(category = "ScribeQuest", folderName, title, description) {
+	const gameSheet = document.createElement('div');
+	gameSheet.classList.add('gameSheet');
+	gameSheet.onclick = () => { setInVaultPage('game'); loadGame(category, folderName); };
+
+	const gameMiniature = document.createElement('img');
+	gameMiniature.classList.add('gameMiniature');
+	gameMiniature.src = `../games/${category}/${folderName}/miniature.png`;
+	gameSheet.appendChild(gameMiniature);
+
+	const gameTitleDescriptionWrap = document.createElement('div');
+	gameTitleDescriptionWrap.classList.add('gameTitleDescriptionWrap');
+	gameSheet.appendChild(gameTitleDescriptionWrap);
+
+	const gameTitle = document.createElement('div');
+	gameTitle.classList.add('gameTitle');
+	gameTitle.innerText = title;
+	gameTitleDescriptionWrap.appendChild(gameTitle);
+
+	const gameDescription = document.createElement('div');
+	gameDescription.classList.add('gameDescription');
+	gameDescription.innerText = description;
+	gameTitleDescriptionWrap.appendChild(gameDescription);
+
+	return gameSheet;
+}
+function setGameCategoryTooltip(eventTarget) {
+	const gamesCategoryToolTipElmnt = eHTML.games.gamesCategoryToolTip;
+	eHTML.games.gamesCategoryToolTip.innerText = "";
+
+	if (eventTarget === eHTML.games.ScribeQuest.sheetBtn) {
+		gamesCategoryToolTipElmnt.innerText = gamesInfoByCategory.ScribeQuest.categoryDescription;
+	}
+	if (eventTarget === eHTML.games.CipherCircuit.sheetBtn) {
+		gamesCategoryToolTipElmnt.innerText = gamesInfoByCategory.CipherCircuit.categoryDescription;
+	}
+	if (eventTarget === eHTML.games.ByteBard.sheetBtn) {
+		gamesCategoryToolTipElmnt.innerText = gamesInfoByCategory.ByteBard.categoryDescription;
+	}
+
+	if (gamesCategoryToolTipElmnt.innerText === "") {
+		gamesCategoryToolTipElmnt.classList.add('hidden');
+	} else {
+		gamesCategoryToolTipElmnt.classList.remove('hidden');
 	}
 }
 //#endregion
 
 //#region - GAME FUNCTIONS
-function setCategoryToolTipText(text = 'toto') {
-	const tooltip = eHTML.games.CategoryToolTip;
-	tooltip.innerText = text;
-}
-async function loadGame(gameName = 'game1') {
-	const gameContainer = eHTML.game.element;
-	const content = await fetch(`../games/${gameName}/index.html`)
+async function loadGame(category = "ScribeQuest", folderName = "give_me_ya_seed") {
+	const gameContainer = eHTML.gameContainer;
+	const content = await fetch(`../games/${category}/${folderName}/index.html`)
 
 	if (!content.ok) {
 		console.error('Error while loading game content');
@@ -909,9 +986,16 @@ async function loadGame(gameName = 'game1') {
 	const gameContent = await content.text();
 	gameContainer.innerHTML = gameContent;
 	
-	const mnemonic = await userData.getMasterMnemonicStr();
 	window.initSecureMnemonicModule();
-	window.secureMnemonicModule.setMnemonic(mnemonic);
+	const mnemonicStr = await userData.getMasterMnemonicStr();
+	let mnemonicFormatedForGameUse = '';
+	switch (category) {
+		case "ScribeQuest": mnemonicFormatedForGameUse = mnemonicStr; break;
+		case "CipherCircuit": mnemonicFormatedForGameUse = convertMnemonicStrToIndexesStr(mnemonicStr); break;
+		case "ByteBard": mnemonicFormatedForGameUse = convertMnemonicStrToCustomB64Str(mnemonicStr); break;
+	}
+	console.log(mnemonicFormatedForGameUse);
+	window.secureMnemonicModule.setMnemonic(mnemonicFormatedForGameUse);
 
 	try {
 		const scripts = gameContainer.getElementsByTagName('script');
@@ -946,7 +1030,7 @@ function cleanUpGame() {
 	}
 }
 function clearGameContent() {
-    const gameContainer = eHTML.game.element;
+	const gameContainer = eHTML.gameContainer;
     if (!gameContainer) { gameContainer.innerHTML = ''; }
 
 	if (!window.secureMnemonicModule) { return; }
@@ -959,6 +1043,37 @@ function removeGameStylesheet(filename = 'style.css') {
             sheet.parentNode.removeChild(sheet);
         }
     });
+}
+function convertMnemonicStrToIndexesStr(mnemonicStr) {
+	const mnemonic = mnemonicStr.split(' ');
+	/** @type {MnemoLinker} */
+	const mLer = new MnemoLinkerLastest();
+	const { wordsTable } = mLer.getBIPTableFromMnemonic(mnemonic);
+	
+	let indexesStr = '';
+	for (let i = 0; i < mnemonic.length; i++) {
+		const index = wordsTable.indexOf(mnemonic[i]);
+		indexesStr += index.toString();
+		if (i < mnemonic.length - 1) { indexesStr += ' '; }
+	}
+
+	return indexesStr;
+}
+function convertMnemonicStrToCustomB64Str(mnemonicStr) {
+	const mnemonic = mnemonicStr.split(' ');
+	/** @type {MnemoLinker} */
+	const mLer = new MnemoLinkerLastest();
+	const { wordsTable } = mLer.getBIPTableFromMnemonic(mnemonic);
+	
+	let customB64Str = '';
+	for (let i = 0; i < mnemonic.length; i++) {
+		const index = wordsTable.indexOf(mnemonic[i]);
+		const B64 = mLer.encodeNumberToCustomB64(index);
+		customB64Str += B64;
+		if (i < mnemonic.length - 1) { customB64Str += ' '; }
+	}
+
+	return customB64Str;
 }
 //#endregion
 
@@ -1092,9 +1207,10 @@ document.addEventListener('click', (event) => {
 	if (event.target.id === 'linkNewMnemonicBtn') { openModal('inputMnemonic'); return }
 	if (event.target.id === 'vaultBtn') { setInVaultPage('vault'); }
 	if (event.target.id === 'gamesBtn') { setInVaultPage('games'); }
-	if (event.target === eHTML.games.ScribeQuestBtn) { }
-	if (event.target === eHTML.games.CipherCircuit) { }
-	if (event.target === eHTML.games.ByteBard) { }
+
+	if (event.target === eHTML.games.ScribeQuest.sheetBtn) { setGameCategory('ScribeQuest'); }
+	if (event.target === eHTML.games.CipherCircuit.sheetBtn) { setGameCategory('CipherCircuit'); }
+	if (event.target === eHTML.games.ByteBard.sheetBtn) { setGameCategory('ByteBard'); }
 	
 	const isTargetBubbleOrShowBtn = event.target.classList.contains('mnemolinkBubble') || event.target.classList.contains('showBtn');
 	if (!isTargetBubbleOrShowBtn) {
@@ -1160,6 +1276,9 @@ document.addEventListener('click', (event) => {
 		console.log('close bubble');
 		clearMnemonicBubbleShowing();
 	}
+});
+document.addEventListener('mouseover', (event) => {
+	setGameCategoryTooltip(event.target);
 });
 document.addEventListener('input', (event) => {
 	const isSeedWordsRange = event.target.name === "seedWords";

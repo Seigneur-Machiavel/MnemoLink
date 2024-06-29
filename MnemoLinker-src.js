@@ -134,8 +134,8 @@ class MnemoLinker {
 		const versionNumber = this.version;
 		const n1 = versionNumber[0];
 		const n2 = versionNumber[1];
-		const encodedN1 = this.#encode(n1);
-		const encodedN2 = this.#encode(n2);
+		const encodedN1 = this.encodeNumberToCustomB64(n1);
+		const encodedN2 = this.encodeNumberToCustomB64(n2);
 
 		return encodedN1 + encodedN2;
 	}
@@ -146,7 +146,7 @@ class MnemoLinker {
 	 * @param {number} number - The number to encode
 	 * @returns {string} - The encoded number
 	 */
-	#encode(number) {
+	encodeNumberToCustomB64(number) {
 		if (isNaN(number)) { console.error('number is not a number'); return false; }
 		if (number > 4095) { console.error('number is too high to be encoded'); return false; }
 
@@ -160,7 +160,7 @@ class MnemoLinker {
 	 * @param {string} encodedNumber - The encoded number
 	 * @returns {number} - The decoded number
 	 */
-	#decode(encodedNumber) {
+	decodeCustomB64ToNumber(encodedNumber) {
 		const firstChar = base64EncodingChars.indexOf(encodedNumber[0]);
 		const secondChar = base64EncodingChars.indexOf(encodedNumber[1]);
 		return firstChar * 64 + secondChar;
@@ -220,7 +220,7 @@ class MnemoLinker {
 		let encodedMnemonic = '';
 		for (let i = 0; i < indexTable.length; i++) {
 			const wordIndex = indexTable[i];
-			const encodedIndex = this.#encode(wordIndex);
+			const encodedIndex = this.encodeNumberToCustomB64(wordIndex);
 			encodedMnemonic += encodedIndex;
 		}
 
@@ -238,7 +238,7 @@ class MnemoLinker {
 		const indexTable = [];
 		for (let i = 0; i < encodedMnemonic.length; i += 2) {
 			const encodedNumber = encodedMnemonic.slice(i, i + 2);
-			const decodedNumber = this.#decode(encodedNumber);
+			const decodedNumber = this.decodeCustomB64ToNumber(encodedNumber);
 			indexTable.push(decodedNumber);
 		}
 
@@ -315,7 +315,7 @@ class MnemoLinker {
 			// value between 0 and 2047 included
 			const value = this.cryptoLib.getRandomValues(new Uint16Array(1))[0] % 4096;
 			result.saltUnit16Array[i] = value;
-			result.saltBase64Str += this.#encode(value);
+			result.saltBase64Str += this.encodeNumberToCustomB64(value);
 		}
 
 		return result;
@@ -410,8 +410,8 @@ class MnemoLinker {
 	dissectMnemoLink(mnemoLink = '') {
 		// --- Suffix info corresponds to the version of the table, saved on the last 4 characters ---
 		const versionSuffix = mnemoLink.slice(-4);
-		const versionPart1 = this.#decode(versionSuffix.slice(0, 2));
-		const versionPart2 = this.#decode(versionSuffix.slice(2, 4));
+		const versionPart1 = this.decodeCustomB64ToNumber(versionSuffix.slice(0, 2));
+		const versionPart2 = this.decodeCustomB64ToNumber(versionSuffix.slice(2, 4));
 		const versionNumber = [versionPart1, versionPart2];
 
 		// --- Salt info corresponds to X characters before the version suffix ---
@@ -419,7 +419,7 @@ class MnemoLinker {
 		const saltUnit16Array = new Uint16Array(saltStrLength / 2);
 		for (let i = 0; i < saltStrLength / 2; i++) {
 			const encodedNumber = saltSuffix.slice(i * 2, i * 2 + 2);
-			const decodedNumber = this.#decode(encodedNumber);
+			const decodedNumber = this.decodeCustomB64ToNumber(encodedNumber);
 			saltUnit16Array[i] = decodedNumber;
 		}
 
