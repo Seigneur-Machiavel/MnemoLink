@@ -493,13 +493,6 @@ body.dark-mode .categorySheet.active {
     width: 100%;
     height: 100%;
 }
-/*#centerScreenBtn .wrap:nth-child(1) .lockCircle { transform: scale(.9); stroke-width: .4vh; }
-#centerScreenBtn .wrap:nth-child(2) .lockCircle { transform: scale(.81); stroke-width: .44vh; }
-#centerScreenBtn .wrap:nth-child(3) .lockCircle { transform: scale(.72); stroke-width: .48vh; }
-#centerScreenBtn .wrap:nth-child(4) .lockCircle { transform: scale(.63); stroke-width: .52vh; }
-#centerScreenBtn .wrap:nth-child(5) .lockCircle { transform: scale(.54); stroke-width: .56vh; }
-#centerScreenBtn .wrap:nth-child(6) .lockCircle { transform: scale(.45); stroke-width: .6vh; }
-#centerScreenBtn .wrap:nth-child(7) .lockCircle { transform: scale(.36); stroke-width: .66vh; }*/
 #centerScreenBtn .wrap:nth-child(1) .lockCircle { transform: scale(.88); stroke-width: .4vh; }
 #centerScreenBtn .wrap:nth-child(2) .lockCircle { transform: scale(.79); stroke-width: .44vh; }
 #centerScreenBtn .wrap:nth-child(3) .lockCircle { transform: scale(.70); stroke-width: .48vh; }

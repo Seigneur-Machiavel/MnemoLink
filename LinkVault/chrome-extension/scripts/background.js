@@ -1,24 +1,3 @@
-/*chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-    //console.log(`Message received: ${JSON.stringify(request)}`);
-    if (request.action === "openPage") {
-        let password = request.password;
-        chrome.tabs.create({'url': chrome.runtime.getURL('views/index.html')}, function(tab) {
-            console.log('Tab opened');
-
-            chrome.runtime.onMessage.addListener(
-                function(request, sender, sendResponse) {
-                    if (request.action == "getPassword" && password !== null) {
-                        sendResponse({success: true, password: password});
-                        password = null;
-                    } else if (request.action == "getPassword" && password === null) {
-                        sendResponse({success: false});
-                    }
-                    return true; // indicates that the response will be asynchronous
-                }
-            );
-        });
-    }
-});*/
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (typeof request.action !== "string") { return; }
     

@@ -1,6 +1,11 @@
 if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
 	const { cryptoLight } = require("./cryptoLight.js");
+    const { lockCircleObject, centerScreenBtnObject } = require("./classes.js");
 }
+
+const centerScreenBtn = new centerScreenBtnObject();
+centerScreenBtn.state = 'welcome';
+centerScreenBtn.init(7);
 
 const hardcodedPassword = '123456'; // should be "" in production
 const busy = [];
@@ -38,7 +43,8 @@ function resetApplication() {
 }
 function showFormDependingOnStoredPassword() {
     chrome.storage.local.get(['hashedPassword'], function(result) {
-        if (result.hashedPassword && typeof result.hashedPassword === 'string') {
+        const { hash, saltBase64, ivBase64 } = sanitize(result.hashedPassword);
+        if (hash && saltBase64 && ivBase64) {
             setVisibleForm('loginForm');
             document.getElementById('loginForm').getElementsByTagName('input')[0].focus();
         } else {
@@ -47,6 +53,26 @@ function showFormDependingOnStoredPassword() {
         }
     });
 }
+function sanitize(data) {
+    if (!data) return false;
+	if (typeof data === 'number' || typeof data === 'boolean') return data;
+    if (!typeof data === 'string' || !typeof data === 'object') return 'Invalid data type';
+
+    if (typeof data === 'string') {
+        //return data.replace(/[^a-zA-Z0-9]/g, '');
+        // accept all base64 characters
+        return data.replace(/[^a-zA-Z0-9+/=]/g, '');
+    } else if (typeof data === 'object') {
+        const sanitized = {};
+        for (const key in data) {
+			const sanitazedValue = sanitize(data[key]);
+            sanitized[sanitize(key)] = sanitazedValue;
+        }
+        return sanitized;
+    }
+    return data;
+}
+function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1) + min); }
 
 document.getElementById('passwordCreationForm').addEventListener('submit', async function(e) {
     if (busy.includes('passwordCreationForm')) return;

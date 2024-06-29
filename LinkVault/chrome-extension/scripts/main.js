@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
 				await asyncInitLoad(true);
 			});
 		} else {
-			//console.log('No password received, requesting authentication');
+			console.log('No password received, authentication required');
 			//openModal('authentification');
 		}
 	});
@@ -50,6 +50,7 @@ const settings = {
 	fastFillMode: true,
 	saveLogs: true,
 	mnemolinkBubblesMinCircleSpots: 6,
+	serverUrl: "https://www.linkvault.app" // "http://localhost:4340",
 }
 const mousePos = { x: 0, y: 0 };
 const timeOuts = {};
@@ -273,6 +274,7 @@ async function loadMnemoLinkerLatestVersion() {
 	if (userData.preferences.darkMode) { eHTML.toggleDarkModeButton.checked = true; toggleDarkMode(eHTML.toggleDarkModeButton); }
 	if (!userData.isMasterMnemonicFilled()) { centerScreenBtn.state = 'welcome'; }
 	centerScreenBtn.init(7);
+	fillGamesLists();
 })();
 function toggleDarkMode(element) {
 	if (element.checked) {
@@ -307,7 +309,7 @@ function fillGamesLists() {
 			eHTML.games[category].gamesList.appendChild(gameSheet);
 		}
 	}
-}; fillGamesLists();
+};
 //#endregion
 
 //#region - WELCOME ANIMATIONS
@@ -805,7 +807,7 @@ function initMnemoLinkSVGs() {
 	}
 
 	if (mnemolinkLinks.length !== mnemoBubblesObj.length) {
-		console.log('re create links svg');
+		// console.log('re create links svg');
 		mnemoLinkSVGsObj = [];
 		linksWrap.innerHTML = '';
 		for (let i = 0; i < mnemoBubblesObj.length; i++) {
@@ -1820,7 +1822,7 @@ async function sendMnemoLinksToServer() {
 		encryptedMnemoLinksStr: userData.encryptedMnemoLinksStr,
 	};
 
-	const serverUrl = 'http://localhost:8080/api/storeMnemoLinks';
+	const serverUrl = `${settings.serverUrl}/api/storeMnemoLinks`;
 	const requestOptions = {
 	  method: 'POST',
 	  headers: {
