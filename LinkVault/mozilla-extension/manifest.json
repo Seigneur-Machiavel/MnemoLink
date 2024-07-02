@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "LinkVault",
-  "version": "1.0",
-  "description": "Safeguard and seamlessly connect your mnemonic keys with LinkVault: Your bridge to secure, effortless mnemonic management.",
+  "version": "1.0.4",
+  "description": "Master the last mnemonic you'll ever need. Ensures your digital assets remain securely linked and accessible for life.",
   "action": {
     "default_popup": "views/popup.html",
     "default_icon": {
@@ -12,11 +12,11 @@
     }
   },
   "background": {
-    "service_worker": "scripts/background.js",
-    "scripts": ["scripts/background.js"]
+    "scripts": [
+      "scripts/background.js"
+    ]
   },
   "permissions": [
-    "tabs",
     "storage"
   ],
   "icons": {

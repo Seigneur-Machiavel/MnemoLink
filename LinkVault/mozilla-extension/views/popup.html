@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="../styles/popup-styles.css">
+    <script src="../scripts/cryptoLight.js"></script>
+    <script src="../scripts/classes.js"></script>
+    <title>Authentification</title>
+</head>
+<body>
+    <div id="appTitle" class="appTitle">
+        <h1 class="ml3">Link Vault</h1>
+        <span class="titleSufix">Beta</span>
+    </div>
+
+    <div class="centerScreenBtnContrainer">
+        <div id="centerScreenBtnWrap">
+            <div class="wrap">
+                <div id="centerScreenBtn">
+                    <div class="lockCircle">
+                        <!--<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+                            <path d="M 30 5 Q 50 0 70 5"/>
+                        </svg>-->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form id="passwordCreationForm" class="hidden">
+        <input type="password" placeholder="Password">
+        <input type="password" placeholder="Confirm password">
+        <button type="submit">Create password</button>
+    </form>
+
+    <form id="loginForm" class="hidden">
+        <input type="password" placeholder="Password">
+        <button type="submit">Unlock</button>
+    </form>
+
+    <script src="../scripts/popup.js"></script>
+</body>
+</html>

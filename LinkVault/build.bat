@@ -1,1 +1,1 @@
-node build-config.js
+node build-Extensions.js

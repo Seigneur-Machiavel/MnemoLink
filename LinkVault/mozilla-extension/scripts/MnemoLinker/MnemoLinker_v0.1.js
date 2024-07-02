@@ -3,9 +3,41 @@ if (false) { // CODE NEVER REACHED, SHOWS THE IMPORTS FOR DOCUMENTATION PURPOSES
 }
 //bip39.mnemonicToSeedSync('basket actual', 'a password')
 
-const BIPTablesHardcoded = {};
-const BIPOfficialNamesHardcoded = {};
-const versionHardcoded = [];
+const BIPTablesHardcoded = {
+    "BIP-0039": {
+        "chinesetraditional": {
+            "officialLanguageStr": "chinese_traditional"
+        },
+        "czech": {
+            "officialLanguageStr": "czech"
+        },
+        "english": {
+            "officialLanguageStr": "english"
+        },
+        "french": {
+            "officialLanguageStr": "french"
+        },
+        "italian": {
+            "officialLanguageStr": "italian"
+        },
+        "japanese": {
+            "officialLanguageStr": "japanese"
+        },
+        "korean": {
+            "officialLanguageStr": "korean"
+        },
+        "portuguese": {
+            "officialLanguageStr": "portuguese"
+        },
+        "spanish": {
+            "officialLanguageStr": "spanish"
+        }
+    }
+};
+const BIPOfficialNamesHardcoded = {
+    "BIP-0039": "bip39"
+};
+const versionHardcoded = [0,1];
 const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const saltStrLength = 4; // need to be a multiple of 2
 
@@ -19,7 +51,7 @@ const saltStrLength = 4; // need to be a multiple of 2
  * @param {string} params.version - The version of the table used only by the builder!
  * @param {Object} params.officialBIPs - The official BIPs used only by the builder!
  */
-class MnemoLinker {
+export class MnemoLinker {
 	constructor(params = { pseudoMnemonic: null, mnemonic: null, BIPTables: null, version: null, officialBIPs: null}) {
 		this.minMnemonicLength = 12;
 		this.cryptoLib = null;
@@ -344,8 +376,6 @@ class MnemoLinker {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 
 		const encodedPseudoMnemonicBase64Str = this.#encodeMnemonic(this.pseudo.mnemonic, 24);
-		if (!encodedPseudoMnemonicBase64Str) { console.error('Unable to encode the pseudo mnemonic'); return false; }
-
 		const fixedSalt = new Uint16Array([0, 2, 1, 3]);
 		const fixedIV = new Uint8Array([0, 1, 2, 3, 5, 4, 6, 7, 8, 9, 11, 10, 12, 13, 14, 15]);
 		const key = await this.#deriveK(encodedPseudoMnemonicBase64Str, fixedSalt);
@@ -530,5 +560,3 @@ class MnemoLinker {
 /* CODE RELEASED ONLY WHEN EXPORTED --- DONT USE "//" or "/*" COMMENTS IN THIS SECTION !!! ---
 */
 
-//END --- ANY CODE AFTER THIS LINE WILL BE REMOVED DURING EXPORT, SHOULD BE USE FOR TESTING ONLY ---
-module.exports = MnemoLinker;

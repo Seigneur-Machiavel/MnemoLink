@@ -1,0 +1,148 @@
+#quizCarousel {
+    pointer-events: all;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.quizWord {
+    position: absolute;
+    padding: 4vh;
+    opacity: 0;
+    transition: transform 0.4s, opacity 0.2s;
+}
+
+.quizWord h1 {
+    position: absolute;
+    margin: 0;
+    font-size: 5vh;
+    transform: translate(-120%, -8%);
+}
+.quizWord .circleTimer {
+    position: absolute;
+    width: 4vh;
+    height: 4vh;
+    transform: translate(80%, 18%);
+    right: 0;
+}
+.circleTimer svg {
+    transform: rotate(-90deg);
+    overflow: visible;
+}
+.circleTimer .circle-background {
+    fill: none;
+    stroke: #f3f3f3;
+    stroke-width: 4vh;
+}
+.circleTimer .circle-progress {
+    fill: none;
+    stroke: rgb(127, 127, 127);
+    stroke-width: 4vh;
+    stroke-dasharray: 284;
+    /*animation: countdown 5s linear forwards;*/
+}
+@keyframes countdown {
+    0% {
+        opacity: 1;
+        stroke-dashoffset: 284;
+    }
+    60% {
+        opacity: 1;
+        stroke-dashoffset: 114;
+    }
+    65% {
+        opacity: .2;
+        stroke-dashoffset: 100;
+    }
+    70% {
+        opacity: 1;
+        stroke-dashoffset: 86;
+    }
+    80% {
+        opacity: 1;
+        stroke-dashoffset: 58;
+    }
+    85% {
+        opacity: .2;
+        stroke-dashoffset: 44;
+    }
+    90% {
+        opacity: 1;
+        stroke-dashoffset: 30;
+    }
+    100% {
+        stroke-dashoffset: 0;
+    }
+}
+.quizWord input[type="text"] {
+    font-family: monospace;
+    text-align: center;
+    font-size: 4vh;
+    border: none;
+    background-color: #00000005;
+    border-bottom: #00000030 solid;
+    border-radius: 6px;
+    filter: invert(var(--color-reversed));
+}
+.quizWord input[type="text"].wrong {
+    animation: wrongWord 0.5s;
+}
+.quizWord input[type="text"].correct {
+    animation: correctWord 0.3s;
+}
+
+.quizWord.outTop {
+    opacity: 0;
+    transform: translate(-50%, -350%) scale(.7);
+}
+.quizWord.extremeTop {
+    opacity: .1;
+    transform: translate(-50%, -250%) scale(.8);
+}
+.quizWord.top {
+    opacity: .2;
+    transform: translate(-50%, -150%) scale(.9);
+}
+.quizWord.center {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+}
+.quizWord.bottom {
+    opacity: .2;
+    transform: translate(-50%, 50%) scale(.9);
+}
+.quizWord.extremeBottom {
+    opacity: .1;
+    transform: translate(-50%, 150%) scale(.8);
+}
+.quizWord.outBottom {
+    opacity: 0;
+    transform: translate(-50%, 250%) scale(.7);
+}
+
+@keyframes wrongWord {
+    0% {
+        opacity: 1;
+        filter: invert(var(--color-reversed)) brightness(2) blur(0);
+    }
+    50% {
+        opacity: .4;
+        filter: invert(var(--color-reversed)) brightness(.4) blur(2px);
+    }
+    100% {
+        opacity: 1;
+        filter: invert(var(--color-reversed)) brightness(1) blur(0);
+    }
+}
+@keyframes correctWord {
+    0% {
+        box-shadow: black 0px 0px 0px;
+    }
+    66% {
+        box-shadow: black 0px 0px 8px;
+    }
+    100% {
+        box-shadow: black 0px 0px 0px;
+    }
+}

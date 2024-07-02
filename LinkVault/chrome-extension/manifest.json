@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "LinkVault",
-  "version": "1.0",
-  "description": "Master the last mnemonic you'll ever need. Our advanced cryptographic technology ensures your digital assets remain securely linked and accessible for life.",
+  "version": "1.0.4",
+  "description": "Master the last mnemonic you'll ever need. Ensures your digital assets remain securely linked and accessible for life.",
   "action": {
     "default_popup": "views/popup.html",
     "default_icon": {
@@ -15,11 +15,7 @@
     "service_worker": "scripts/background.js"
   },
   "permissions": [
-    "tabs",
     "storage"
-  ],
-  "host_permissions": [
-    "https://www.linkvault.app/*"
   ],
   "icons": {
     "16": "images/icon16.png",
