@@ -349,7 +349,15 @@ class userDataClass {
 		return true;
 	}
 	getListOfMnemoLinks() {
-		return Object.keys(this.encryptedMnemoLinksStr);
+		const result = [];
+		for (let i = 0; i < Object.keys(this.encryptedMnemoLinksStr).length; i++) {
+			const label = Object.keys(this.encryptedMnemoLinksStr)[i];
+			const version = emptyMnemoLinker.dissectMnemoLink(this.encryptedMnemoLinksStr[label]).version;
+			const versionStr = `v${version.join(".")}`;
+			result.push({ label: label, versionStr: versionStr });
+		}
+
+		return result;
 	}
 	replaceMnemoLinkLabel(oldLabel, newLabel, logs = false) {
 		if (oldLabel === newLabel) { if (logs) { return true; } }
@@ -392,9 +400,10 @@ class userDataClass {
 		if (logs) { console.log(`versionStr: ${versionStr}`); }
 		try {
 			/** @type {MnemoLinker} */
-			const targetMnemoLinker = new targetMnemoLinkerClass( { pseudoMnemonic: masterMnemonicStr } );
+			const targetMnemoLinker = new targetMnemoLinkerClass( { masterMnemonic: masterMnemonicStr } );
 			const mnemoLinkDecrypted = await targetMnemoLinker.decryptMnemoLink(mnemoLinkEncrypted);
 			if (!mnemoLinkDecrypted) { if (logs) { console.error('mnemoLinkDecrypted not found !'); return false; } }
+			
 			return mnemoLinkDecrypted;
 		} catch (error) {
 			if (logs) { console.error('error:', error); }
@@ -428,10 +437,11 @@ class tempDataClass {
 	}
 };
 class mnemoBubbleObject {
-	constructor(label, x = 0, y = 0) {
+	constructor(label, mnemoLinkerVersion, x = 0, y = 0) {
 		/** @type {HTMLElement} */
-		this.element = this.createMnemoLinkBubbleElement(label);
+		this.element = this.createMnemoLinkBubbleElement(label, mnemoLinkerVersion);
 		this.label = label;
+		this.mnemoLinkerVersion = mnemoLinkerVersion;
 		this.positionLock = false;
 		
 		this.animation = null;
@@ -443,22 +453,26 @@ class mnemoBubbleObject {
 			y: y / eHTML.vault.mnemolinksBubblesContainer.offsetHeight * 100,
 		};
 	}
-	createMnemoLinkBubbleElement(label = 'toto') {
+	createMnemoLinkBubbleElement(label = 'toto', mnemoLinkerVersion = 'v0.1') {
 		const newMnemoLink = document.createElement('div');
 		newMnemoLink.classList.add('mnemolinkBubble');
 	
-		const inElement = this.createInBubbleElement(label);
+		const inElement = this.createInBubbleElement(label, mnemoLinkerVersion);
 		newMnemoLink.appendChild(inElement);
 		
 		return newMnemoLink;
 	}
-	createInBubbleElement(label = 'toto') {
+	createInBubbleElement(label = 'toto', mnemoLinkerVersion = 'v0.1') {
 		const wrap = document.createElement('div');
 		wrap.classList.add('wrap');
 	
 		const h2 = document.createElement('h2');
 		h2.innerText = label;
 		wrap.appendChild(h2);
+
+		const p = document.createElement('p');
+		p.innerText = mnemoLinkerVersion;
+		wrap.appendChild(p);
 
 		return wrap;
 	}
@@ -577,7 +591,7 @@ class mnemoBubbleObject {
 		if (affectCenterScreenBtn) { centerScreenBtn.show(120); }
 		this.element.innerHTML = '';
 
-		const inElement = this.createInBubbleElement(this.label);
+		const inElement = this.createInBubbleElement(this.label, this.mnemoLinkerVersion);
 		this.element.appendChild(inElement);
 
 		this.resetPosition();

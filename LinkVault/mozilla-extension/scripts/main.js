@@ -8,8 +8,12 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion )
 }
 document.addEventListener('DOMContentLoaded', function() {
 	chrome.runtime.sendMessage({action: "getPassword"}, function(response) {
+		if (chrome.runtime.lastError) {
+			console.log('Error sending message:', chrome.runtime.lastError);
+			return;
+		}
+		
 		if (response && response.password) {
-			//console.log(`Password received: ${JSON.stringify(response.password)}`)
 			chrome.storage.local.get(['hashedPassword'], async function(result) {
 				const { hash, saltBase64, ivBase64 } = sanitize(result.hashedPassword);
 				if (!hash || !saltBase64 || !ivBase64) { alert('Password data corrupted'); return; }
@@ -150,7 +154,7 @@ const eHTML = {
 		},
 	}
 }
-eHTML.footerVersion.innerText = "v" + window.MnemoLinker.latestVersion;
+eHTML.footerVersion.innerText = "v" + chrome.runtime.getManifest().version;
 //#endregion
 const hardcodedPassword = settings.isDebug ? '123456' : '';
 eHTML.modals.authentification.input.value = hardcodedPassword;
@@ -336,16 +340,23 @@ function fillGamesLists() {
 const textWrapper = document.querySelector('.ml3');
 textWrapper.innerHTML = textWrapper.textContent.replace(/\S/g, "<span class='letter'>$&</span>");
 const titleAnimationDuration = {A: 800, B: 1000, C: 1400};
-setTimeout(() => { document.getElementById('appTitleBackground').style.opacity = 1; }, titleAnimationDuration.A / 2);
+/*setTimeout(() => { document.getElementById('appTitleShadow').style.opacity = .4; }, titleAnimationDuration.A / 2);*/
 document.getElementById('appTitle').classList.remove('hidden');
 anime.timeline({loop: false})
   .add({
+	targets: '.ml3 .letter',
+	background: 'rgb(125, 125, 125)',
+	easing: 'easeOutElastic(1.4, .8)',
+	duration: titleAnimationDuration.A,
+	delay: (el, i) => titleAnimationDuration.A / 10 * (i+1)
+  }
+	/*{
     targets: '.ml3 .letter',
     opacity: [0,1],
 	easing: 'easeOutElastic(1.4, .8)',
     duration: titleAnimationDuration.B,
     delay: (el, i) => titleAnimationDuration.A / 10 * (i+1)
-  });
+  }*/);
 setTimeout(async () => {
 	//document.getElementById('appTitleWrap').classList.add('topScreen');
 	document.getElementById('appTitle').getElementsByClassName('titleSufix')[0].classList.add('visible');
@@ -751,10 +762,11 @@ function createMnemoLinkElement(label = 'key1') {
 function fillMnemoLinkList() {
 	eHTML.dashboard.mnemolinksList.innerHTML = ''
 
-	const monemoLinksLabels = userData.getListOfMnemoLinks();
-	for (let i = 0; i < monemoLinksLabels.length; i++) {
-		const label = monemoLinksLabels[i];
-		const element = createMnemoLinkElement(label);
+	const monemoLinksInfos = userData.getListOfMnemoLinks();
+	for (let i = 0; i < monemoLinksInfos.length; i++) {
+		const label = monemoLinksInfos[i].label;
+		const versionStr = monemoLinksInfos[i].versionStr;
+		const element = createMnemoLinkElement(label, versionStr);
 		eHTML.dashboard.mnemolinksList.appendChild(element);
 	}
 
@@ -785,17 +797,19 @@ function initMnemoLinkBubbles(releaseBubbles = false, delayBeforeRelease = 600) 
 	
 	const bubblesWrap = eHTML.vault.bubblesWrap;
 	bubblesWrap.innerHTML = '';
-	const monemoLinksLabels = userData.getListOfMnemoLinks();
-	const total = settings.mnemolinkBubblesMinCircleSpots > monemoLinksLabels.length ? settings.mnemolinkBubblesMinCircleSpots : monemoLinksLabels.length;
+	const monemoLinksInfos = userData.getListOfMnemoLinks();
+	const total = settings.mnemolinkBubblesMinCircleSpots > monemoLinksInfos.length ? settings.mnemolinkBubblesMinCircleSpots : monemoLinksInfos.length;
 	
 	mnemoBubblesObj = [];
-	for (let i = 0; i < monemoLinksLabels.length; i++) {
+	for (let i = 0; i < monemoLinksInfos.length; i++) {
 		const angle = (i / total) * (2 * Math.PI) + angleDecay; // Angle for each element
 		
 		const x = center_x + radius * Math.cos(angle);
 		const y = center_y + radius * Math.sin(angle);
 
-		const mnemoBubbleObj = new mnemoBubbleObject(monemoLinksLabels[i], x, y);
+		const label = monemoLinksInfos[i].label;
+		const versionStr = monemoLinksInfos[i].versionStr;
+		const mnemoBubbleObj = new mnemoBubbleObject(label, versionStr, x, y);
 		bubblesWrap.appendChild(mnemoBubbleObj.element);
 		mnemoBubbleObj.toCenterContainer(0);
 		mnemoBubblesObj.push(mnemoBubbleObj);
@@ -1410,6 +1424,9 @@ document.addEventListener('focusout', (event) => {
 		fillMnemoLinkList();
 		initMnemoLinkBubbles(true, 200);
 		save.userMnemoLinks();
+
+		userData.state.synchronizedWithCloud = false;
+		save.userState();
 	} else {
 		mnemolinkInput.classList.add('wrong');
 		mnemolinkInput.value = mnemolinkInput.defaultValue;
@@ -1464,8 +1481,8 @@ eHTML.dashboard.mnemolinksList.addEventListener('click', async (event) => {
 		} else {
 			console.log('delete mnemolink');
 			const index = Array.from(event.target.parentElement.parentElement.children).indexOf(event.target.parentElement);
-			const listOfMnemoLinksLabel = userData.getListOfMnemoLinks();
-			const label = listOfMnemoLinksLabel[index];
+			const monemoLinksInfos = userData.getListOfMnemoLinks();
+			const label = monemoLinksInfos[index].label;
 
 			prepareConfirmationModal(
 				`Delete MnemoLink: ${label}?`,
@@ -1473,6 +1490,9 @@ eHTML.dashboard.mnemolinksList.addEventListener('click', async (event) => {
 					closeModal();
 					userData.removeMnemoLink(label);
 					save.userMnemoLinks();
+
+					userData.state.synchronizedWithCloud = false;
+					save.userState();
 		
 					fillMnemoLinkList();
 					initMnemoLinkBubbles(true, 600);
@@ -1497,17 +1517,17 @@ eHTML.dashboard.mnemolinksList.addEventListener('click', async (event) => {
 			clearMnemonicBubbleShowing();
 			event.target.classList.add('showing');
 			const index = Array.from(event.target.parentElement.parentElement.children).indexOf(event.target.parentElement);
-			const listOfMnemoLinksLabel = userData.getListOfMnemoLinks();
-			const label = listOfMnemoLinksLabel[index];
+			const monemoLinksInfos = userData.getListOfMnemoLinks();
+			const label = monemoLinksInfos[index].label;
+			
 			const mnemonicStr = await userData.getMnemoLinkDecrypted(label, true);
 			if (!mnemonicStr) { console.error(`Unable to get decrypted mnemonicStr for MnemoLink: ${label}`); return; }
-			
+
 			await mnemoBubblesObj[index].prepareBubbleToShow(label, mnemonicStr);
 			await mnemoBubblesObj[index].decipherMiniMnemonicGrid(mnemonicStr);
 			
 			return;
 		} else {
-			event.target.classList.remove('showing');
 			clearMnemonicBubbleShowing();
 			return;
 		}
@@ -1701,7 +1721,7 @@ eHTML.modals.inputMasterMnemonic.confirmBtn.addEventListener('click', async (eve
 	setTimeout(() => { centerScreenBtnAction() }, 600);
 	setTimeout(async () => { 
 		/** @type {MnemoLinker} */
-		const mnemoLinker = new MnemoLinkerLastest( { pseudoMnemonic: mnemonic } );
+		const mnemoLinker = new MnemoLinkerLastest( { masterMnemonic: mnemonic } );
 		const id = await mnemoLinker.genPublicId();
 		userData.id = id;
 		save.userId();
@@ -1835,12 +1855,15 @@ eHTML.modals.inputMnemonic.confirmBtn.addEventListener('click', async (event) =>
 
 	const masterMnemonicStr = await userData.getMasterMnemonicStr();
 	/** @type {MnemoLinker} */
-	const mnemoLinker = new MnemoLinkerLastest( { pseudoMnemonic: masterMnemonicStr , mnemonic: mnemonic } );
+	const mnemoLinker = new MnemoLinkerLastest( { masterMnemonic: masterMnemonicStr , mnemonic: mnemonic } );
 	const mnemoLink = await mnemoLinker.encryptMnemonic();
 	if (!mnemoLink) { console.error('Unable to create mnemoLink'); return; }
 
 	userData.addMnemoLink(mnemoLink);
 	await save.userMnemoLinks();
+
+	userData.state.synchronizedWithCloud = false;
+	await save.userState();
 
 	fillMnemoLinkList();
 	initMnemoLinkBubbles(true, 600);

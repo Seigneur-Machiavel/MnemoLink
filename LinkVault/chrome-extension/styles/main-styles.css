@@ -45,6 +45,19 @@ body {
     background-color: var(--background-color);
     color: var(--text-color);
 }
+#bodyBackground {
+    pointer-events: none;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-image: url('../images/paper.jpg');
+    filter: invert(0);
+    transition: filter 0.36s ease-in-out;
+    opacity: .8;
+}
+body.dark-mode #bodyBackground {
+    filter: invert(1);
+}
 p {
     font-size: 1.6vh;
 }
@@ -115,7 +128,7 @@ button {
 #appTitleWrap.visible {
     opacity: 1;
 }
-#appTitleBackground {
+#appTitleShadow {
     position: absolute;
     height: 100%;
     width: 100%;
@@ -126,7 +139,7 @@ button {
     filter: blur(12px);
     opacity: 0;
 }
-body.dark-mode #appTitleBackground {
+body.dark-mode #appTitleShadow {
     background-color: rgb(35 35 37);
 }
 .appTitle {
@@ -136,16 +149,23 @@ body.dark-mode #appTitleBackground {
     padding: 0 8px;
     border-radius: 10px;
     font-size: 2.4vh;
-    color: var(--placeholder-color);
-    filter: drop-shadow(-1px 6px 3px rgba(0, 0, 0, .1));
+    color: transparent;
     transition: color 0.12s ease-in-out;
 }
 body.dark-mode .appTitle {
     color: rgb(145 144 148);
+    color: transparent;
 }
 .ml3 {
     font-weight: 900;
     font-size: 9vh;
+    background: var(--placeholder-color);
+    background: transparent;
+    text-shadow: 2px 5px 5px rgba(255, 255, 255, 0.3);
+}
+.ml3 span {
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
 }
 .appTitle .titleSufix {
     position: absolute;
@@ -153,6 +173,10 @@ body.dark-mode .appTitle {
     font-size: 4vh;
     top: 36%;
     left: 0;
+    background: var(--placeholder-color);
+    -webkit-background-clip: text;
+    background-clip: text;
+    text-shadow: 1px 3px 3px rgba(255, 255, 255, 0.3);
     transition: opacity 0.4s ease-in-out;
     opacity: 0;
 }
@@ -367,7 +391,7 @@ body.dark-mode .mnemolinkBubble:not(.showing) {
 .mnemolinkBubble:not(.showing).hoverFromList, .mnemolinkBubble:not(.showing):hover {
     filter: drop-shadow(-3px 2px 4px rgba(0,0,0, .2));
     z-index: 2;
-    transform: translateX(-50%) translateY(-50%) scale(1.1);
+    transform: translateX(-50%) translateY(-50%) scale(1.04);
 }
 body.dark-mode .mnemolinkBubble:not(.showing).hoverFromList, body.dark-mode .mnemolinkBubble:not(.showing):hover {
     filter: drop-shadow(-3px 2px 4px rgba(255,255,255, .2));
@@ -389,6 +413,10 @@ body.dark-mode .mnemolinkBubble .wrap {
 .mnemolinkBubble:not(.showing) h2 {
     color: var(--text-color);
     text-align: center;
+}
+.mnemolinkBubble:not(.showing) p {
+    position: absolute;
+    transform: translateY(2.8vh);
 }
 .mnemolinkBubble.showing {
     cursor: initial;

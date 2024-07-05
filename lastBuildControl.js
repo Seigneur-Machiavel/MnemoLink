@@ -1,8 +1,8 @@
 if (false) { // CODE NEVER REACHED, SHOWS THE IMPORTS FOR DOCUMENTATION PURPOSES
 	const bip39 = require('./bip39 3.1.0.js');
 }
-//bip39.mnemonicToSeedSync('basket actual', 'a password')
 
+const syncScrypt = typeof(exports) !== 'undefined' ? require('./syncScrypt.js') : null;
 const BIPTablesHardcoded = {
     "BIP-0039": {
         "chinesetraditional": {
@@ -37,22 +37,31 @@ const BIPTablesHardcoded = {
 const BIPOfficialNamesHardcoded = {
     "BIP-0039": "bip39"
 };
-const versionHardcoded = [0,1];
+const versionHardcoded = [1,0];
 const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-const saltStrLength = 4; // need to be a multiple of 2
+
+const PBKDF2Iterations = 200000;
+const saltLength = 16; // need to be a multiple of 2
+const IVStrLength = 16; // need to be a multiple of 2
+
+/*const totoTime = Date.now();
+const testScrypt = syncScrypt('password', 'NaCl', 4, 2**6, 1, saltLength);
+console.log('syncScryptTestTiming: ', Date.now() - totoTime);
+console.log('syncScryptTest: ', testScrypt);*/
 
 /**
- * Class MnemoLinker
- * - Used to translate a mnemonic to a pseudo mnemonic and vice versa
- * @param {Object} params
+ * Class MnemoLinker, used to:
+ * - encrypt a mnemonic using a masterMnemonic as a key, resulting in a MnemoLink
+ * - decrypt a MnemoLink using the masterMnemonic as a key, resulting in the original mnemonic
+ * @param {Object} params - {} - The parameters object
  * @param {string|string[]} params.mnemonic - The original mnemonic
- * @param {string|string[]} params.pseudoMnemonic - The pseudo mnemonic
- * @param {Object} BIPTables - The BIP tables used only by the builder!
+ * @param {string|string[]} params.masterMnemonic - The master mnemonic
+ * @param {Object} params.BIPTables - The BIP tables used only by the builder!
  * @param {string} params.version - The version of the table used only by the builder!
  * @param {Object} params.officialBIPs - The official BIPs used only by the builder!
  */
 class MnemoLinker {
-	constructor(params = { pseudoMnemonic: null, mnemonic: null, BIPTables: null, version: null, officialBIPs: null}) {
+	constructor(params = { masterMnemonic: null, mnemonic: null, BIPTables: null, version: null, officialBIPs: null}) {
 		this.minMnemonicLength = 12;
 		this.cryptoLib = null;
 		this.officialBIPs = {}; // Only used when file called as "lastBuildControl.js"
@@ -70,12 +79,11 @@ class MnemoLinker {
 			language: '',
 			BIPTable: [],
 		};
-		this.pseudo = {
+		this.master = {
 			mnemonic: [],
 			bip: '',
 			language: '',
 			BIPTable: [],
-			pseudoBIP: [],
 		}
 		this.error = '';
 	}
@@ -86,10 +94,10 @@ class MnemoLinker {
 		if (this.params.BIPTables) { this.BIPTables = this.params.BIPTables; } // used only by builder cause the BIPTables are not Hardcoded yet
 		if (this.params.version) { this.version = this.params.version; }
 
-		if (typeof this.params.pseudoMnemonic !== 'string' && typeof this.params.pseudoMnemonic !== 'object') { console.error('pseudoMnemonic is not a string or an array'); return false; }
-		this.pseudo.mnemonic = typeof this.params.pseudoMnemonic === 'string' ? this.params.pseudoMnemonic.split(' ') : this.params.pseudoMnemonic;
+		if (typeof this.params.masterMnemonic !== 'string' && typeof this.params.masterMnemonic !== 'object') { console.error('masterMnemonic is not a string or an array'); return false; }
+		this.master.mnemonic = typeof this.params.masterMnemonic === 'string' ? this.params.masterMnemonic.split(' ') : this.params.masterMnemonic;
 		
-		if (this.params.mnemonic && this.pseudo.mnemonic.length > 0) {
+		if (this.params.mnemonic && this.master.mnemonic.length > 0) {
 			if (typeof this.params.mnemonic !== 'string' && typeof this.params.mnemonic !== 'object') { console.error('mnemonic is not a string or an array'); return false; }
 			
 			this.origin.mnemonic = typeof this.params.mnemonic === 'string' ? this.params.mnemonic.split(' ') : this.params.mnemonic;
@@ -97,7 +105,7 @@ class MnemoLinker {
 			if (!this.#detectMnemonicsLanguage()) { console.error('detectMnemonicsLanguage() failed'); return false; }
 
 			this.initialized = true;
-		} else if (this.pseudo.mnemonic.length > 0) {
+		} else if (this.master.mnemonic.length > 0) {
 			if (!this.#detectMnemonicsLanguage()) { console.error('detectMnemonicsLanguage() failed'); return false; }
 
 			this.initialized = true;
@@ -136,18 +144,16 @@ class MnemoLinker {
 		// DETECT THE BIP AND LANGUAGE OF THE MNEMONICS
 		const originBIPTable = this.getBIPTableFromMnemonic(this.origin.mnemonic);
 		if (originBIPTable) {
-			// SET THE ORIGIN BIP TABLES
 			this.origin.BIPTable = originBIPTable.wordsTable;
 			this.origin.bip = originBIPTable.bip;
 			this.origin.language = originBIPTable.language;
 		}
 
-		const pseudoBIPTable = this.getBIPTableFromMnemonic(this.pseudo.mnemonic);
-		if (pseudoBIPTable) {
-			// SET THE PSEUDO BIP TABLES
-			this.pseudo.BIPTable = pseudoBIPTable.wordsTable;
-			this.pseudo.bip = pseudoBIPTable.bip;
-			this.pseudo.language = pseudoBIPTable.language;
+		const masterBIPTable = this.getBIPTableFromMnemonic(this.master.mnemonic);
+		if (masterBIPTable) {
+			this.master.BIPTable = masterBIPTable.wordsTable;
+			this.master.bip = masterBIPTable.bip;
+			this.master.language = masterBIPTable.language;
 		}
 		
 		return true;
@@ -292,12 +298,11 @@ class MnemoLinker {
 		const mnemonicStr = mnemonic.join(' ');
 		return mnemonicStr;
 	}
-	async #deriveK(pseudoMnemonic, saltUnit16Array) {
+	async #deriveK(masterMnemonic, saltUnit16Array, iterations = PBKDF2Iterations) {
 		const salt = saltUnit16Array;
-		const iterations = 100000;
 		const keyMaterial = await this.cryptoLib.subtle.importKey(
 			"raw",
-			new TextEncoder().encode(pseudoMnemonic),
+			new TextEncoder().encode(masterMnemonic),
 			{ name: "PBKDF2" },
 			false,
 			["deriveKey"]
@@ -307,7 +312,7 @@ class MnemoLinker {
 			{
 				name: "PBKDF2",
 				salt: new TextEncoder().encode(salt),
-				iterations: iterations,
+				iterations,
 				hash: "SHA-256"
 			},
 			keyMaterial,
@@ -318,7 +323,7 @@ class MnemoLinker {
 
 		return derivedKey;
 	}
-	async #encryptText(str, key, iv = new Uint8Array(16)) { // iv = this.cryptoLib.getRandomValues(new Uint8Array(16)); -> Will not use random IV for now
+	async #encryptText(str, key, iv = new Uint8Array(16)) {
 		const buffer = new TextEncoder().encode(str);
 		const encryptedContent = await this.cryptoLib.subtle.encrypt(
 			{ name: "AES-GCM", iv: iv },
@@ -329,11 +334,10 @@ class MnemoLinker {
 		const encryptedBase64 = this.uint8ArrayToBase64(new Uint8Array(encryptedContent));
 		return encryptedBase64
 	}
-	async #decryptText(base64, key, iv = new Uint8Array(16)) { // iv = this.cryptoLib.getRandomValues(new Uint8Array(16)); -> Will not use random IV for now
-		//const strUnit8Array = this.base64ToUint8Array(str);
+	async #decryptText(base64, key, iv = new Uint8Array(16)) {
 		const buffer = this.base64ToUint8Array(base64);
 		const decryptedContent = await this.cryptoLib.subtle.decrypt(
-			{ name: "AES-GCM", iv: new Uint8Array(iv) },
+			{ name: "AES-GCM", iv: iv },
 			key,
 			buffer
 		);
@@ -341,16 +345,52 @@ class MnemoLinker {
 		const decryptedText = new TextDecoder().decode(new Uint8Array(decryptedContent));
 		return decryptedText;
 	}
-	#generateSalt() {
-		const result = { saltUnit16Array: new Uint16Array(saltStrLength / 2), saltBase64Str: ''}
-		for (let i = 0; i < saltStrLength / 2; i++) {
-			// value between 0 and 2047 included
-			const value = this.cryptoLib.getRandomValues(new Uint16Array(1))[0] % 4096;
-			result.saltUnit16Array[i] = value;
-			result.saltBase64Str += this.encodeNumberToCustomB64(value);
+	#generateScryptSalt(masterMnemonicStr, IVStr = 'toto', length = saltLength) {
+		const passwordStr = masterMnemonicStr;
+		const saltStr = IVStr;
+		const CPUCost = 4;
+		const memoryCost = 2**8;
+		const parallelism = 1;
+
+		let Uint8Salt = null;
+		try {
+			Uint8Salt = window.syncScrypt(passwordStr, saltStr, CPUCost, memoryCost, parallelism, length);
+		} catch (error) {
+			Uint8Salt = syncScrypt(passwordStr, saltStr, CPUCost, memoryCost, parallelism, length);
+		}
+		return Uint8Salt;
+	}
+	#generateIV(length = IVStrLength) {
+		const result = { IVUnit8Array: new Uint8Array(length), IVBase64Str: ''}
+		for (let i = 0; i < length / 2; i++) {
+			// value between 0 and 63 included
+			// combined, 64 * 64 = 4096 possibilities -> Correspond to 12 bits of entropy -> custom Base64 encoding
+			const value1 = this.cryptoLib.getRandomValues(new Uint8Array(1))[0] % 64;
+			const value2 = this.cryptoLib.getRandomValues(new Uint8Array(1))[0] % 64;
+
+			result.IVUnit8Array[i * 2] = value1;
+			result.IVUnit8Array[i * 2 + 1] = value2;
+
+			const combinedValue = (value1 << 6) | value2; // Decay the value1 to the left by 6 bits and add the value2
+			result.IVBase64Str += this.encodeNumberToCustomB64(combinedValue);
 		}
 
 		return result;
+	}
+	#decodeIV(IVBase64Str) {
+		const IVUnit8Array = new Uint8Array(IVStrLength);
+		for (let i = 0; i < IVStrLength / 2; i++) {
+			const encodedNumber = IVBase64Str.slice(i * 2, i * 2 + 2);
+			const decodedNumber = this.decodeCustomB64ToNumber(encodedNumber);
+
+			const value1 = decodedNumber >> 6; // Shift the value to the right by 6 bits
+			const value2 = decodedNumber & 63; // Mask the value with 63 (0b00111111)
+
+			IVUnit8Array[i * 2] = value1;
+			IVUnit8Array[i * 2 + 1] = value2;
+		}
+
+		return IVUnit8Array;
 	}
 	#getExternalBipLib(bip = 'BIP-0039') {
 		// code only used while MnemoLinker builder run this file as "lastBuildControl.js"
@@ -375,15 +415,17 @@ class MnemoLinker {
 	async genPublicId(desiredLength = 32) {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 
-		const encodedPseudoMnemonicBase64Str = this.#encodeMnemonic(this.pseudo.mnemonic, 24);
+		const encodedMasterMnemonicBase64Str = this.#encodeMnemonic(this.master.mnemonic, 24);
+		if (!encodedMasterMnemonicBase64Str) { console.error('Unable to encode the master mnemonic'); return false; }
+
 		const fixedSalt = new Uint16Array([0, 2, 1, 3]);
 		const fixedIV = new Uint8Array([0, 1, 2, 3, 5, 4, 6, 7, 8, 9, 11, 10, 12, 13, 14, 15]);
-		const key = await this.#deriveK(encodedPseudoMnemonicBase64Str, fixedSalt);
-		const id = await this.#encryptText(encodedPseudoMnemonicBase64Str, key, fixedIV);
+		const key = await this.#deriveK(encodedMasterMnemonicBase64Str, fixedSalt, PBKDF2Iterations / 16);
+		const id = await this.#encryptText(encodedMasterMnemonicBase64Str, key, fixedIV);
 
 		const controlBase64Str = await this.#decryptText(id, key, fixedIV);
 		const decodedStr = this.#decodeMnemonic(controlBase64Str, this.origin.bip, this.origin.language);
-		if (!this.pseudo.mnemonic.join(' ') === decodedStr) { console.error('Decrypted ID is not valid'); return false; }
+		if (!this.master.mnemonic.join(' ') === decodedStr) { console.error('Decrypted ID is not valid'); return false; }
 
 		let reducedId = '';
 		const acceptedChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -399,43 +441,52 @@ class MnemoLinker {
 	}
 	async encryptMnemonic() {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
-		await this.genPublicId();
 		
-		const salt = this.#generateSalt();
-		const encodedPseudoMnemonicBase64Str = this.#encodeMnemonic(this.pseudo.mnemonic, 24);
+		const IV = this.#generateIV();
+		const saltUint8Array = this.#generateScryptSalt(this.master.mnemonic.join(' '), IV.IVBase64Str, saltLength);
+		const encodedMasterMnemonicBase64Str = this.#encodeMnemonic(this.master.mnemonic, 24);
 		const encodedMnemonicBase64Str = this.#encodeMnemonic(this.origin.mnemonic, 24);
-		const key = await this.#deriveK(encodedPseudoMnemonicBase64Str, salt.saltUnit16Array);
-		const encryptedMnemonicStr = await this.#encryptText(encodedMnemonicBase64Str, key);
-		//console.log(`saltL: ${salt.saltUnit16Array} | encryptedMnemonicStr: ${encryptedMnemonicStr}`);
+
+		const key = await this.#deriveK(encodedMasterMnemonicBase64Str, saltUint8Array);
+		const encryptedMnemonicStr = await this.#encryptText(encodedMnemonicBase64Str, key, IV.IVUnit8Array);
 		
 		// control validity
-		const controlEncodedMnemonicBase64Str = await this.#decryptText(encryptedMnemonicStr, key);
+		const controlEncodedMnemonicBase64Str = await this.#decryptText(encryptedMnemonicStr, key, IV.IVUnit8Array);
 		const decodedMnemonicStr = this.#decodeMnemonic(controlEncodedMnemonicBase64Str, this.origin.bip, this.origin.language);
 		if (!this.origin.mnemonic.join(' ') === decodedMnemonicStr) { console.error('Decrypted mnemonic is not valid'); return false; }
 
 		const originPrefix = this.#getOriginPrefix();
 		const versionSuffix = this.#getVersionSuffix();
-		return originPrefix + encryptedMnemonicStr + salt.saltBase64Str + versionSuffix;
+
+		return originPrefix + encryptedMnemonicStr + IV.IVBase64Str + versionSuffix;
 	}
 	async decryptMnemoLink(mnemoLink = '') {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
-		
-		const { encryptedMnemonic, bip, language, version, saltUnit16Array } = this.dissectMnemoLink(mnemoLink);
+		const timings = { startTimestamp: Date.now() };
+
+		const { encryptedMnemonic, bip, language, version, IVUnit8Array, IVBase64Str } = this.dissectMnemoLink(mnemoLink);
 		if (version.join(".") !== this.version.join(".")) { 
 			this.error = 'invalid version number';
 			console.error(`Invalid MnemoLink version number: ${version.join(".")} | current: ${this.version.join(".")}`);
 			return false;
 		}
-
-		const encodedPseudoMnemonicBase64Str = this.#encodeMnemonic(this.pseudo.mnemonic, 24);
-		const key = await this.#deriveK(encodedPseudoMnemonicBase64Str, saltUnit16Array);
 		
-		//console.log(`saltL: ${saltUnit16Array} | encryptedMnemonicStr: ${encryptedMnemonic}`);
-		const decryptedMnemonicStr = await this.#decryptText(encryptedMnemonic, key);
+		const saltUint8Array = this.#generateScryptSalt(this.master.mnemonic.join(' '), IVBase64Str, saltLength);
+		timings.saltsGenerated = Date.now() - timings.startTimestamp;
+		timings.checkPoint = Date.now();
+
+		const encodedMasterMnemonicBase64Str = this.#encodeMnemonic(this.master.mnemonic, 24);
+		const key = await this.#deriveK(encodedMasterMnemonicBase64Str, saltUint8Array);
+		timings.deriveK = Date.now() - timings.checkPoint;
+		
+		const decryptedMnemonicStr = await this.#decryptText(encryptedMnemonic, key, IVUnit8Array);
 		if (!decryptedMnemonicStr) { console.error('decryptedMnemonicStr is empty'); return false; }
 
 		const decodedMnemonic = this.#decodeMnemonic(decryptedMnemonicStr, bip, language);
 		if (!decodedMnemonic) { console.error('decodedMnemonic is empty'); return false; }
+
+		timings.total = Date.now() - timings.startTimestamp;
+		console.info(`decryptTimings=> t: ${timings.total}ms | s:${timings.saltsGenerated}ms | dK: ${timings.deriveK}ms`);
 
 		return decodedMnemonic;
 	}
@@ -446,14 +497,9 @@ class MnemoLinker {
 		const versionPart2 = this.decodeCustomB64ToNumber(versionSuffix.slice(2, 4));
 		const versionNumber = [versionPart1, versionPart2];
 
-		// --- Salt info corresponds to X characters before the version suffix ---
-		const saltSuffix = mnemoLink.slice(-(4 + saltStrLength), -4);
-		const saltUnit16Array = new Uint16Array(saltStrLength / 2);
-		for (let i = 0; i < saltStrLength / 2; i++) {
-			const encodedNumber = saltSuffix.slice(i * 2, i * 2 + 2);
-			const decodedNumber = this.decodeCustomB64ToNumber(encodedNumber);
-			saltUnit16Array[i] = decodedNumber;
-		}
+		// --- IV info corresponds to X characters before the version suffix ---
+		const IVBase64Str = mnemoLink.slice(-(4 + IVStrLength), -4);
+		const IVUnit8Array = this.#decodeIV(IVBase64Str);
 
 		// --- Prefix info corresponds to the origin BIPTable ---
 		const BipCode = mnemoLink.split('BIP')[1].substring(0, 4);
@@ -464,9 +510,9 @@ class MnemoLinker {
 		const prefix = detectedLanguage + "BIP" + BipCode;
 		let encryptedMnemonic = detectionSuccess ? mnemoLink.replace(prefix, '') : mnemoLink;
 		encryptedMnemonic = encryptedMnemonic.slice(0, encryptedMnemonic.length - 4); // remove the version suffix
-		encryptedMnemonic = encryptedMnemonic.slice(0, encryptedMnemonic.length - saltStrLength); // remove the salt suffix
+		encryptedMnemonic = encryptedMnemonic.slice(0, encryptedMnemonic.length - IVStrLength); // remove the salt suffix
 
-		return { encryptedMnemonic, bip: detectedBip, language: detectedLanguage, version: versionNumber, saltUnit16Array };
+		return { encryptedMnemonic, bip: detectedBip, language: detectedLanguage, version: versionNumber, IVUnit8Array, IVBase64Str };
 	}
 	getAvailableLanguages(bip = 'BIP-0039') {
 		const BIP = this.BIPTables[bip];
@@ -550,7 +596,6 @@ class MnemoLinker {
 			}
 		}
 
-		//if (bip === '' || language === '') { console.error(`BIP and/or language not found for the mnemonic ! Best result -> ${bestSearch.bip} | ${bestSearch.language} | words found: ${bestSearch.foundWords.length} | missing word: ${bestSearch.word}`);  return false; }
 		if (bip === '' || language === '') { return { bestLanguage: bestSearch.language }; }
 
 		return { bip, language, wordsTable, bestLanguage: bestSearch.language };
@@ -561,4 +606,4 @@ class MnemoLinker {
 */
 
 //END --- ANY CODE AFTER THIS LINE WILL BE REMOVED DURING EXPORT, SHOULD BE USE FOR TESTING ONLY ---
-module.exports = MnemoLinker;
+if (typeof(exports) !== 'undefined') { module.exports = MnemoLinker }

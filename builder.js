@@ -7,7 +7,9 @@ const officialBIPs = {
 }
 
 const MnemoLinker = require('./MnemoLinker-src.js');
-const controlMnemoLinker = require('./lastBuildControl.js');
+let lastBuildExists = false;
+try { const toto = require('./lastBuildControl.js'); lastBuildExists = true; } catch (error) { console.info('No last build control file found') };
+const controlMnemoLinker = lastBuildExists ? require('./lastBuildControl.js') : false;
 
 const BIPTables = {};
 const BIPTablesToHardcode = {};
@@ -21,11 +23,11 @@ async function main() {
 	const customTestMnemonics = [
 		{ 	
 			mnemonic: ["abandon","able","industry","connect","town","stay","such","ribbon","return","cabbage","bus","spy"],
-			pseudoMnemonic: ["abaisser","abandon","abdiquer","abeille","abolir","aborder","aboutir","aboyer","abrasif","abreuver","abriter","abroger"]
+			masterMnemonic: ["abaisser","abandon","abdiquer","abeille","abolir","aborder","aboutir","aboyer","abrasif","abreuver","abriter","abroger"]
 		},
 		{
 			mnemonic: ["abandon","abandon","industry","connect","town","stay","such","ribbon","return","cabbage","bus","spy"],
-			pseudoMnemonic: ["abaisser","abandon","abdiquer","abeille","abeille","aborder","aboutir","aboyer","abrasif","abreuver","abriter","abroger"]
+			masterMnemonic: ["abaisser","abandon","abdiquer","abeille","abeille","aborder","aboutir","aboyer","abrasif","abreuver","abriter","abroger"]
 		},
 	];
 	const customTestSuccess = await specialsTest(customTestMnemonics);
@@ -37,6 +39,7 @@ async function main() {
 		console.log('-------------------------------------------------------');
 		console.log('All tests passed successfully, exporting MnemoLinker...');
 		console.log(`avg time: ${testResult.avgTime}ms`);
+
 		if (testResult.needVersionUpgrade) {
 			const currentVersion = settings.version[0] + '.' + settings.version[1];
 			const newVersion = settings.version[1] + 1 < 4095 ? [settings.version[0], settings.version[1] + 1] : [settings.version[0] + 1, 0];
@@ -65,12 +68,12 @@ async function specialsTest(customTestMnemonics) {
 	for (let i = 0; i < customTestMnemonics.length; i++) {
 		const startTimestamp = Date.now();
 		const mnemonic_ = customTestMnemonics[i].mnemonic;
-		const pseudoMnemonic_ = customTestMnemonics[i].pseudoMnemonic;
-		const singleTestResult = await singleTest(mnemonic_, pseudoMnemonic_);
+		const masterMnemonic_ = customTestMnemonics[i].masterMnemonic;
+		const singleTestResult = await singleTest(mnemonic_, masterMnemonic_);
 		if (!singleTestResult.success) {
 			console.error(`Custom test ${i} failed`);
 			console.error(`mnemonic: ${mnemonic_}`);
-			console.error(`pseudoMnemonic: ${pseudoMnemonic_}`);
+			console.error(`masterMnemonic: ${masterMnemonic_}`);
 			return false;
 		}
 		const endTimestamp = Date.now();
@@ -80,7 +83,7 @@ async function specialsTest(customTestMnemonics) {
 
 	return true;
 }
-async function testLoop(iterations = 100, language = "random", pseudoLanguage = "random", mnemonicLengths = [12, 24], autoVersionUpgrade = true, logs = true) {
+async function testLoop(iterations = 100, language = "random", masterLanguage = "random", mnemonicLengths = [12, 24], autoVersionUpgrade = true, logs = true) {
 	lastUpdateProgress = -1;
 	let success = 0;
 	let failure = 0;
@@ -90,12 +93,12 @@ async function testLoop(iterations = 100, language = "random", pseudoLanguage = 
 	for (let i = 0; i < iterations; i++) {
 		const mnemonicLength = mnemonicLengths[ getRandomInt(0, mnemonicLengths.length - 1) ];
 		const gen1 = generateMnemonic(mnemonicLength, 'BIP-0039', language);
-		const gen2 = generateMnemonic(12, 'BIP-0039', pseudoLanguage);
+		const gen2 = generateMnemonic(12, 'BIP-0039', masterLanguage);
 		const mnemonic = gen1.wordsList;
-		const pseudoMnemonic = gen2.wordsList;
+		const masterMnemonic = gen2.wordsList;
 		const startTimestamp = Date.now();
 		
-		const result = await singleTest(mnemonic, pseudoMnemonic, needVersionUpgrade, logs);
+		const result = await singleTest(mnemonic, masterMnemonic, needVersionUpgrade, logs);
 		if (result.success === true) { 
 			success++;
 			if (result.needVersionUpgrade) { needVersionUpgrade = true; }
@@ -104,12 +107,14 @@ async function testLoop(iterations = 100, language = "random", pseudoLanguage = 
 			failureInfos.push({
 				reason: result.reason,
 				mnemonic: gen1,
-				pseudoMnemonic: gen2
+				masterMnemonic: gen2
 			});
 			failure++;
 		}
 		const endTimestamp = Date.now();
-		singleTestTimings.push(endTimestamp - startTimestamp);
+		const totalSingleTestTime = endTimestamp - startTimestamp;
+		const singleEncryptionOperationTime = controlMnemoLinker ? totalSingleTestTime / 3 : totalSingleTestTime / 2;
+		singleTestTimings.push(singleEncryptionOperationTime);
 		updateProgressBar(i + 1, iterations);
 	}
 	console.log(`\n\nSuccess: ${success} / Failure: ${failure}`);
@@ -132,17 +137,17 @@ function updateProgressBar(current, total) {
 /**
  * 
  * @param {string|string[]} mnemonic
- * @param {string|string[]} pseudoMnemonic
+ * @param {string|string[]} masterMnemonic
  * @returns {boolean}
  */
-async function singleTest(mnemonic, pseudoMnemonic, needVersionUpgrade = false, logs = true) {
+async function singleTest(mnemonic, masterMnemonic, needVersionUpgrade = false, logs = true) {
 	const result = { success: false, needVersionUpgrade: false, reason: '' };
-	if (!mnemonic || !pseudoMnemonic) { result.reason = 'mnemonic or pseudoMnemonic is undefined'; return result; }
+	if (!mnemonic || !masterMnemonic) { result.reason = 'mnemonic or masterMnemonic is undefined'; return result; }
 	const mnemonicStr = Array.isArray(mnemonic) ? mnemonic.join(' ') : mnemonic;
 	if (logs) { console.log(`\nTesting with mnemonic: ${mnemonicStr}\n`) };
 
 	// ENCRYPT MNEMONIC => MNEMOLINK
-	const MnemoLinkerA = new MnemoLinker( {mnemonic, pseudoMnemonic, BIPTables, version: settings.version, officialBIPs} );
+	const MnemoLinkerA = new MnemoLinker( {mnemonic, masterMnemonic, BIPTables, version: settings.version, officialBIPs} );
 	const mnemoLink = await MnemoLinkerA.encryptMnemonic();
 	if (!mnemoLink) { result.reason = 'encryptMnemonic() failed'; return result; }
 	
@@ -150,9 +155,9 @@ async function singleTest(mnemonic, pseudoMnemonic, needVersionUpgrade = false, 
 	if (logs) { console.log(`mnemoLink: ${mnemoLink}`) };
 
 	// DECRYPT MNEMOLINK => MNEMONIC
-	const MnemoLinkerB = new MnemoLinker( {pseudoMnemonic, BIPTables, version: settings.version, officialBIPs} );
+	const MnemoLinkerB = new MnemoLinker( {masterMnemonic, BIPTables, version: settings.version, officialBIPs} );
 	const decryptedMnemonicStr = await MnemoLinkerB.decryptMnemoLink(mnemoLink);
-	if (!decryptedMnemonicStr) { result.reason = 'translateMnemonic() failed'; return result; }
+	if (!decryptedMnemonicStr) { result.reason = 'decryptMnemoLink() failed'; return result; }
 	if (logs) { console.log(`Decoded mnemonic: ${decryptedMnemonicStr}`) };
 
 	// CHECK IF THE DECODED MNEMONIC IS THE SAME AS THE ORIGINAL ONE
@@ -170,7 +175,7 @@ async function singleTest(mnemonic, pseudoMnemonic, needVersionUpgrade = false, 
 	// CONTROL VERSION COMPATIBILITY
 	try {
 		// DECRYPT MNEMOLINK => MNEMONIC, WITH THE LAST VERSION
-		const MnemoLinkerC = new controlMnemoLinker( {pseudoMnemonic, officialBIPs} );
+		const MnemoLinkerC = new controlMnemoLinker( {masterMnemonic, officialBIPs} );
 		const controlDecryptedMnemonicStr = await MnemoLinkerC.decryptMnemoLink(mnemoLink);
 		// CHECK IF THE DECODED MNEMONIC IS THE SAME AS THE ORIGINAL ONE
 		if (controlDecryptedMnemonicStr !== mnemonicStr) { throw new Error('VERSIONNING CONTROL => Decoded mnemonic is different from the original one !'); }
