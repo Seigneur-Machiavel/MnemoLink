@@ -1,4 +1,4 @@
-const mnemoLinker = require('./MnemoLinker-src.js');
+const mnemoLinkerLastest = require('./MnemoLinker-src.js');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -139,12 +139,12 @@ async function demo() {
     console.log(`Master Mnemonic: ${masterMnemonic}`);
     console.log(`Mnemonic: ${mnemonic}`);
     
-    const mnemoLinkerInstance = new mnemoLinker({masterMnemonic, mnemonic, BIPTables, version: settings.version, officialBIPs});
+    const mnemoLinkerInstance = new mnemoLinkerLastest({masterMnemonic, mnemonic, BIPTables, version: settings.version, officialBIPs});
     mnemoLinkerInstance.minMnemonicLength = 8;
     const mnemoLink = await mnemoLinkerInstance.encryptMnemonic();
     console.log(`MnemoLink: ${mnemoLink}`);
 
-    const decrypterIntance = new mnemoLinker({masterMnemonic, BIPTables, version: settings.version, officialBIPs});
+    const decrypterIntance = new mnemoLinkerLastest({masterMnemonic, BIPTables, version: settings.version, officialBIPs});
     decrypterIntance.minMnemonicLength = 8;
     const decryptedMnemonic = await decrypterIntance.decryptMnemoLink(mnemoLink);
     console.log(`Decrypted Mnemonic: ${decryptedMnemonic}`);

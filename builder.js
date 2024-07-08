@@ -8,7 +8,7 @@ const officialBIPs = {
 
 const MnemoLinker = require('./MnemoLinker-src.js');
 let lastBuildExists = false;
-try { const toto = require('./lastBuildControl.js'); lastBuildExists = true; } catch (error) { console.info('No last build control file found') };
+try { const libraryImportTest = require('./lastBuildControl.js'); lastBuildExists = true; } catch (error) { console.info('No last build control file found') };
 const controlMnemoLinker = lastBuildExists ? require('./lastBuildControl.js') : false;
 
 const BIPTables = {};
