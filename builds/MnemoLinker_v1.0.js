@@ -54,7 +54,7 @@ console.log('syncScryptTest: ', testScrypt);*/
  * - encrypt a mnemonic using a masterMnemonic as a key, resulting in a MnemoLink
  * - decrypt a MnemoLink using the masterMnemonic as a key, resulting in the original mnemonic
  * @param {Object} params - {} - The parameters object
- * @param {string|string[]} params.masterMnemonic - The master mnemonic
+ * @param {string|string[]} params.masterMnemonic - The master mnemonic -> Used for any scenario
  * @param {string|string[]} params.mnemonic - The original mnemonic -> Encryption only
  * @param {Object} params.BIPTables - The BIP tables -> Only used with nodeJS!
  * @param {Object} params.officialBIPs - The official BIPs - > Only used with nodeJS!
@@ -63,7 +63,7 @@ console.log('syncScryptTest: ', testScrypt);*/
 export class MnemoLinker {
 	constructor(params = { masterMnemonic: null, mnemonic: null, BIPTables: undefined, officialBIPs: undefined, version: undefined}) {
 		this.minMnemonicLength = 12;
-		this.cryptoLib = null;
+		this.cryptoLib = this.#getCryptoLib();
 		this.officialBIPs = params.officialBIPs ? params.officialBIPs : {}; // Only used when file called as "lastBuildControl.js"
 		this.BIPTables = params.BIPTables ? params.BIPTables : BIPTablesHardcoded;
 		this.BIPOfficialNames = BIPOfficialNamesHardcoded;
@@ -88,8 +88,12 @@ export class MnemoLinker {
 		this.error = '';
 	}
 
+	/**
+	 * Initialize the MnemoLinker.
+	 * Will be called automatically by the first public method if not already initialized
+	 */
 	#init() {
-		if (this.cryptoLib === null && !this.#getCryptoLib()) { console.error('Unable to get the crypto library'); return false; }
+		if (!this.cryptoLib) { console.error('Crypto library not found'); return false; }
 
 		if (typeof this.params.masterMnemonic !== 'string' && typeof this.params.masterMnemonic !== 'object') { console.error('masterMnemonic is not a string or an array'); return false; }
 		this.master.mnemonic = typeof this.params.masterMnemonic === 'string' ? this.params.masterMnemonic.split(' ') : this.params.masterMnemonic;
@@ -117,17 +121,15 @@ export class MnemoLinker {
 		const buffer = new Uint32Array(1);
 		try {
 			window.crypto.getRandomValues(buffer);
-			this.cryptoLib = window.crypto;
-			return true;
+			return window.crypto;
 		} catch (e) {
 		}
 		try {
 			const crypto = require('crypto');
 			crypto.getRandomValues(buffer);
-			this.cryptoLib = crypto;
-			return true;
+			return crypto;
 		} catch (error) {
-			
+			console.error('Unable to get the crypto library');
 		}
 		return false;
 	}
@@ -336,6 +338,15 @@ export class MnemoLinker {
 		const decryptedText = new TextDecoder().decode(new Uint8Array(decryptedContent));
 		return decryptedText;
 	}
+	/**
+	 * Generate a salt using the master mnemonic as a password, and the IV as a salt.
+	 * - The salt is generated using the Scrypt algorithm
+	 * - Memory cost provides better security over Brute Force attacks
+	 * @param {string} masterMnemonicStr - The master mnemonic as a string
+	 * @param {string} IVStr - The IV as a string
+	 * @param {number} length - The desired length of the salt
+	 * @returns 
+	 */
 	#generateScryptSalt(masterMnemonicStr, IVStr = 'toto', length = saltLength) {
 		const passwordStr = masterMnemonicStr;
 		const saltStr = IVStr;
@@ -403,6 +414,12 @@ export class MnemoLinker {
 	}
 
 	// PUBLIC METHODS
+	/**
+	 * Generate a public ID from the master mnemonic.
+	 * - The public ID is derived from the master mnemonic
+	 * - We ensure non sentivity by cuting the ID to the desired length
+	 * @param {number} desiredLength - The desired length of the public ID
+	 */
 	async genPublicId(desiredLength = 32) {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 
@@ -430,6 +447,13 @@ export class MnemoLinker {
 
 		return reducedId;
 	}
+	/**
+	 * Encrypt the mnemonic using the master mnemonic as a key.
+	 * - The mnemonic is encrypted using AES-GCM
+	 * - The IV is generated randomly and saved at the end of the MnemoLink
+	 * - The salt is generated using the Scrypt algorithm by deriving the master mnemonic within the IV as a salt
+	 * - The MnemoLink is composed of the encrypted mnemonic, the BIP and language as preffix, and the IV and version as suffix
+	 */
 	async encryptMnemonic() {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 		
