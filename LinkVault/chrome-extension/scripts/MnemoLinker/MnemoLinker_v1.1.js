@@ -2,22 +2,6 @@ if (false) { // CODE NEVER REACHED, SHOWS THE IMPORTS FOR DOCUMENTATION PURPOSES
 	const bip39 = require('./bip39 3.1.0.js');
 }
 
-let argon2Lib = null;
-async function test() {
-	try {
-		const toto = await argon2.hash({ password: 'password', salt: "thisIsASalt" });
-		console.log(toto.hash);
-		argon2Lib = argon2;
-		console.log('argon2 loaded from window');
-	} catch (error) {
-		argon2Lib = require("argon2");
-		console.log('argon2 loaded from require');
-	}
-    const toto = await argon2Lib.hash('password', { salt: Buffer.from("saltalittlebitlonger") });
-	const hash = toto.hash || toto;
-    console.log(hash);
-}; test();
-
 const syncScrypt = typeof(exports) !== 'undefined' ? require('./syncScrypt.js') : null;
 const BIPTablesHardcoded = {
     "BIP-0039": {
@@ -57,13 +41,8 @@ const versionHardcoded = [1,1];
 const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 const PBKDF2Iterations = 200001;
-const saltLength = 16; // need to be a multiple of 2
+const saltLength = 32; // need to be a multiple of 2
 const IVStrLength = 16; // need to be a multiple of 2
-
-/*const totoTime = Date.now();
-const testScrypt = syncScrypt('password', 'NaCl', 4, 2**6, 1, saltLength);
-console.log('syncScryptTestTiming: ', Date.now() - totoTime);
-console.log('syncScryptTest: ', testScrypt);*/
 
 /**
  * Class MnemoLinker, used to:
@@ -80,6 +59,7 @@ export class MnemoLinker {
 	constructor(params = { masterMnemonic: null, mnemonic: null, BIPTables: undefined, officialBIPs: undefined, version: undefined}) {
 		this.minMnemonicLength = 12;
 		this.cryptoLib = this.#getCryptoLib();
+		this.argon2Lib = this.#getArgon2Lib();
 		this.officialBIPs = params.officialBIPs ? params.officialBIPs : {}; // Only used when file called as "lastBuildControl.js"
 		this.BIPTables = params.BIPTables ? params.BIPTables : BIPTablesHardcoded;
 		this.BIPOfficialNames = BIPOfficialNamesHardcoded;
@@ -110,6 +90,7 @@ export class MnemoLinker {
 	 */
 	#init() {
 		if (!this.cryptoLib) { console.error('Crypto library not found'); return false; }
+		if (!this.argon2Lib) { console.error('Argon2 library not found'); return false; }
 
 		if (typeof this.params.masterMnemonic !== 'string' && typeof this.params.masterMnemonic !== 'object') { console.error('masterMnemonic is not a string or an array'); return false; }
 		this.master.mnemonic = typeof this.params.masterMnemonic === 'string' ? this.params.masterMnemonic.split(' ') : this.params.masterMnemonic;
@@ -146,6 +127,21 @@ export class MnemoLinker {
 			return crypto;
 		} catch (error) {
 			console.error('Unable to get the crypto library');
+		}
+		return false;
+	}
+	#getArgon2Lib() {
+		try {
+			argon2.hash({ pass: 'getArgon2Lib', salt: "saltalittlebitlonger" });
+			return argon2;
+		} catch (error) {
+		}
+		try {
+			const argon2 = require('argon2');
+			argon2.hash('getArgon2Lib', { salt: Buffer.from("saltalittlebitlonger") });
+			return argon2;
+		} catch (error) {
+			console.error('Unable to get the argon2 library');
 		}
 		return false;
 	}
@@ -380,6 +376,52 @@ export class MnemoLinker {
 		}
 		return Uint8Salt;
 	}
+	/**
+	 * Generate a salt using the master mnemonic as a password, and the IV as a salt.
+	 * - The salt is generated using the Argon2 algorithm
+	 * - The memory cost provides better security over Brute Force attacks
+	 * @param {string} masterMnemonicStr
+	 * @param {string} IVStr
+	 * @param {number} length
+	 */
+	async #generateArgon2Salt(masterMnemonicStr, IVStr = 'toto', length = saltLength) {
+		const passwordStr = masterMnemonicStr;
+		const saltStr = IVStr;
+		const time = 2; // The number of iterations
+		const mem = 2**14; // The memory cost
+		const hashLen = length; // The length of the hash
+		const parallelism = 1; // The number of threads
+		const type = 2; // The type of the hash (0=Argon2d, 1=Argon2i, 2=Argon2id)
+
+		if (typeof(exports) !== 'undefined') {
+			const result = await this.argon2Lib.hash(
+				passwordStr,
+				{
+					timeCost: time,
+					memoryCost: mem,
+					hashLength: hashLen,
+					parallelism,
+					type,
+					salt: Buffer.from(saltStr),
+					raw: true // Return the hash as a Buffer
+				}
+			);
+			return result;
+		} else {
+			const result = await this.argon2Lib.hash(
+				{
+					pass: passwordStr,
+					time,
+					mem,
+					hashLen,
+					parallelism,
+					type,
+					salt: saltStr
+				}
+			);
+			return result.hash;
+		}
+	}
 	#generateIV(length = IVStrLength) {
 		const result = { IVUnit8Array: new Uint8Array(length), IVBase64Str: ''}
 		for (let i = 0; i < length / 2; i++) {
@@ -476,7 +518,8 @@ export class MnemoLinker {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 		
 		const IV = this.#generateIV();
-		const saltUint8Array = this.#generateScryptSalt(this.master.mnemonic.join(' '), IV.IVBase64Str, saltLength);
+		//const saltUint8Array = this.#generateScryptSalt(this.master.mnemonic.join(' '), IV.IVBase64Str, saltLength);
+		const saltUint8Array = await this.#generateArgon2Salt(this.master.mnemonic.join(' '), IV.IVBase64Str, saltLength);
 		const encodedMasterMnemonicBase64Str = this.#encodeMnemonic(this.master.mnemonic, 24);
 		const encodedMnemonicBase64Str = this.#encodeMnemonic(this.origin.mnemonic, 24);
 
@@ -504,7 +547,8 @@ export class MnemoLinker {
 			return false;
 		}
 		
-		const saltUint8Array = this.#generateScryptSalt(this.master.mnemonic.join(' '), IVBase64Str, saltLength);
+		//const saltUint8Array = this.#generateScryptSalt(this.master.mnemonic.join(' '), IVBase64Str, saltLength);
+		const saltUint8Array = await this.#generateArgon2Salt(this.master.mnemonic.join(' '), IVBase64Str, saltLength);
 		timings.saltsGenerated = Date.now() - timings.startTimestamp;
 		timings.checkPoint = Date.now();
 
@@ -519,7 +563,7 @@ export class MnemoLinker {
 		if (!decodedMnemonic) { console.error('decodedMnemonic is empty'); return false; }
 
 		timings.total = Date.now() - timings.startTimestamp;
-		console.info(`decryptTimings=> t: ${timings.total}ms | s:${timings.saltsGenerated}ms | dK: ${timings.deriveK}ms`);
+		console.info(`decryptTimings=> total: ${timings.total}ms | salt:${timings.saltsGenerated}ms | dKey: ${timings.deriveK}ms`);
 
 		return decodedMnemonic;
 	}

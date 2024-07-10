@@ -40,7 +40,7 @@ async function main() {
 		console.log('All tests passed successfully, exporting MnemoLinker...');
 		console.log(`avg time: ${testResult.avgTime}ms`);
 
-		if (testResult.needVersionUpgrade) {
+		if (testResult.needVersionUpgrade || !controlMnemoLinker) {
 			const currentVersion = settings.version[0] + '.' + settings.version[1];
 			const newVersion = settings.version[1] + 1 < 4095 ? [settings.version[0], settings.version[1] + 1] : [settings.version[0] + 1, 0];
 			settings.version = newVersion;

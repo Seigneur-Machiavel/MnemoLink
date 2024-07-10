@@ -12,5 +12,8 @@ will just test the argon2-browser lib hashing function
 
 <body>
     <h1>Test Argon2</h1>
+    <script>
+        const toto = await argon2.hash({ pass: 'password', salt: 'somesalt' })
+    </script>
 </body>
 </html>

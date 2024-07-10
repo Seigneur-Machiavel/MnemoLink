@@ -1,7 +1,7 @@
 if (false) { // THIS IS FOR DEV ONLY ( to get better code completion )
 	const anime = require("./anime.min.js");
 	const bip39 = require("./bip39-3.1.0.js");
-	const { MnemoLinker } = require("./MnemoLinker/MnemoLinker_v0.1.js");
+	const { MnemoLinker } = require("./MnemoLinker/MnemoLinker_v1.0.js");
 	const { cryptoLight } = require("./cryptoLight.js");
 	const { lockCircleObject, centerScreenBtnObject, mnemonicClass, userDataClass, tempDataClass, mnemoBubbleObject, svgLinkObject, mnemoLinkSVGObject, gameControllerClass } = require("./classes.js");
 	const { gamesInfoByCategory, GameInfoClass, CategoryInfoClass } = require("../games/gamesinfo.js");

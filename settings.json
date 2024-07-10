@@ -1,9 +1,8 @@
 {
     "testIterations": 100,
-    "output": "converter.js",
     "version": [
         1,
-        1
+        2
     ],
     "_versionFormatingMaxValues": [
         4095,
