@@ -5,6 +5,7 @@
     --background-color-dark: rgb(200, 200, 200);
     --text-color: rgb(0, 0, 0);
     --placeholder-color: rgb(125, 125, 125);
+    --placeholderLight-color: rgb(200, 200, 200);
     /*--modal-background-color: rgb(255, 255, 255);*/
 
     --dashboard-open-child-transition-delay: 0.2s;
@@ -18,6 +19,7 @@
     --background-color-dark: rgb(40, 40, 40);
     --text-color: rgb(255, 255, 255);
     --placeholder-color: rgb(125, 125, 125);
+    --placeholderLight-color: rgb(75, 75, 75);
 }
 ::-webkit-scrollbar {
     width: 8px;
@@ -483,6 +485,7 @@ body.dark-mode .mnemolinkBubble .wrap {
 .mnemolinkBubble:not(.showing) p {
     position: absolute;
     transform: translateY(2.8vh);
+    color: var(--placeholder-color);
 }
 .mnemolinkBubble.showing {
     cursor: initial;
@@ -1207,7 +1210,8 @@ form button {
     padding: 0;
 }
 .wordInput::placeholder {
-    color: var(--placeholder-color);
+    /*color: var(--placeholder-color);*/
+    color: var(--placeholderLight-color);
 }
 .wordInput:hover {
     border-style: none none dashed none;
