@@ -5,6 +5,7 @@
     --background-color-dark: rgb(200, 200, 200);
     --text-color: rgb(0, 0, 0);
     --placeholder-color: rgb(125, 125, 125);
+    --placeholderLight-color: rgb(200, 200, 200);
     /*--modal-background-color: rgb(255, 255, 255);*/
 
     --dashboard-open-child-transition-delay: 0.2s;
@@ -18,6 +19,7 @@
     --background-color-dark: rgb(40, 40, 40);
     --text-color: rgb(255, 255, 255);
     --placeholder-color: rgb(125, 125, 125);
+    --placeholderLight-color: rgb(75, 75, 75);
 }
 ::-webkit-scrollbar {
     width: 8px;
@@ -47,7 +49,7 @@ body {
 }
 #bodyBackground {
     pointer-events: none;
-    position: absolute;
+    position: fixed;
     width: 100%;
     height: 100%;
     background-image: url('../images/paper.jpg');
@@ -56,9 +58,10 @@ body {
     background-size: 200px;
     /*filter: invert(0)*/
     filter: brightness(1.05);
-    transition: filter .36s ease-in-out, background-size .4s ease-in-out;
+    transition: filter .6s ease-in-out, background-size 4s ease-in-out, transform 10s ease-in-out;
     opacity: .8;
-    animation: movingBackground 4s infinite;
+    animation: movingBackground 40s infinite;
+    transform: scale(1.2) skew(0deg, 0deg);
 }
 body.dark-mode #bodyBackground {
     /*filter: invert(1);*/
@@ -66,6 +69,7 @@ body.dark-mode #bodyBackground {
 }
 @keyframes movingBackground {
     0% {
+        transform: scale(1.2) skew(0deg, 0deg);
         background-repeat: round;
         background-size: 1px;
     }
@@ -82,6 +86,7 @@ body.dark-mode #bodyBackground {
         background-size: 1px;
     }
     40% {
+        transform: scale(1.4) skew(3deg, -2deg);
         background-repeat: space;
         background-size: 7px;
     }
@@ -98,6 +103,7 @@ body.dark-mode #bodyBackground {
         background-size: 1px;
     }
     72% {
+        transform: scale(1.5) skew(-2deg, -3deg);
         background-repeat: round;
         background-size: 70px;
     }
@@ -110,6 +116,7 @@ body.dark-mode #bodyBackground {
         background-size: 5px;
     }
     100% {
+        transform: scale(1.2) skew(0deg, 0deg);
         background-repeat: space;
         background-size: 1px;
     }
@@ -478,6 +485,7 @@ body.dark-mode .mnemolinkBubble .wrap {
 .mnemolinkBubble:not(.showing) p {
     position: absolute;
     transform: translateY(2.8vh);
+    color: var(--placeholder-color);
 }
 .mnemolinkBubble.showing {
     cursor: initial;
@@ -1202,7 +1210,8 @@ form button {
     padding: 0;
 }
 .wordInput::placeholder {
-    color: var(--placeholder-color);
+    /*color: var(--placeholder-color);*/
+    color: var(--placeholderLight-color);
 }
 .wordInput:hover {
     border-style: none none dashed none;

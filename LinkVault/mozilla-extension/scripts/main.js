@@ -1332,7 +1332,6 @@ document.addEventListener('input', (event) => {
 	const parentModalWrap = event.target.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement;
 	const isMasterMnemonicModal = parentModalWrap.id === eHTML.modals.inputMasterMnemonic.wrap.id;
 	if (isMasterMnemonicModal) {
-		console.log(parseInt(event.target.value));
 		const nbOfWords = parseInt(event.target.value) < 12 ? 12 : parseInt(event.target.value);
 		eHTML.modals.inputMasterMnemonic.seedWordsValueStr.innerText = nbOfWords;
 		setNumberOfVisibleWordsInMnemonicGrid(eHTML.modals.inputMasterMnemonic.mnemonicGridInputs, nbOfWords);

@@ -1,6 +1,10 @@
 if (false) { // CODE NEVER REACHED, SHOWS THE IMPORTS FOR DOCUMENTATION PURPOSES
 	const bip39 = require('./bip39 3.1.0.js');
 }
+const argon2 = typeof(exports) === 'undefined' ? window.argon2 : require('../node_modules/argon2-browser/lib/argon2.js');
+argon2.hash({ pass: 'password', salt: 'somesalt' })
+    .then(h => console.log(h.hash, h.hashHex, h.encoded))
+    .catch(e => console.error(e.message, e.code))
 
 const syncScrypt = typeof(exports) !== 'undefined' ? require('./syncScrypt.js') : null;
 const BIPTablesHardcoded = {};
