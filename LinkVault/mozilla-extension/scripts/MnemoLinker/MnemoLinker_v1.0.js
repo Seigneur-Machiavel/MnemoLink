@@ -314,6 +314,8 @@ export class MnemoLinker {
 			["encrypt", "decrypt"]
 		);
 
+		//const toto = await this.cryptoLib.subtle.exportKey("raw", derivedKey);
+
 		return derivedKey;
 	}
 	async #encryptText(str, key, iv = new Uint8Array(16)) {

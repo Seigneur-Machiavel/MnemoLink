@@ -76,7 +76,7 @@ console.log('syncScryptTest: ', testScrypt);*/
  * @param {Object} params.officialBIPs - The official BIPs - > Only used with nodeJS!
  * @param {string} params.version - The version of the table - > Only used with nodeJS!
  */
-class MnemoLinker {
+export class MnemoLinker {
 	constructor(params = { masterMnemonic: null, mnemonic: null, BIPTables: undefined, officialBIPs: undefined, version: undefined}) {
 		this.minMnemonicLength = 12;
 		this.cryptoLib = this.#getCryptoLib();
@@ -638,5 +638,3 @@ class MnemoLinker {
 /* CODE RELEASED ONLY WHEN EXPORTED --- DONT USE "//" or "/*" COMMENTS IN THIS SECTION !!! ---
 */
 
-//END --- ANY CODE AFTER THIS LINE WILL BE REMOVED DURING EXPORT, SHOULD BE USE FOR TESTING ONLY ---
-if (typeof(exports) !== 'undefined') { module.exports = MnemoLinker }

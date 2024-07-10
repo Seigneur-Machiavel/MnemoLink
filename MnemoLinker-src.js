@@ -1,10 +1,22 @@
 if (false) { // CODE NEVER REACHED, SHOWS THE IMPORTS FOR DOCUMENTATION PURPOSES
 	const bip39 = require('./bip39 3.1.0.js');
 }
-const argon2 = typeof(exports) === 'undefined' ? window.argon2 : require('../node_modules/argon2-browser/lib/argon2.js');
-argon2.hash({ pass: 'password', salt: 'somesalt' })
-    .then(h => console.log(h.hash, h.hashHex, h.encoded))
-    .catch(e => console.error(e.message, e.code))
+
+let argon2Lib = null;
+async function test() {
+	try {
+		const toto = await argon2.hash({ password: 'password', salt: "thisIsASalt" });
+		console.log(toto.hash);
+		argon2Lib = argon2;
+		console.log('argon2 loaded from window');
+	} catch (error) {
+		argon2Lib = require("argon2");
+		console.log('argon2 loaded from require');
+	}
+    const toto = await argon2Lib.hash('password', { salt: Buffer.from("saltalittlebitlonger") });
+	const hash = toto.hash || toto;
+    console.log(hash);
+}; test();
 
 const syncScrypt = typeof(exports) !== 'undefined' ? require('./syncScrypt.js') : null;
 const BIPTablesHardcoded = {};
@@ -12,7 +24,7 @@ const BIPOfficialNamesHardcoded = {};
 const versionHardcoded = [];
 const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
-const PBKDF2Iterations = 200000;
+const PBKDF2Iterations = 200001;
 const saltLength = 16; // need to be a multiple of 2
 const IVStrLength = 16; // need to be a multiple of 2
 
@@ -285,6 +297,8 @@ class MnemoLinker {
 			false,
 			["encrypt", "decrypt"]
 		);
+
+		//const toto = await this.cryptoLib.subtle.exportKey("raw", derivedKey);
 
 		return derivedKey;
 	}
