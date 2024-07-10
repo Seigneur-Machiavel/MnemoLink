@@ -1,0 +1,14 @@
+{
+  "name": "mnemolink",
+  "version": "1.0.0",
+  "description": "Since the emergence of cryptographic assets like Bitcoin, Ethereum, Solana, NFTs, and other digital assets, we've found ourselves juggling an ever-growing collection of digital wallets. With this proliferation comes the daunting task of managing their secret keys, which can quickly become a cumbersome burden. It's not always straightforward to store these keys securely, safeguarding them from theft, alteration, loss, and other risks. Thus, I envisioned the simplest possible system that allows anyone to secure their mnemonic phrases optimally, while significantly easing their use and recovery. Allow me to introduce the technology at the heart of the mnemonic manager LinkVault, aptly named \"MnemoLinker\".",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "argon2": "^0.40.3"
+  }
+}
