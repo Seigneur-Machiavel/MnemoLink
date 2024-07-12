@@ -271,8 +271,8 @@ class MnemoLinker {
 		const mnemonicStr = mnemonic.join(' ');
 		return mnemonicStr;
 	}
-	async #deriveK(masterMnemonic, saltUnit16Array, iterations = PBKDF2Iterations) {
-		const salt = saltUnit16Array;
+	async #deriveK(masterMnemonic, saltUnit8Array, iterations = PBKDF2Iterations) {
+		const salt = saltUnit8Array;
 		const keyMaterial = await this.cryptoLib.subtle.importKey(
 			"raw",
 			new TextEncoder().encode(masterMnemonic),

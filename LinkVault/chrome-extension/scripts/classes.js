@@ -1,3 +1,7 @@
+if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
+	const { cryptoLight } = require("./cryptoLight.js");
+}
+
 //#region - CLASSES
 class lockCircleObject {
 	constructor(element, dTransitionMs = 120, strokeTransitionMs = 120, opacityTransitionMs = 120) {

@@ -14,18 +14,19 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 		
 		if (response && response.password) {
-			chrome.storage.local.get(['hashedPassword'], async function(result) {
-				const { hash, saltBase64, ivBase64 } = sanitize(result.hashedPassword);
-				if (!hash || !saltBase64 || !ivBase64) { alert('Password data corrupted'); return; }
-				if (typeof hash !== 'string' || typeof saltBase64 !== 'string' || typeof ivBase64 !== 'string') { alert('Password data corrupted'); return; }
+			chrome.storage.local.get(['authInfo'], async function(result) {
+				const { hash, salt1Base64, iv1Base64 } = sanitize(result.authInfo);
+				if (!hash || !salt1Base64 || !iv1Base64) { console.error('Password data corrupted'); return; }
+				if (typeof hash !== 'string' || typeof salt1Base64 !== 'string' || typeof iv1Base64 !== 'string') { console.error('Password data corrupted'); return; }
 				
-				const res = await cryptoLight.init(response.password, saltBase64, ivBase64);
-				if (res.hash !== hash) { 
-					console.info('Wrong password, requesting authentication');
-					openModal('authentification');
-					return;
-				}
-				console.log('Valid password, Ready to decrypt!'); 
+				const res = await cryptoLight.init(response.password, salt1Base64, iv1Base64);
+				if (!res) { console.error('Error while initializing cryptoLight'); return; }
+
+				console.log('res.strongEntropyPassStr', res.strongEntropyPassStr);
+				console.log('hash', hash);
+				const hashIsValid = await cryptoLight.verifyArgon2Hash(res.strongEntropyPassStr, hash);
+				if (!hashIsValid) { console.info('Wrong password'); return; }
+
 				await asyncInitLoad(true);
 			});
 		} else {
@@ -260,12 +261,12 @@ const load = {
 function sanitize(data) {
     if (!data) return false;
 	if (typeof data === 'number' || typeof data === 'boolean') return data;
-    if (!typeof data === 'string' || !typeof data === 'object') return 'Invalid data type';
+	if (typeof data !== 'string' && typeof data !== 'object') return 'Invalid data type';
 
     if (typeof data === 'string') {
         //return data.replace(/[^a-zA-Z0-9]/g, '');
         // accept all base64 characters
-        return data.replace(/[^a-zA-Z0-9+/=]/g, '');
+        return data.replace(/[^a-zA-Z0-9+/=$,]/g, '');
     } else if (typeof data === 'object') {
         const sanitized = {};
         for (const key in data) {
@@ -1132,17 +1133,18 @@ eHTML.modals.authentification.loginForm.addEventListener('submit', function(e) {
 	let password = input.value;
 	if (password === '') { return; }
 	
-	chrome.storage.local.get(['hashedPassword'], async function(result) {
-		const { hash, saltBase64, ivBase64 } = result.hashedPassword;
-		const res = await cryptoLight.init(password, saltBase64, ivBase64);
+	chrome.storage.local.get(['authInfo'], async function(result) {
+		const { hash, salt1Base64, iv1Base64 } = result.authInfo;
 
-		if (res.hash !== hash) { 
-			input.classList.add('wrong');
-			return;
-		}
+		const res = await cryptoLight.init(password, salt1Base64, iv1Base64);
+		if (!res) { console.error('Error while initializing cryptoLight'); return; }
+
+		const hashIsValid = await cryptoLight.verifyArgon2Hash(res.strongEntropyPassStr, hash);
+		if (!hashIsValid) { console.info('Password is wrong'); input.classList.add('wrong'); return; }
 
 		password = null;
 		input.value = '';
+
 		await asyncInitLoad(true);
 		closeModal();
 		centerScreenBtn.lock();

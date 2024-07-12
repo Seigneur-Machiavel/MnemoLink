@@ -2,6 +2,7 @@
 <html>
 <head>
     <link rel="stylesheet" href="../styles/popup-styles.css">
+    <script src="../scripts/argon2-bundled.min.js"></script>
     <script src="../scripts/cryptoLight.js"></script>
     <script src="../scripts/classes.js"></script>
     <title>Authentification</title>
@@ -30,6 +31,12 @@
         <input type="password" placeholder="Password">
         <input type="password" placeholder="Confirm password">
         <button type="submit">Create password</button>
+        <div class="inlineCheckBox" style="margin-top: 20px;">
+            <label>
+                <input id="serverAuthBoost" type="checkbox" name="securityOption" value="improveSecurityUsingServer" checked>
+                Improve security using server
+            </label>
+        </div>
     </form>
 
     <form id="loginForm" class="hidden">
