@@ -3,6 +3,7 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
     const { lockCircleObject, centerScreenBtnObject } = require("./classes.js");
 }
 
+const settings = { serverUrl: 'http://localhost:4340' };
 const centerScreenBtn = new centerScreenBtnObject();
 centerScreenBtn.state = 'welcome';
 centerScreenBtn.init(7);
@@ -18,46 +19,47 @@ function setVisibleForm(formId) {
     }
 }
 async function setNewPassword(password, passComplement = false) {
-    // Generate a hash from the password - this hash will be used to encrypt the data
-    const simpleAuthResult = await cryptoLight.init(password);
-    if (!simpleAuthResult || !simpleAuthResult.hash || !simpleAuthResult.salt1Base64 || !simpleAuthResult.iv1Base64) { console.error('cryptoLight.init() failed'); return false; }
+    const startTimestamp = Date.now();
 
-    const authInfoToStore = {
-        hash: simpleAuthResult.hash,
-        salt1Base64: simpleAuthResult.salt1Base64,
-        iv1Base64: simpleAuthResult.iv1Base64,
-    };
+    const passwordReadyUse = passComplement ? `${password}${passComplement}` : password;
+    const authInfo = await cryptoLight.generateKey(passwordReadyUse);
+    if (!authInfo || !authInfo.encodedHash || !authInfo.salt1Base64 || !authInfo.iv1Base64) { console.error('cryptoLight.generateKey() failed'); return false; }
+    cryptoLight.clear();
+
+    const weakEncryptionReady = await cryptoLight.generateKey(password, authInfo.salt1Base64, authInfo.iv1Base64);
+    if (!weakEncryptionReady) { console.error('cryptoLight.generateKey() failed'); return false; }
+    if (authInfo.salt1Base64 !== weakEncryptionReady.salt1Base64 || authInfo.iv1Base64 !== weakEncryptionReady.iv1Base64) { console.error('Salt1 or IV1 mismatch'); return false; }
     
-    if (passComplement) {
-        // Encrypt the passComplement with the password -> passComplement is high entropy
-        const encryptedPassComplement = await cryptoLight.encryptText(passComplement);
-        if (!encryptedPassComplement) { console.error('Pass complement encryption failed'); return false; }
-        cryptoLight.clear();
-        authInfoToStore.passComplement = encryptedPassComplement;
+    const authToken = cryptoLight.generateRndBase64(32); // authToken - used to authenticate the user on the server
+    const authTokenHash = await cryptoLight.encryptText(authToken);
 
-        // Overwrite the hash with a hash of the full password
-        const fullPassword = passComplement ? `${password}${passComplement}` : password;
-        const fullAuthResult = await cryptoLight.init(fullPassword, simpleAuthResult.salt1Base64, simpleAuthResult.iv1Base64);
-        if (!fullAuthResult || !fullAuthResult.hash) { console.error('cryptoLight.init() failed'); return false; }
-        if (simpleAuthResult.salt1Base64 !== fullAuthResult.salt1Base64 || simpleAuthResult.iv1Base64 !== fullAuthResult.iv1Base64) { console.error('Salt and IV mismatch'); return false; }
-        authInfoToStore.hash = fullAuthResult.hash;
+    const encryptedPassComplement = passComplement ? await cryptoLight.encryptText(passComplement) : false;
+    if (passComplement && !encryptedPassComplement) { console.error('Pass complement encryption failed'); return false; }
+    cryptoLight.clear();
 
-        // Generate a random authID - used to link the passComplement on the server
-        const authID = cryptoLight.generateRndBase64(32);
-        authInfoToStore.authID = cryptoLight.encryptText(authID);
-    }
-
+    const authID = generateAuthID(); // authID - used to link the passComplement on the server
     chrome.storage.local.set({
-        authInfo: authInfoToStore
+        authInfo: {
+            authID,
+            authToken,
+            hash: authInfo.encodedHash,
+            salt1Base64: authInfo.salt1Base64,
+            iv1Base64: authInfo.iv1Base64,
+            serverAuthBoost: passComplement ? true : false
+        }
     }, function () {
-        console.log(`Password set, salt1: ${simpleAuthResult.salt1Base64}, iv1: ${simpleAuthResult.iv1Base64}`);
+        console.log(`Password set, salt1: ${authInfo.salt1Base64}, iv1: ${authInfo.iv1Base64}`);
     });
 
-    cryptoLight.clear();
-    return result;
+    const totalTimings = {
+        argon2Time: authInfo.argon2Time + weakEncryptionReady.argon2Time,
+        deriveKTime: authInfo.deriveKTime + weakEncryptionReady.deriveKTime,
+        total: Date.now() - startTimestamp
+    };
+    return passComplement ? { authID, authTokenHash, encryptedPassComplement, totalTimings } : true;
 }
-function resetApplication() {
-    chrome.storage.local.clear(function() {
+async function resetApplication() {
+    await chrome.storage.local.clear(function() {
         var error = chrome.runtime.lastError;
         if (error) {
             console.error(error);
@@ -99,15 +101,25 @@ function sanitize(data) {
     return data;
 }
 function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1) + min); }
-
+function generateAuthID(length = 32) {
+    const authorized = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        result += authorized[rnd(0, authorized.length - 1)];
+    }
+    return result;
+}
 document.getElementById('passwordCreationForm').addEventListener('submit', async function(e) {
     if (busy.includes('passwordCreationForm')) return;
     busy.push('passwordCreationForm');
 
     e.preventDefault();
+    console.log(`serverAuthBoost: ${document.getElementById('serverAuthBoost').checked}`);
     const serverAuthBoost = document.getElementById('serverAuthBoost').checked;
+    cryptoLight.cryptoStrength = serverAuthBoost ? 'medium' : 'heavy';
+
     const passComplement = serverAuthBoost ? cryptoLight.generateRndBase64(32) : false;
-    const passwordMinLength = serverAuthBoost ? 8 : 6;
+    const passwordMinLength = serverAuthBoost ? 6 : 8;
     const password = document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].value;
     const passwordConfirm = document.getElementById('passwordCreationForm').getElementsByTagName('input')[1].value;
     
@@ -116,13 +128,27 @@ document.getElementById('passwordCreationForm').addEventListener('submit', async
     } else if (password.length < passwordMinLength) {
         alert(`Password must be at least ${passwordMinLength} characters long`);
     } else {
-        const passwordIsSet = await setNewPassword(password, passComplement);
-        if (!passwordIsSet) { alert('Password setting failed'); busy.splice(busy.indexOf('passwordCreationForm'), 1); return; }
+        const passwordCreatedInfo = await setNewPassword(password, passComplement);
+        if (!passwordCreatedInfo) { alert('Password setting failed'); busy.splice(busy.indexOf('passwordCreationForm'), 1); return; }
 
         document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].value = '';
         document.getElementById('passwordCreationForm').getElementsByTagName('input')[1].value = '';
 
-        // await new Promise(resolve => setTimeout(resolve, 10000)); // for debugging
+       if (serverAuthBoost) {
+            const { authID, authTokenHash, encryptedPassComplement, totalTimings } = passwordCreatedInfo;
+            const keyPair = await cryptoLight.generateKeyPair();
+            const exportedPubKey = await cryptoLight.exportPublicKey(keyPair.publicKey);
+
+            const serverResponse = await sharePubKeyWithServer(authID, exportedPubKey);
+            if (!serverResponse) { alert('Server communication failed'); busy.splice(busy.indexOf('passwordCreationForm'), 1); resetApplication(); return; }
+            if (!serverResponse.success) { alert(serverResponse.message); busy.splice(busy.indexOf('passwordCreationForm'), 1); resetApplication(); return; }
+
+            const serverPublicKey = await cryptoLight.publicKeyFromExported(serverResponse.serverPublicKey);
+
+            const serverResponse2 = await sendAuthDataToServer(serverPublicKey, authID, authTokenHash, encryptedPassComplement, totalTimings);
+            if (!serverResponse2) { alert('Server communication failed'); busy.splice(busy.indexOf('passwordCreationForm'), 1); resetApplication(); return; }
+            if (!serverResponse2.success) { alert(serverResponse2.message); busy.splice(busy.indexOf('passwordCreationForm'), 1); resetApplication(); return; }
+       }
 
         chrome.runtime.sendMessage({action: "openPage", password, passComplement});
     }
@@ -139,28 +165,53 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
 
     e.preventDefault();
     const input = document.getElementById('loginForm').getElementsByTagName('input')[0];
-    let password = input.value;
-    if (password === '') { busy.splice(busy.indexOf('loginForm'), 1); return; }
+    let passwordReadyUse = input.value;
+    input.value = '';
+    if (passwordReadyUse === '') { busy.splice(busy.indexOf('loginForm'), 1); return; }
 
     chrome.storage.local.get(['authInfo'], async function(result) {
-        const { hash, salt1Base64, iv1Base64 } = result.authInfo;
+        const { authID, authToken, hash, salt1Base64, iv1Base64, serverAuthBoost } = sanitize(result.authInfo);
         if (!hash || !salt1Base64 || !iv1Base64) { alert('Password not set'); busy.splice(busy.indexOf('loginForm'), 1); return; }
         if (typeof hash !== 'string' || typeof salt1Base64 !== 'string' || typeof iv1Base64 !== 'string') { console.error('Password data corrupted'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+        cryptoLight.cryptoStrength = serverAuthBoost ? 'medium' : 'heavy';
 
-        const res = await cryptoLight.init(password, salt1Base64, iv1Base64);
+        if (serverAuthBoost) {
+            const weakEncryptionReady = await cryptoLight.generateKey(passwordReadyUse, salt1Base64, iv1Base64);
+            if (!weakEncryptionReady) { alert('Weak encryption failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+            const authTokenHash = await cryptoLight.encryptText(authToken);
+
+            const keyPair = await cryptoLight.generateKeyPair();
+            const exportedPubKey = await cryptoLight.exportPublicKey(keyPair.publicKey);
+
+            const serverResponse = await sharePubKeyWithServer(authID, exportedPubKey);
+            if (!serverResponse) { alert('Server communication failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+            if (!serverResponse.success) { alert(serverResponse.message); busy.splice(busy.indexOf('loginForm'), 1); return; }
+
+            const serverPublicKey = await cryptoLight.publicKeyFromExported(serverResponse.serverPublicKey);
+
+            const serverResponse2 = await sendAuthDataToServer(serverPublicKey, authID, authTokenHash, false);
+            if (!serverResponse2) { alert('Server communication failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+            if (!serverResponse2.success) { alert(`authID: ${authID}\n${serverResponse2.message}`); busy.splice(busy.indexOf('loginForm'), 1); return; }
+
+            const encryptedPassComplementEnc = serverResponse2.encryptedPassComplement;
+            const encryptedPassComplement = await cryptoLight.decryptData(keyPair.privateKey, encryptedPassComplementEnc);
+            const passComplement = await cryptoLight.decryptText(encryptedPassComplement);
+
+            passwordReadyUse = `${passwordReadyUse}${passComplement}`;
+            cryptoLight.clear();
+        }
+
+        const res = await cryptoLight.generateKey(passwordReadyUse, salt1Base64, iv1Base64, hash);
         if (!res) { alert('Key derivation failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
 
-        console.log('res.strongEntropyPassStr', res.strongEntropyPassStr);
-        console.log('hash', hash);
-        const hashIsValid = await cryptoLight.verifyArgon2Hash(res.strongEntropyPassStr, hash);
-        if (hashIsValid) {
-            //await new Promise(resolve => setTimeout(resolve, 10000));
+        if (res.hashVerified) {
             input.value = '';
-            chrome.runtime.sendMessage({action: "openPage", password: password});
-            password = null;
+            chrome.runtime.sendMessage({action: "openPage", password: passwordReadyUse});
         } else {
             input.classList.add('wrong');
         }
+        
+        passwordReadyUse = null;
         busy.splice(busy.indexOf('loginForm'), 1);
     });
 });
@@ -171,13 +222,43 @@ document.getElementById('passwordCreationForm').getElementsByTagName('input')[0]
 document.getElementById('passwordCreationForm').getElementsByTagName('input')[1].value = hardcodedPassword;
 
 //#region - SERVER COMMUNICATION
-async function sendPassComplementToServer(encryptedPassComplement = 'toto') {
-	const data = { 
-		id: userData.id,
-		encryptedMnemoLinksStr: userData.encryptedMnemoLinksStr,
-	};
+async function sharePubKeyWithServer(authID, publicKey) {
+    const data = { authID, publicKey };
+    const serverUrl = `${settings.serverUrl}/api/sharePubKey`;
+    const requestOptions = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data)
+    };
+  
+    try {
+      const response = await fetch(serverUrl, requestOptions);
+      return await response.json();
+    } catch (error) {
+      console.error(`Error while sharing public key with server: ${error}`);
+      return false;
+    }
+}
+async function sendAuthDataToServer(serverPublicKey, authID, authTokenHash, encryptedPassComplement, totalTimings) {
+    const authTokenHashEnc = await cryptoLight.encryptData(serverPublicKey, authTokenHash);
+    const encryptedPassComplementEnc = encryptedPassComplement ? await cryptoLight.encryptData(serverPublicKey, encryptedPassComplement) : false;
 
-	const serverUrl = `${settings.serverUrl}/api/storeMnemoLinks`;
+	const data = {
+        authID,
+        authTokenHash: btoa(String.fromCharCode.apply(null, new Uint8Array(authTokenHashEnc))),
+        encryptedPassComplement: encryptedPassComplementEnc ? btoa(String.fromCharCode.apply(null, new Uint8Array(encryptedPassComplementEnc))) : false,
+    };
+    if (totalTimings) {
+        data.argon2Time = totalTimings.argon2Time;
+        data.deriveKTime = totalTimings.deriveKTime;
+        data.totalTime = totalTimings.total;
+    }
+
+    //console.log(data);
+    const apiRoute = encryptedPassComplement ? 'createAuthInfo' : 'loginAuthInfo';
+	const serverUrl = `${settings.serverUrl}/api/${apiRoute}`;
 	const requestOptions = {
 	  method: 'POST',
 	  headers: {
@@ -188,11 +269,9 @@ async function sendPassComplementToServer(encryptedPassComplement = 'toto') {
   
 	try {
 	  const response = await fetch(serverUrl, requestOptions);
-	  const result = await response.json();
-	  console.log(`MnemoLinks sent to server: ${result.success}`);
-	  return result.success;
+	  return await response.json();
 	} catch (error) {
-	  console.error(`Error while sending MnemoLinks to server: ${error}`);
+	  console.error(`Error while sending AuthData to server: ${error}`);
 	  return false;
 	}
 }

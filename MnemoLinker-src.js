@@ -280,7 +280,7 @@ class MnemoLinker {
 			false,
 			["deriveKey"]
 		);
-	
+
 		const derivedKey = await this.cryptoLib.subtle.deriveKey(
 			{
 				name: "PBKDF2",
@@ -293,8 +293,6 @@ class MnemoLinker {
 			false,
 			["encrypt", "decrypt"]
 		);
-
-		//const toto = await this.cryptoLib.subtle.exportKey("raw", derivedKey);
 
 		return derivedKey;
 	}

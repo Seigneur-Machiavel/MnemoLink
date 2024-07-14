@@ -3,6 +3,9 @@ if (false) {
 }
 
 const cryptoLight = {
+    cryptoStrength: 'heavy',
+    PBKDF2Iterations: { heavy: 1000000, medium: 100000, light: 10000 },
+    argon2Mem: { heavy: 2**14, medium: 2**11, light: 2**8 },
     key: null,
     /** @type {Uint8Array} */
     iv: null,
@@ -11,42 +14,57 @@ const cryptoLight = {
         this.key = null;
         this.iv = null;
     },
-    async init(passwordStr, salt1Base64 = null, iv1Base64 = null) {
+    async generateKey(passwordStr, salt1Base64 = null, iv1Base64 = null, hashToVerify = null) {
         this.clear();
 
-        const startTimestamp = Date.now();
+        let startTimestamp = Date.now();
+        const result = {
+            salt1Base64: null,
+            iv1Base64: null,
+            passHash: null,
+            strongEntropyPassStr: null,
+            encodedHash: null,
+            hashVerified: false,
+            argon2Time: 0,
+            deriveKTime: 0
+        };
 
         // iv1 && salt1 are random, saved
         const iv1 = iv1Base64 ? this.base64ToUint8Array(iv1Base64) : this.generateRandomUint8Array();
-        const iv1Base64_ = this.uint8ArrayToBase64(iv1);
+        result.iv1Base64 = this.uint8ArrayToBase64(iv1);
         
         const salt1 = salt1Base64 ? this.base64ToUint8Array(salt1Base64) : this.generateRandomUint8Array();
-        const salt1Base64_ = this.uint8ArrayToBase64(salt1);
+        result.salt1Base64 = this.uint8ArrayToBase64(salt1);
         
         // iv2 && salt2 are deterministic, not saved : would need to generate them each time
-        const argon2SaltForm_Salt1_Iv1 = this.concatUint8(salt1, iv1);
-        const iv2 = await this.generateArgon2DeterministicUint8(passwordStr + "iv2", argon2SaltForm_Salt1_Iv1, 16);
+        const iv2 = await this.generateArgon2DeterministicUint8(passwordStr + "iv2", this.concatUint8(salt1, iv1), 16);
         this.iv = this.concatUint8(iv1, iv2); // should be 32 bytes
 
-        const argon2SaltFrom_Salt1_Iv = this.concatUint8(salt1, this.iv);
-        const salt2 = await this.generateArgon2DeterministicUint8(passwordStr + "salt2", argon2SaltFrom_Salt1_Iv, 16);
+        const salt2 = await this.generateArgon2DeterministicUint8(passwordStr + "salt2", this.concatUint8(salt1, this.iv), 16);
         const salt = this.concatUint8(salt1, salt2); // should be 32 bytes
-        console.log(`exor: ${this.uint8ArrayToBase64(salt)}`)
 
-        console.log(`Salt.length: ${salt.length}, IV.length: ${this.iv.length}`)
-        console.log('Argon2 Salt+IV generation took', Date.now() - startTimestamp, 'ms');
+        result.argon2Time = Date.now() - startTimestamp;
+        //console.log(`salt.length: ${salt.length}, IV.length: ${this.iv.length}`);
+        //console.log('Argon2 Salt+IV generation took', result.argon2Time, 'ms');
 
-        const key = await this.deriveK(passwordStr, salt);
-        if (!key) { console.error('Key derivation failed'); return false; } else { this.key = key; }
+        this.key = await this.deriveK(passwordStr, salt);
+        if (!this.key) { console.error('Key derivation failed'); return false; }
 
-        const strongEntropyPassStr = passwordStr + this.uint8ArrayToBase64(this.iv) + this.uint8ArrayToBase64(salt);
-        const hash = await this.generateArgon2Hash(strongEntropyPassStr);
-        
-        return { hash, strongEntropyPassStr, salt1Base64: salt1Base64_, iv1Base64: iv1Base64_ };
+        result.deriveKTime = Date.now() - startTimestamp - result.argon2Time;
+        //console.log('Key derivation took', result.deriveKTime, 'ms');
+
+        result.strongEntropyPassStr = passwordStr + this.uint8ArrayToBase64(this.iv) + this.uint8ArrayToBase64(salt);
+
+        const generatedArgon2Hash = await this.generateArgon2Hash(result.strongEntropyPassStr, salt, 64);
+        result.encodedHash = generatedArgon2Hash.encoded;
+        result.hashVerified = result.encodedHash === hashToVerify;
+
+        return result;
     },
-    async deriveK(str, salt, iterations = 1000000) {
+    async deriveK(str, salt) {
         if (salt === null) { return false; }
         const startTimestamp = Date.now();
+        const iterations = this.PBKDF2Iterations[this.cryptoStrength];
 
         const buffer = new TextEncoder().encode(str);
         const keyMaterial = await window.crypto.subtle.importKey(
@@ -70,7 +88,7 @@ const cryptoLight = {
             ["encrypt", "decrypt"]
         );
         
-        console.log('Key derivation took', Date.now() - startTimestamp, 'ms');
+        //console.log('Key derivation took', Date.now() - startTimestamp, 'ms');
 
         return derivedKey;
     },
@@ -137,7 +155,8 @@ const cryptoLight = {
 	 */
 	async generateArgon2DeterministicUint8(passwordStr, saltStr = 'toto', length = 16) {
 		const time = 2; // The number of iterations
-		const mem = 2**14; // The memory cost
+		//const mem = 2**14; // The memory cost
+        const mem = this.argon2Mem[this.cryptoStrength]; // The memory cost
 		const hashLen = length; // The length of the hash
 		const parallelism = 1; // The number of threads
 		const type = 2; // The type of the hash (0=Argon2d, 1=Argon2i, 2=Argon2id)
@@ -150,20 +169,37 @@ const cryptoLight = {
      * @param {string} strongEntropyPassStr
      * @param {number} length
      */
-    async generateArgon2Hash(strongEntropyPassStr, length = 32) {
+    async generateArgon2Hash(strongEntropyPassStr, salt, length = 64) {
         const time = 2; // The number of iterations
-        const mem = 2**8; // The memory cost
+        //const mem = 2**6; // The memory cost
+        const mem = this.argon2Mem['light']; // The memory cost
         const hashLen = length; // The length of the hash
         const parallelism = 1; // The number of threads
         const type = 2; // The type of the hash (0=Argon2d, 1=Argon2i, 2=Argon2id)
-        const salt = window.crypto.getRandomValues(new Uint8Array(32));
 
         const result = await argon2.hash({pass: strongEntropyPassStr, time, mem, hashLen, parallelism, type, salt});
-        return result.encoded;
+
+        const splited = result.encoded.split('$');
+        // Remove the salt from the hash - contained into last "$" and prelast "$"
+        const hash = splited.pop();
+        splited.pop();
+        return {
+            encoded: splited.join('$') + '$' + hash,
+            hash: hash
+        }
     },
-    async verifyArgon2Hash(passwordStr, hashEncoded) {
+    async verifyArgon2Hash(passwordStr, hashEncoded, saltToInclude = '') { // DEPRECATED
+        /** @type {string} */
+        let hashEnc = hashEncoded;
+        if (saltToInclude) {
+            // re-add the salt to the hash
+            const splited = hashEnc.split('$');
+            const hash = splited.pop();
+            splited.push(saltToInclude)
+            hashEnc = splited.join('$') + '$' + hash;
+        }
         try {
-            await argon2.verify({pass: passwordStr, encoded: hashEncoded});
+            await argon2.verify({pass: passwordStr, encoded: hashEnc});
             return true;
         } catch (error) {
             console.error('Argon2 verify res:', error);
@@ -175,6 +211,69 @@ const cryptoLight = {
         result.set(salt1);
         result.set(salt2, salt1.length);
         return result;
+    },
+    // ASYMETRIC CRYPTO
+    async generateKeyPair() {
+        const keyPair = await window.crypto.subtle.generateKey(
+            {
+                name: "RSA-OAEP",
+                modulusLength: 2048,
+                publicExponent: new Uint8Array([1, 0, 1]),
+                hash: "SHA-256",
+            },
+            true,
+            ["encrypt", "decrypt"]
+        );
+    
+        return keyPair;
+    },
+    async exportPublicKey(key) {
+        const exportedKey = await window.crypto.subtle.exportKey(
+            "spki",
+            key
+        );
+        return new Uint8Array(exportedKey);
+    },
+    async publicKeyFromExported(exportedKey) {
+        const buffer = new Uint8Array(Object.values(exportedKey));
+        const publicKey = await window.crypto.subtle.importKey(
+            "spki",
+            buffer,
+            {
+                name: "RSA-OAEP",
+                hash: "SHA-256"
+            },
+            true,
+            ["encrypt"]
+        );
+        return publicKey;
+    },
+    async encryptData(publicKey, data) {
+        const encodedData = new TextEncoder().encode(data);
+    
+        const encryptedData = await window.crypto.subtle.encrypt(
+            {
+                name: "RSA-OAEP"
+            },
+            publicKey,
+            encodedData
+        );
+    
+        return encryptedData;
+    },
+    async decryptData(privateKey, data) {
+        const encryptedData = this.base64ToUint8Array(data);
+
+        const decryptedData = await window.crypto.subtle.decrypt(
+            {
+                name: "RSA-OAEP"
+            },
+            privateKey,
+            encryptedData
+        );
+    
+        const decodedData = new TextDecoder().decode(decryptedData);
+        return decodedData;
     }
 }
 

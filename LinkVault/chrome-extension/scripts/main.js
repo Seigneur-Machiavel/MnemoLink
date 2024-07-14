@@ -15,23 +15,21 @@ document.addEventListener('DOMContentLoaded', function() {
 		
 		if (response && response.password) {
 			chrome.storage.local.get(['authInfo'], async function(result) {
-				const { hash, salt1Base64, iv1Base64 } = sanitize(result.authInfo);
-				if (!hash || !salt1Base64 || !iv1Base64) { console.error('Password data corrupted'); return; }
-				if (typeof hash !== 'string' || typeof salt1Base64 !== 'string' || typeof iv1Base64 !== 'string') { console.error('Password data corrupted'); return; }
 				
-				const res = await cryptoLight.init(response.password, salt1Base64, iv1Base64);
+				const { salt1Base64, iv1Base64, hash, serverAuthBoost } = sanitize(result.authInfo);
+				cryptoLight.cryptoStrength = serverAuthBoost ? 'medium' : 'heavy';
+
+				const res = await cryptoLight.generateKey(response.password, salt1Base64, iv1Base64, hash);
 				if (!res) { console.error('Error while initializing cryptoLight'); return; }
-
-				console.log('res.strongEntropyPassStr', res.strongEntropyPassStr);
-				console.log('hash', hash);
-				const hashIsValid = await cryptoLight.verifyArgon2Hash(res.strongEntropyPassStr, hash);
-				if (!hashIsValid) { console.info('Wrong password'); return; }
-
+				if (!res.hashVerified) { console.error('Error while verifying hash'); return; }
+				
+				//passwordReadyUse = null;
 				await asyncInitLoad(true);
+				centerScreenBtnAction();
 			});
 		} else {
 			console.log('No password received, authentication required');
-			//openModal('authentification');
+			openModal('authentification');
 		}
 	});
 });
@@ -42,8 +40,9 @@ let MnemoLinkerLastest = null; // FOR FAST ACCESS TO THE LATEST VERSION (need to
 /** @type {MnemoLinker} */
 let emptyMnemoLinker = null; // ONLY USED FOR BASIC USAGE, NEVER USE THIS GLOBAL VARIABLE FOR CRYPTOGRAPHY !!
 
+const isProduction = !(window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'));
 const settings = {
-	isDebug: window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'),
+	isDebug: !isProduction,
 	animationsLevel: 1,
 	mnemoLinkerVersion: window.MnemoLinker.latestVersion,
 	defaultBip: "BIP-0039",
@@ -53,7 +52,7 @@ const settings = {
 	fastFillMode: true,
 	saveLogs: true,
 	mnemolinkBubblesMinCircleSpots: 6,
-	serverUrl: "https://www.linkvault.app" // "http://localhost:4340",
+	serverUrl: isProduction ? "https://www.linkvault.app": "http://localhost:4340"
 }
 const mousePos = { x: 0, y: 0 };
 const timeOuts = {};
@@ -72,6 +71,8 @@ const eHTML = {
 		element: document.getElementById('dashboard'),
 		dashboardMnemolinksList: document.getElementById('dashboardMnemolinksList'),
 		mnemolinksList: document.getElementById('mnemolinksList'),
+		vaultBtn: document.getElementById('vaultBtn'),
+		gamesBtn: document.getElementById('gamesBtn'),
 	},
 	inVaultWrap: document.getElementById('inVaultWrap'),
 	vault: {
@@ -326,7 +327,7 @@ function fillGamesLists() {
 
 		/** @type {CategoryInfoClass} */
 		const categoryInfo = gamesInfoByCategory[category];
-		eHTML.games[category].sheetBackground.innerText = categoryInfo.sheetBackground;
+		eHTML.games[category].sheetBackground.children[0].innerText = categoryInfo.sheetBackground;
 
 		for (let i = 0; i < Object.keys(categoryInfo.games).length; i++) {
 			const gameInfo = categoryInfo.games[Object.keys(categoryInfo.games)[i]];
@@ -505,8 +506,12 @@ function extractMnemonicFromInputs(modal = eHTML.modals.inputMasterMnemonic) {
 	return result;
 }
 async function centerScreenBtnAction() {
+	if (centerScreenBtn.element.classList.contains('busy')) { return; }
+	centerScreenBtn.element.classList.add('busy');
+
 	if (!cryptoLight.key) {
 		openModal('authentification');
+		centerScreenBtn.element.classList.remove('busy');
 		return;
 	}
 
@@ -515,11 +520,25 @@ async function centerScreenBtnAction() {
 		
 		await randomizeMnemonic(eHTML.modals.inputMasterMnemonic, true);
 		eHTML.modals.inputMasterMnemonic.mnemonicGridInputs[0].focus();
+		centerScreenBtn.element.classList.remove('busy');
 		return;
 	}
 
 	// if master mnemonic is already filled - and password is correct
-	toggleDashboard();
+	const newState = await toggleDashboard();
+	if (newState === 'close') {
+		cryptoLight.clear();
+
+		if (userData.preferences.autoCloudSync && !userData.state.synchronizedWithCloud) { 
+			const isSync = await sendMnemoLinksToServer();
+			if (isSync) { 
+				userData.state.synchronizedWithCloud = true;
+				save.userState();
+			} else { console.error('Error while synchronizing with the cloud'); }
+		}
+	}
+
+	centerScreenBtn.element.classList.remove('busy');
 }
 function downloadStringAsFile(string, filename) {
 	const blob = new Blob([string], { type: "text/plain" });
@@ -554,6 +573,7 @@ async function toggleDashboard() {
 		
 		eHTML.vault.mnemolinksBubblesContainer.classList.add('visible');
 		mnemoBubblesObj.forEach((bubble) => { bubble.stopShowing(false); });
+		return 'open';
 	} else {
 		timeOuts["appTitleWrapVisible"] = setTimeout(() => { 
 			appTitleWrap.classList.add('visible'); 
@@ -563,6 +583,7 @@ async function toggleDashboard() {
 		dashboard.classList.remove('open');
 		mnemoBubblesObj.forEach((bubble) => { bubble.toCenterContainer(480); });
 		eHTML.vault.mnemolinksBubblesContainer.classList.remove('visible');
+		return 'close';
 	}
 }
 function prepareConfirmationModal(text = "Are you sure?", yesCallback = () => {}, noCallback = () => { closeModal(); }) {
@@ -947,13 +968,17 @@ function setInVaultPage(pageName = 'vault') {
 	eHTML.vault.element.classList.add('tidy');
 	eHTML.games.element.classList.add('tidy');
 	eHTML.gameContainer.classList.add('tidy');
+	eHTML.dashboard.vaultBtn.classList.remove('active');
+	eHTML.dashboard.gamesBtn.classList.remove('active');
 	
 	if (pageName === 'vault') {
+		eHTML.dashboard.vaultBtn.classList.add('active');
 		eHTML.vault.element.classList.remove('tidy');
 		eHTML.dashboard.dashboardMnemolinksList.classList.remove('tidy');
 	}
 	
 	if (pageName === 'games') {
+		eHTML.dashboard.gamesBtn.classList.add('active');
 		const category = userData.preferences.gameCategory || 'ScribeQuest';
 		setGameCategory(category);
 		eHTML.games.element.classList.remove('tidy');
@@ -998,22 +1023,28 @@ function createGameSheetElement(category = "ScribeQuest", folderName, title, des
 }
 function setGameCategoryTooltip(eventTarget) {
 	const gamesCategoryToolTipElmnt = eHTML.games.gamesCategoryToolTip;
-	eHTML.games.gamesCategoryToolTip.innerText = "";
+	const titleElmnt = gamesCategoryToolTipElmnt.children[0];
+	const descriptionElmnt = gamesCategoryToolTipElmnt.children[1];
+	titleElmnt.innerText = "";
+	descriptionElmnt.innerText = "";
 
 	if (eventTarget === eHTML.games.ScribeQuest.sheetBtn) {
-		gamesCategoryToolTipElmnt.innerText = gamesInfoByCategory.ScribeQuest.categoryDescription;
+		titleElmnt.innerText = gamesInfoByCategory.ScribeQuest.categoryTitle;
+		descriptionElmnt.innerText = gamesInfoByCategory.ScribeQuest.categoryDescription;
 	}
 	if (eventTarget === eHTML.games.CipherCircuit.sheetBtn) {
-		gamesCategoryToolTipElmnt.innerText = gamesInfoByCategory.CipherCircuit.categoryDescription;
+		titleElmnt.innerText = gamesInfoByCategory.CipherCircuit.categoryTitle;
+		descriptionElmnt.innerText = gamesInfoByCategory.CipherCircuit.categoryDescription;
 	}
 	if (eventTarget === eHTML.games.ByteBard.sheetBtn) {
-		gamesCategoryToolTipElmnt.innerText = gamesInfoByCategory.ByteBard.categoryDescription;
+		titleElmnt.innerText = gamesInfoByCategory.ByteBard.categoryTitle;
+		descriptionElmnt.innerText = gamesInfoByCategory.ByteBard.categoryDescription;
 	}
 
-	if (gamesCategoryToolTipElmnt.innerText === "") {
-		gamesCategoryToolTipElmnt.classList.add('hidden');
+	if (titleElmnt.innerText === "" || descriptionElmnt.innerText === "") {
+		gamesCategoryToolTipElmnt.classList.remove('active');
 	} else {
-		gamesCategoryToolTipElmnt.classList.remove('hidden');
+		gamesCategoryToolTipElmnt.classList.add('active');
 	}
 }
 //#endregion
@@ -1130,20 +1161,48 @@ eHTML.modals.authentification.loginForm.addEventListener('submit', function(e) {
 	e.preventDefault();
 
 	const input = eHTML.modals.authentification.input;
-	let password = input.value;
-	if (password === '') { return; }
+	if (input.value === '') { return; }
+
+	let passwordReadyUse = input.value;
+	input.value = '';
 	
 	chrome.storage.local.get(['authInfo'], async function(result) {
-		const { hash, salt1Base64, iv1Base64 } = result.authInfo;
+		const { authID, authToken, hash, salt1Base64, iv1Base64, serverAuthBoost } = sanitize(result.authInfo);
+		if (!hash || !salt1Base64 || !iv1Base64) { console.error('Password data corrupted'); return; }
+		if (typeof hash !== 'string' || typeof salt1Base64 !== 'string' || typeof iv1Base64 !== 'string') { console.error('Password data corrupted'); return; }
+		cryptoLight.cryptoStrength = serverAuthBoost ? 'medium' : 'heavy';
 
-		const res = await cryptoLight.init(password, salt1Base64, iv1Base64);
-		if (!res) { console.error('Error while initializing cryptoLight'); return; }
+		if (serverAuthBoost) {
+			const weakEncryptionReady = await cryptoLight.generateKey(passwordReadyUse, salt1Base64, iv1Base64);
+			if (!weakEncryptionReady) { alert('Weak encryption failed'); return; }
+			const authTokenHash = await cryptoLight.encryptText(authToken);
 
-		const hashIsValid = await cryptoLight.verifyArgon2Hash(res.strongEntropyPassStr, hash);
-		if (!hashIsValid) { console.info('Password is wrong'); input.classList.add('wrong'); return; }
+			const keyPair = await cryptoLight.generateKeyPair();
+			const exportedPubKey = await cryptoLight.exportPublicKey(keyPair.publicKey);
 
-		password = null;
-		input.value = '';
+			const serverResponse = await sharePubKeyWithServer(authID, exportedPubKey);
+			if (!serverResponse) { alert('Server communication failed'); return; }
+			if (!serverResponse.success) { alert(serverResponse.message); return; }
+
+			const serverPublicKey = await cryptoLight.publicKeyFromExported(serverResponse.serverPublicKey);
+
+			const serverResponse2 = await sendAuthDataToServer(serverPublicKey, authID, authTokenHash, false);
+			if (!serverResponse2) { alert('Server communication failed'); return; }
+			if (!serverResponse2.success) { alert(serverResponse2.message); return; }
+
+			const encryptedPassComplementEnc = serverResponse2.encryptedPassComplement;
+			const encryptedPassComplement = await cryptoLight.decryptData(keyPair.privateKey, encryptedPassComplementEnc);
+			const passComplement = await cryptoLight.decryptText(encryptedPassComplement);
+
+			passwordReadyUse = `${passwordReadyUse}${passComplement}`;
+			cryptoLight.clear();
+		}
+
+		const res = await cryptoLight.generateKey(passwordReadyUse, salt1Base64, iv1Base64, hash);
+		if (!res) { console.error('Error while generateKey - cryptoLight'); return; }
+		if (!res.hashVerified) { console.error('Error while verifying hash'); return; }
+
+		passwordReadyUse = null;
 
 		await asyncInitLoad(true);
 		closeModal();
@@ -1899,6 +1958,54 @@ async function sendMnemoLinksToServer() {
 	  return result.success;
 	} catch (error) {
 	  console.error(`Error while sending MnemoLinks to server: ${error}`);
+	  return false;
+	}
+}
+async function sharePubKeyWithServer(authID, publicKey) {
+    const data = { authID, publicKey };
+    const serverUrl = `${settings.serverUrl}/api/sharePubKey`;
+    const requestOptions = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data)
+    };
+  
+    try {
+      const response = await fetch(serverUrl, requestOptions);
+      return await response.json();
+    } catch (error) {
+      console.error(`Error while sharing public key with server: ${error}`);
+      return false;
+    }
+}
+async function sendAuthDataToServer(serverPublicKey, authID, authTokenHash, encryptedPassComplement) {
+    const authTokenHashEnc = await cryptoLight.encryptData(serverPublicKey, authTokenHash);
+    const encryptedPassComplementEnc = encryptedPassComplement ? await cryptoLight.encryptData(serverPublicKey, encryptedPassComplement) : false;
+
+	const data = {
+        authID,
+        authTokenHash: btoa(String.fromCharCode.apply(null, new Uint8Array(authTokenHashEnc))),
+        encryptedPassComplement: encryptedPassComplementEnc ? btoa(String.fromCharCode.apply(null, new Uint8Array(encryptedPassComplementEnc))) : false
+    };
+
+    //console.log(data);
+    const apiRoute = encryptedPassComplement ? 'createAuthInfo' : 'loginAuthInfo';
+	const serverUrl = `${settings.serverUrl}/api/${apiRoute}`;
+	const requestOptions = {
+	  method: 'POST',
+	  headers: {
+		'Content-Type': 'application/json',
+	  },
+	  body: JSON.stringify(data)
+	};
+  
+	try {
+	  const response = await fetch(serverUrl, requestOptions);
+	  return await response.json();
+	} catch (error) {
+	  console.error(`Error while sending AuthData to server: ${error}`);
 	  return false;
 	}
 }
