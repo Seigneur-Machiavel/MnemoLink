@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LinkVault",
   "version": "1.2.0",
-  "description": "Master the last mnemonic you'll ever need. Ensures your digital assets remain securely linked and accessible for life.",
+  "description": "Decentralized mnemonic(seed) manager. Ensures your digital assets remain securely linked and accessible for life.",
   "action": {
     "default_popup": "views/popup.html",
     "default_icon": {

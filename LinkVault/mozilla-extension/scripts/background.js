@@ -3,6 +3,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     
     if (request.action === "openPage") {
         let password = request.password;
+        let passComplement = request.passComplement;
         chrome.tabs.create({'url': chrome.runtime.getURL('views/index.html')}, function(tab) {
             console.log('Tab opened');
 
@@ -10,7 +11,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             const passwordListener = function(request, sender, sendResponse) {
                 if (typeof request.action !== "string") { return; }
                 if (request.action == "getPassword") {
-                    sendResponse({password: password});
+                    sendResponse({password, passComplement});
                     password = null;
                     // Delete the listener after serving the password
                     chrome.runtime.onMessage.removeListener(passwordListener);

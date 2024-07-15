@@ -12,13 +12,13 @@
     <title>LinkVault</title>
     <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAOwAAADsAEnxA+tAAACeklEQVR42mNgoAz4A3E3EM8C4mwgZmKgMVAH4odA/B8N/0Hj/wPiUGpaDPLZM6jhP6A+x+VbAyA+AlX7F4hdKLXcDslXPCToYwbiG1C9l8m1PARqwA4sciDHdADxXSBeDcTKOMywhJrxmlTLtaAae7HIVSLF9z1o6ODzqShU/gApDgBpuI5F3AYqV4YmLg0VP4jDPCWovCMxlu+GKkYHAtBE+AiHPgu03GCGJr8Oh7kogAOqyBpJzBfNYFaouD0Qnwbi9WgJFGTGRqhaOywhW4PPAfVornSF8rcBMR+SnCdS7oA5jBnNrDPQrIgM9kPLDbxxvxKNfwaLOl4gjkJTV4UjXTChlSn/CTnAGSkv/4caRAi8hRbHoOhZjOYAISx2hONzACeaa2WwqAsEYhYs4opI0XEBKXrQ7ViEzwHIABTHt5H4akiGxiPpASU6LiD+BtUDK5bloPLL0OzYSqwDYFnrKBBLQQ0/jabGFi2XSKDJgyqw52h2bMFmuRyOBGKMZgEu4IxD/g+0uEZ2wBRsBlwB4i9ElJC7CMj/R0of73GkAQdcmqcTcEAolvbAVqQygB2IXyHJfUPLBbhCmcGHmGISqSbMAeIGIG6D6vtKpN5r0OIcA3wE4l9kVtvsUEfwElDHClWniy4hBpXgYSAfYDUYDTzAUjSj1O8MNHSAClSNHDZJEaREA4pLbTIc8BtaWeGTv0vIECmkdhy1AcjMZGIUamKpwajlAG1SUrQgDRygSs0Uja/pRrED/iLV6fjAS2j5QXUHnEKqUnEBI6ihArRwQBpUA6gxyo+GQeX6Hqj8SVqlARBYhaXS+Y/U58ulZSJkoFE5oIguCAAu5tauhE0TJAAAAABJRU5ErkJggg==" type="image/x-icon">
     <link rel="stylesheet" href="../styles/main-styles.css">
-    <script src="../scripts/syncScrypt.js"></script>
+    <!--<script src="../scripts/syncScrypt.js"></script>-->
     <script src="../scripts/argon2-bundled.min.js"></script>
     <script src="../scripts/secureModule.js"></script>
+    <script src="../scripts/cryptoLight.js"></script>
     <script src="../scripts/anime.min.js"></script>
     <script src="../scripts/classes.js"></script>
     <script src="../scripts/mnemoLinkerLoader.js" type="module"></script>
-    <script src="../scripts/cryptoLight.js"></script>
     <script src="../games/gamesinfo.js"></script>
     <script src="../scripts/main.js" defer></script>
     <script src="../scripts/bip39-3.1.0.js" defer></script>
@@ -46,7 +46,7 @@
         <div id="dashboardFrameWrap" class="wrap">
             <div class="dashboardFrame">
                 <div id="dashboardTopBar">
-                    <div id="vaultBtn" class="dashboardTopBarBtn">Vault</div>
+                    <div id="vaultBtn" class="dashboardTopBarBtn active">Vault</div>
                     <div id="gamesBtn" class="dashboardTopBarBtn">Games</div>
                 </div>
                 <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -134,7 +134,7 @@
         <div id="games" class="tidy">
             <div class="categorySheet active">
                 <div class="categoryBtn"><div class="wrap">Scribe Quest</div></div>
-                <div class="sheetBackground"></div>
+                <div class="sheetBackground"><div></div></div>
                 <div class="gamesList">
                     <!--<div class="gameSheet">
                         <img class="gameMiniature" src="../games/scribeQuest/give_me_ya_seed/miniature.png"></img>
@@ -147,15 +147,18 @@
             </div>
             <div class="categorySheet">
                 <div class="categoryBtn"><div class="wrap">Cipher Circuit</div></div>
-                <div class="sheetBackground"></div>
+                <div class="sheetBackground"><div></div></div>
                 <div class="gamesList"></div>
             </div>
             <div class="categorySheet">
                 <div class="categoryBtn"><div class="wrap">Byte Bard</div></div>
-                <div class="sheetBackground"></div>
+                <div class="sheetBackground"><div></div></div>
                 <div class="gamesList"></div>
             </div>
-            <div id="gamesCategoryToolTip"></div>
+            <div id="gamesCategoryToolTip">
+                <h2></h2>
+                <p></p>
+            </div>
         </div>
         <div id="game" class="tidy">
 
@@ -198,8 +201,9 @@
                         </div>
                     </div>
                     <div style="text-align: center;">
-                        <h2 class="modalTopText">Create/Restore Master Mnemonic</h2>
-                        <p class="mdoalTopSubText">it's about finding a balance between ease of memorization and security.</p>
+                        <h2 class="modalTopText">Create Master Mnemonic</h2>
+                        <!--<p class="modalTopSubText">it's about finding a balance between ease of memorization and security.</p>-->
+                        <p class="modalTopSubText">to be saved until memorized!<br>(you will be accompanied in this process)</p>
                     </div>
                     <div class="bipLanguageBtnWrap">
                         <button class="arrowButton">&#11164;</button>
@@ -207,7 +211,7 @@
                         <button class="arrowButton">&#11166;</button>
                     </div>
                 </div>
-                <div class="hSeparator"></div>
+                <!--<div class="hSeparator"></div>-->
                 <div class="mnemonicWrap">
                     <div class="mnemonicGrid">
                         <div class="mnemonicSeparator"></div>
@@ -279,7 +283,7 @@
                     </div>
                     <div style="text-align: center;">
                         <h2 class="modalTopText">New link</h2>
-                        <p class="mdoalTopSubText">Enter a mnemonic to link or click the flag to generate a new one.</p>
+                        <p class="modalTopSubText">Enter a mnemonic to link or click the flag to generate a new one.</p>
                     </div>
                     <div class="bipLanguageBtnWrap">
                         <button class="arrowButton">&#11164;</button>
@@ -287,7 +291,7 @@
                         <button class="arrowButton">&#11166;</button>
                     </div>
                 </div>
-                <div class="hSeparator"></div>
+                <!--<div class="hSeparator"></div>-->
                 <div class="mnemonicWrap">
                     <div class="mnemonicGrid">
                         <div class="mnemonicSeparator"></div>

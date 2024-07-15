@@ -3,37 +3,12 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion )
 	const bip39 = require("./bip39-3.1.0.js");
 	const { MnemoLinker } = require("./MnemoLinker/MnemoLinker_v1.0.js");
 	const { cryptoLight } = require("./cryptoLight.js");
-	const { lockCircleObject, centerScreenBtnObject, mnemonicClass, userDataClass, tempDataClass, mnemoBubbleObject, svgLinkObject, mnemoLinkSVGObject, gameControllerClass } = require("./classes.js");
+	const { lockCircleObject, centerScreenBtnObject, mnemonicClass, userDataClass,
+		tempDataClass, mnemoBubbleObject, svgLinkObject, mnemoLinkSVGObject, gameControllerClass,
+		communicationClass, sanitizerClass } = require("./classes.js");
 	const { gamesInfoByCategory, GameInfoClass, CategoryInfoClass } = require("../games/gamesinfo.js");
 }
-document.addEventListener('DOMContentLoaded', function() {
-	chrome.runtime.sendMessage({action: "getPassword"}, function(response) {
-		if (chrome.runtime.lastError) {
-			console.log('Error sending message:', chrome.runtime.lastError);
-			return;
-		}
-		
-		if (response && response.password) {
-			chrome.storage.local.get(['hashedPassword'], async function(result) {
-				const { hash, saltBase64, ivBase64 } = sanitize(result.hashedPassword);
-				if (!hash || !saltBase64 || !ivBase64) { alert('Password data corrupted'); return; }
-				if (typeof hash !== 'string' || typeof saltBase64 !== 'string' || typeof ivBase64 !== 'string') { alert('Password data corrupted'); return; }
-				
-				const res = await cryptoLight.init(response.password, saltBase64, ivBase64);
-				if (res.hash !== hash) { 
-					console.info('Wrong password, requesting authentication');
-					openModal('authentification');
-					return;
-				}
-				console.log('Valid password, Ready to decrypt!'); 
-				await asyncInitLoad(true);
-			});
-		} else {
-			console.log('No password received, authentication required');
-			//openModal('authentification');
-		}
-	});
-});
+
 
 //#region - VARIABLES
 /** @type {MnemoLinker} */
@@ -41,8 +16,10 @@ let MnemoLinkerLastest = null; // FOR FAST ACCESS TO THE LATEST VERSION (need to
 /** @type {MnemoLinker} */
 let emptyMnemoLinker = null; // ONLY USED FOR BASIC USAGE, NEVER USE THIS GLOBAL VARIABLE FOR CRYPTOGRAPHY !!
 
+const isProduction = !(window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'));
 const settings = {
-	isDebug: window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'),
+	appVersion: chrome.runtime.getManifest().version,
+	hardcodedPassword: isProduction ? '' : '123456',
 	animationsLevel: 1,
 	mnemoLinkerVersion: window.MnemoLinker.latestVersion,
 	defaultBip: "BIP-0039",
@@ -52,18 +29,21 @@ const settings = {
 	fastFillMode: true,
 	saveLogs: true,
 	mnemolinkBubblesMinCircleSpots: 6,
-	serverUrl: "https://www.linkvault.app" // "http://localhost:4340",
+	serverUrl: isProduction ? "https://www.linkvault.app": "http://localhost:4340"
 }
+const centerScreenBtn = new centerScreenBtnObject();
+const userData = new userDataClass();
+const gameController = new gameControllerClass();
+const tempData = new tempDataClass();
+const sanitizer = new sanitizerClass();
+const communication = new communicationClass(settings.serverUrl);
+
 const mousePos = { x: 0, y: 0 };
 const timeOuts = {};
 /** @type {mnemoBubbleObject[]} */
 let mnemoBubblesObj = [];
 /** @type {mnemoLinkSVGObject[]} */
 let mnemoLinkSVGsObj = [];
-const centerScreenBtn = new centerScreenBtnObject();
-const userData = new userDataClass();
-const gameController = new gameControllerClass();
-const tempData = new tempDataClass();
 const eHTML = {
 	toggleDarkModeButton: document.getElementById('dark-mode-toggle'),
 	footerVersion: document.getElementById('footerVersion'),
@@ -71,6 +51,8 @@ const eHTML = {
 		element: document.getElementById('dashboard'),
 		dashboardMnemolinksList: document.getElementById('dashboardMnemolinksList'),
 		mnemolinksList: document.getElementById('mnemolinksList'),
+		vaultBtn: document.getElementById('vaultBtn'),
+		gamesBtn: document.getElementById('gamesBtn'),
 	},
 	inVaultWrap: document.getElementById('inVaultWrap'),
 	vault: {
@@ -110,6 +92,7 @@ const eHTML = {
 			loginForm: document.getElementById('loginForm'),
 			input: document.getElementById('authentificationModalWrap').getElementsByTagName('input')[0],
 			button: document.getElementById('authentificationModalWrap').getElementsByTagName('button')[0],
+			bottomInfo: document.getElementById('authentificationModalWrap').getElementsByClassName('bottomInfo')[0],
 		},
 		confirmation: {
 			wrap : document.getElementById('confirmChoiceModalWrap'),
@@ -117,6 +100,7 @@ const eHTML = {
 			text: document.getElementById('confirmChoiceModalWrap').getElementsByClassName('modalText')[0],
 			yesButton: document.getElementById('confirmChoiceModalWrap').getElementsByClassName('modalButton')[0],
 			noButton: document.getElementById('confirmChoiceModalWrap').getElementsByClassName('modalButton')[1],
+			bottomInfo: document.getElementById('confirmChoiceModalWrap').getElementsByClassName('bottomInfo')[0],
 		},
 		inputMasterMnemonic: {
 			wrap : document.getElementById('masterMnemonicModalWrap'),
@@ -154,10 +138,9 @@ const eHTML = {
 		},
 	}
 }
-eHTML.footerVersion.innerText = "v" + chrome.runtime.getManifest().version;
 //#endregion
-const hardcodedPassword = settings.isDebug ? '123456' : '';
-eHTML.modals.authentification.input.value = hardcodedPassword;
+
+eHTML.footerVersion.innerText = "v" + settings.appVersion;
 
 //#region - STORAGE FUNCTIONS
 const save = {
@@ -252,29 +235,10 @@ const load = {
 	},
 	async getDataLocally(key = "toto") {
 		const fromStorage = await chrome.storage.local.get([key]);
-		const sanitizedData = sanitize(fromStorage[key]);
+		const sanitizedData = sanitizer.sanitize(fromStorage[key]);
 		if (!sanitizedData) { return false; }
 		return sanitizedData;
 	}
-}
-function sanitize(data) {
-    if (!data) return false;
-	if (typeof data === 'number' || typeof data === 'boolean') return data;
-    if (!typeof data === 'string' || !typeof data === 'object') return 'Invalid data type';
-
-    if (typeof data === 'string') {
-        //return data.replace(/[^a-zA-Z0-9]/g, '');
-        // accept all base64 characters
-        return data.replace(/[^a-zA-Z0-9+/=]/g, '');
-    } else if (typeof data === 'object') {
-        const sanitized = {};
-        for (const key in data) {
-			const sanitazedValue = sanitize(data[key]);
-            sanitized[sanitize(key)] = sanitazedValue;
-        }
-        return sanitized;
-    }
-    return data;
 }
 //#endregion
 
@@ -293,7 +257,7 @@ async function loadMnemoLinkerLatestVersion() {
 
 	// send mnemo links to the server if needed
 	if (userData.preferences.autoCloudSync && !userData.state.synchronizedWithCloud) { 
-		const isSync = await sendMnemoLinksToServer();
+		const isSync = await communication.sendMnemoLinksToServer(userData.id, userData.encryptedMnemoLinksStr);
 		if (isSync) { 
 			userData.state.synchronizedWithCloud = true;
 			save.userState();
@@ -325,7 +289,7 @@ function fillGamesLists() {
 
 		/** @type {CategoryInfoClass} */
 		const categoryInfo = gamesInfoByCategory[category];
-		eHTML.games[category].sheetBackground.innerText = categoryInfo.sheetBackground;
+		eHTML.games[category].sheetBackground.children[0].innerText = categoryInfo.sheetBackground;
 
 		for (let i = 0; i < Object.keys(categoryInfo.games).length; i++) {
 			const gameInfo = categoryInfo.games[Object.keys(categoryInfo.games)[i]];
@@ -480,23 +444,33 @@ function focusNextInput(inputElement) {
 }
 function extractMnemonicFromInputs(modal = eHTML.modals.inputMasterMnemonic) {
 	const mnemonicGridInputs = modal.mnemonicGridInputs;
+	for (let i = 0; i < mnemonicGridInputs.length; i++) { mnemonicGridInputs[i].classList.remove('valid'); }
+	for (let i = 0; i < mnemonicGridInputs.length; i++) { mnemonicGridInputs[i].classList.remove('invalid'); }
+
 	const bip = "BIP-0039";
 	const language = modal.randomizeBtn.classList[1];
 	const wordsList = emptyMnemoLinker.getWordsTable(bip, language);
 	if (!wordsList) { return; }
 
-	const result = { allWordsAreValid: true, mnemonic: new mnemonicClass() };
+	const result = { allWordsAreFilled: true, allWordsAreValid: true, mnemonic: new mnemonicClass() };
 	const mnemonic = [];
 	for (let i = 0; i < mnemonicGridInputs.length; i++) {
 		const input = mnemonicGridInputs[i];
 		if (input.parentElement.classList.contains('hidden')) { continue; }
 
+		if (input.value === "") { result.allWordsAreFilled = false }
 		mnemonic.push(input.value);
 	};
 
 	// check if all words are included in the words list
 	for (let i = 0; i < mnemonic.length; i++) {
-		if (!wordsList.includes(mnemonic[i])) { result.allWordsAreValid = false; break; }
+		if (!wordsList.includes(mnemonic[i])) {
+			result.allWordsAreValid = false;
+			if (mnemonicGridInputs[i].value === "") { continue };
+			mnemonicGridInputs[i].classList.add('invalid');
+		} else {
+			mnemonicGridInputs[i].classList.add('valid');
+		}
 	}
 
 	result.mnemonic = new mnemonicClass(mnemonic, bip, language);
@@ -504,8 +478,13 @@ function extractMnemonicFromInputs(modal = eHTML.modals.inputMasterMnemonic) {
 	return result;
 }
 async function centerScreenBtnAction() {
+	if (centerScreenBtn.element.classList.contains('busy')) { return; }
+	centerScreenBtn.element.classList.add('busy');
+
 	if (!cryptoLight.key) {
+		eHTML.modals.authentification.input.value = settings.hardcodedPassword;
 		openModal('authentification');
+		centerScreenBtn.element.classList.remove('busy');
 		return;
 	}
 
@@ -514,11 +493,25 @@ async function centerScreenBtnAction() {
 		
 		await randomizeMnemonic(eHTML.modals.inputMasterMnemonic, true);
 		eHTML.modals.inputMasterMnemonic.mnemonicGridInputs[0].focus();
+		centerScreenBtn.element.classList.remove('busy');
 		return;
 	}
 
 	// if master mnemonic is already filled - and password is correct
-	toggleDashboard();
+	const newState = await toggleDashboard();
+	if (newState === 'close') {
+		cryptoLight.clear();
+
+		if (userData.preferences.autoCloudSync && !userData.state.synchronizedWithCloud) { 
+			const isSync = await communication.sendMnemoLinksToServer(userData.id, userData.encryptedMnemoLinksStr);
+			if (isSync) { 
+				userData.state.synchronizedWithCloud = true;
+				save.userState();
+			} else { console.error('Error while synchronizing with the cloud'); }
+		}
+	}
+
+	centerScreenBtn.element.classList.remove('busy');
 }
 function downloadStringAsFile(string, filename) {
 	const blob = new Blob([string], { type: "text/plain" });
@@ -553,6 +546,7 @@ async function toggleDashboard() {
 		
 		eHTML.vault.mnemolinksBubblesContainer.classList.add('visible');
 		mnemoBubblesObj.forEach((bubble) => { bubble.stopShowing(false); });
+		return 'open';
 	} else {
 		timeOuts["appTitleWrapVisible"] = setTimeout(() => { 
 			appTitleWrap.classList.add('visible'); 
@@ -562,6 +556,7 @@ async function toggleDashboard() {
 		dashboard.classList.remove('open');
 		mnemoBubblesObj.forEach((bubble) => { bubble.toCenterContainer(480); });
 		eHTML.vault.mnemolinksBubblesContainer.classList.remove('visible');
+		return 'close';
 	}
 }
 function prepareConfirmationModal(text = "Are you sure?", yesCallback = () => {}, noCallback = () => { closeModal(); }) {
@@ -733,7 +728,6 @@ function modalInfo(text, timeout = 5000) {
 	const activeModal = getActiveModalWrap();
 	if (!activeModal) { return; }
 
-	//const modal = eHTML.modals.find((modal) => modal.wrap === activeModal);
 	const modals = Object.values(eHTML.modals);
 	const modal = modals.find((modal) => modal.wrap === activeModal); 
 	if (!modal) { return; }
@@ -868,7 +862,7 @@ function positionMnemoLinkBubbles(windowWidth = window.innerWidth, windowHeight 
 	let circleRadius = window.innerHeight * extRadiusInFractionOfVH;
 	if (isModalOpen) { circleRadius *= 0.5; }
 
-	const maxSpeed = .32;
+	const maxSpeed = .16; // .32
 	const acceleration = 0.004;
 	const center_x = windowWidth / 2;
 	const center_y = windowHeight / 2;
@@ -890,7 +884,8 @@ function positionMnemoLinkBubbles(windowWidth = window.innerWidth, windowHeight 
 		const isOppositeSpeed = Math.sign(mnemoBubbleObj.vector.x) !== Math.sign(dx) || Math.sign(mnemoBubbleObj.vector.y) !== Math.sign(dy);
 		
 		//if (i === 0) { console.log( Math.sqrt(dx * dx + dy * dy) ) }
-		const maxSpeed_ = isInPerfectRange ? maxSpeed * .2 : maxSpeed;
+		//const maxSpeed_ = isInPerfectRange ? maxSpeed * .2 : maxSpeed;
+		const maxSpeed_ = isInPerfectRange ? maxSpeed * .4 : maxSpeed;
 		let speed = Math.min(maxSpeed_, Math.sqrt(dx * dx + dy * dy) * acceleration);
 		speed = isOppositeSpeed ? speed * 6 : speed;
 
@@ -946,13 +941,17 @@ function setInVaultPage(pageName = 'vault') {
 	eHTML.vault.element.classList.add('tidy');
 	eHTML.games.element.classList.add('tidy');
 	eHTML.gameContainer.classList.add('tidy');
+	eHTML.dashboard.vaultBtn.classList.remove('active');
+	eHTML.dashboard.gamesBtn.classList.remove('active');
 	
 	if (pageName === 'vault') {
+		eHTML.dashboard.vaultBtn.classList.add('active');
 		eHTML.vault.element.classList.remove('tidy');
 		eHTML.dashboard.dashboardMnemolinksList.classList.remove('tidy');
 	}
 	
 	if (pageName === 'games') {
+		eHTML.dashboard.gamesBtn.classList.add('active');
 		const category = userData.preferences.gameCategory || 'ScribeQuest';
 		setGameCategory(category);
 		eHTML.games.element.classList.remove('tidy');
@@ -997,22 +996,28 @@ function createGameSheetElement(category = "ScribeQuest", folderName, title, des
 }
 function setGameCategoryTooltip(eventTarget) {
 	const gamesCategoryToolTipElmnt = eHTML.games.gamesCategoryToolTip;
-	eHTML.games.gamesCategoryToolTip.innerText = "";
+	const titleElmnt = gamesCategoryToolTipElmnt.children[0];
+	const descriptionElmnt = gamesCategoryToolTipElmnt.children[1];
+	titleElmnt.innerText = "";
+	descriptionElmnt.innerText = "";
 
 	if (eventTarget === eHTML.games.ScribeQuest.sheetBtn) {
-		gamesCategoryToolTipElmnt.innerText = gamesInfoByCategory.ScribeQuest.categoryDescription;
+		titleElmnt.innerText = gamesInfoByCategory.ScribeQuest.categoryTitle;
+		descriptionElmnt.innerText = gamesInfoByCategory.ScribeQuest.categoryDescription;
 	}
 	if (eventTarget === eHTML.games.CipherCircuit.sheetBtn) {
-		gamesCategoryToolTipElmnt.innerText = gamesInfoByCategory.CipherCircuit.categoryDescription;
+		titleElmnt.innerText = gamesInfoByCategory.CipherCircuit.categoryTitle;
+		descriptionElmnt.innerText = gamesInfoByCategory.CipherCircuit.categoryDescription;
 	}
 	if (eventTarget === eHTML.games.ByteBard.sheetBtn) {
-		gamesCategoryToolTipElmnt.innerText = gamesInfoByCategory.ByteBard.categoryDescription;
+		titleElmnt.innerText = gamesInfoByCategory.ByteBard.categoryTitle;
+		descriptionElmnt.innerText = gamesInfoByCategory.ByteBard.categoryDescription;
 	}
 
-	if (gamesCategoryToolTipElmnt.innerText === "") {
-		gamesCategoryToolTipElmnt.classList.add('hidden');
+	if (titleElmnt.innerText === "" || descriptionElmnt.innerText === "") {
+		gamesCategoryToolTipElmnt.classList.remove('active');
 	} else {
-		gamesCategoryToolTipElmnt.classList.remove('hidden');
+		gamesCategoryToolTipElmnt.classList.add('active');
 	}
 }
 //#endregion
@@ -1122,6 +1127,33 @@ function convertMnemonicStrToCustomB64Str(mnemonicStr) {
 //#endregion
 
 //#region - EVENT LISTENERS
+document.addEventListener('DOMContentLoaded', function() {
+	chrome.runtime.sendMessage({action: "getPassword"}, function(response) {
+		if (chrome.runtime.lastError) {
+			console.log('Error sending message:', chrome.runtime.lastError);
+			return;
+		}
+		
+		if (response && response.password) {
+			chrome.storage.local.get(['authInfo'], async function(result) {
+				
+				const { salt1Base64, iv1Base64, hash, serverAuthBoost } = sanitizer.sanitize(result.authInfo);
+				cryptoLight.cryptoStrength = serverAuthBoost ? 'medium' : 'heavy';
+
+				const res = await cryptoLight.generateKey(response.password, salt1Base64, iv1Base64, hash);
+				if (!res) { console.error('Error while initializing cryptoLight'); return; }
+				if (!res.hashVerified) { console.error('Error while verifying hash'); return; }
+				
+				//passwordReadyUse = null;
+				await asyncInitLoad(true);
+				centerScreenBtnAction();
+			});
+		} else {
+			console.log('No password received, authentication required');
+			openModal('authentification');
+		}
+	});
+});
 window.addEventListener('resize', () => {
 	initMnemoLinkBubbles(true, 600);
 });
@@ -1129,20 +1161,58 @@ eHTML.modals.authentification.loginForm.addEventListener('submit', function(e) {
 	e.preventDefault();
 
 	const input = eHTML.modals.authentification.input;
-	let password = input.value;
-	if (password === '') { return; }
-	
-	chrome.storage.local.get(['hashedPassword'], async function(result) {
-		const { hash, saltBase64, ivBase64 } = result.hashedPassword;
-		const res = await cryptoLight.init(password, saltBase64, ivBase64);
+	if (input.value === '') { return; }
 
-		if (res.hash !== hash) { 
-			input.classList.add('wrong');
-			return;
+	let passwordReadyUse = input.value;
+	input.value = '';
+
+	function infoAndWrongAnim(text) {
+		modalInfo(text);
+		input.classList.add('wrong');
+		cryptoLight.clear();
+	}
+	
+	chrome.storage.local.get(['authInfo'], async function(result) {
+		const { authID, authToken, hash, salt1Base64, iv1Base64, serverAuthBoost } = sanitizer.sanitize(result.authInfo);
+		const passwordMinLength = serverAuthBoost ? 6 : 8;
+        if (passwordReadyUse.length < passwordMinLength) { infoAndWrongAnim(`Password must be at least ${passwordMinLength} characters long`); busy.splice(busy.indexOf('loginForm'), 1); return; }
+
+		if (!hash || !salt1Base64 || !iv1Base64) { console.error('Password data corrupted'); return; }
+		if (typeof hash !== 'string' || typeof salt1Base64 !== 'string' || typeof iv1Base64 !== 'string') { console.error('Password data corrupted'); return; }
+		cryptoLight.cryptoStrength = serverAuthBoost ? 'medium' : 'heavy';
+
+		if (serverAuthBoost) {
+			const weakEncryptionReady = await cryptoLight.generateKey(passwordReadyUse, salt1Base64, iv1Base64);
+			if (!weakEncryptionReady) { infoAndWrongAnim('Weak encryption failed'); return; }
+			const authTokenHash = await cryptoLight.encryptText(authToken);
+
+			const keyPair = await cryptoLight.generateKeyPair();
+			const exportedPubKey = await cryptoLight.exportPublicKey(keyPair.publicKey);
+
+			const serverResponse = await communication.sharePubKeyWithServer(authID, exportedPubKey);
+			if (!serverResponse) { infoAndWrongAnim('Server communication failed'); return; }
+			if (!serverResponse.success) { infoAndWrongAnim(serverResponse.message); return; }
+
+			const serverPublicKey = await cryptoLight.publicKeyFromExported(serverResponse.serverPublicKey);
+
+			const serverResponse2 = await communication.sendAuthDataToServer(serverPublicKey, authID, authTokenHash, false);
+			if (!serverResponse2) { infoAndWrongAnim('Server communication failed'); return; }
+			if (!serverResponse2.success) { infoAndWrongAnim(serverResponse2.message); return; }
+
+			const encryptedPassComplementEnc = serverResponse2.encryptedPassComplement;
+			const encryptedPassComplement = await cryptoLight.decryptData(keyPair.privateKey, encryptedPassComplementEnc);
+			const passComplement = await cryptoLight.decryptText(encryptedPassComplement);
+
+			passwordReadyUse = `${passwordReadyUse}${passComplement}`;
+			cryptoLight.clear();
 		}
 
-		password = null;
-		input.value = '';
+		const res = await cryptoLight.generateKey(passwordReadyUse, salt1Base64, iv1Base64, hash);
+		if (!res) { console.error('Error while generateKey - cryptoLight'); return; }
+		if (!res.hashVerified) { console.error('Error while verifying hash'); return; }
+
+		passwordReadyUse = null;
+
 		await asyncInitLoad(true);
 		closeModal();
 		centerScreenBtn.lock();
@@ -1167,7 +1237,9 @@ document.getElementById("dark-mode-toggle").addEventListener('change', (event) =
 });
 document.addEventListener('keydown', (event) => {
 	// "tab key" result same as "enter key" for suggestions
-	if (event.key === 'Enter' || event.key === 'Tab' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+	// case space
+	const acceptedKeys = ['Enter', 'Tab', 'ArrowDown', 'ArrowUp', ' '];
+	if (acceptedKeys.includes(event.key)) {
 		const suggestionsHTML = document.getElementsByClassName('suggestions')[0];
 		if (!suggestionsHTML) { return; }
 		const activeSuggestion = suggestionsHTML.getElementsByClassName('active')[0];
@@ -1202,6 +1274,7 @@ document.addEventListener('keydown', (event) => {
 				scrollSuggestionToView(nextSuggestion, 'bottom');
 				break;
 			case 'Tab':
+			case ' ':
 			case 'Enter':
 				/** @type {HTMLInputElement} */
 				let input = null;
@@ -1216,15 +1289,9 @@ document.addEventListener('keydown', (event) => {
 				const modalWrap = input.parentElement.parentElement.parentElement.parentElement.parentElement
 				if (!modalWrap || !modalWrap.id) { console.error('modalWrap not found'); return; }
 				
-				if (!activeSuggestion) {
-					if (switchBtnsIfMnemonicGridIsFilled(modalWrap.id).allWordsAreValid) { return; }
-					focusNextInput(input);
-					return; 
-				}
-
-				input.value = activeSuggestion.innerText;
+				input.value = activeSuggestion ? activeSuggestion.innerText : input.value;
 				deleteExistingSuggestionsHTML();
-				
+
 				if (modalWrap.id === eHTML.modals.inputMasterMnemonic.wrap.id) {
 					if (tempData.rndMnemonic.includes(input.value)) { input.classList.add('random'); } else { input.classList.remove('random'); }
 					actualizeScore();
@@ -1872,32 +1939,4 @@ eHTML.modals.inputMnemonic.confirmBtn.addEventListener('click', async (event) =>
 
 	modal.confirmBtn.classList.remove('busy');
 });
-//#endregion
-
-//#region - SERVER COMMUNICATION
-async function sendMnemoLinksToServer() {
-	const data = { 
-		id: userData.id,
-		encryptedMnemoLinksStr: userData.encryptedMnemoLinksStr,
-	};
-
-	const serverUrl = `${settings.serverUrl}/api/storeMnemoLinks`;
-	const requestOptions = {
-	  method: 'POST',
-	  headers: {
-		'Content-Type': 'application/json',
-	  },
-	  body: JSON.stringify(data)
-	};
-  
-	try {
-	  const response = await fetch(serverUrl, requestOptions);
-	  const result = await response.json();
-	  console.log(`MnemoLinks sent to server: ${result.success}`);
-	  return result.success;
-	} catch (error) {
-	  console.error(`Error while sending MnemoLinks to server: ${error}`);
-	  return false;
-	}
-}
 //#endregion
