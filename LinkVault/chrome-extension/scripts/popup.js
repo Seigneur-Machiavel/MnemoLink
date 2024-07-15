@@ -1,22 +1,72 @@
 if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
 	const { cryptoLight } = require("./cryptoLight.js");
-    const { lockCircleObject, centerScreenBtnObject } = require("./classes.js");
+    const { lockCircleObject, centerScreenBtnObject, communicationClass, sanitizerClass } = require("./classes.js");
 }
 
-const settings = { serverUrl: 'http://localhost:4340' };
+const isProduction = !(window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'));
+const settings = {
+    appVersion: chrome.runtime.getManifest().version,
+    minVersionAcceptedWithoutReset: '1.2.0',
+    hardcodedPassword: isProduction ? '' : '123456',
+    serverUrl: isProduction ? "https://www.linkvault.app": "http://localhost:4340"
+};
+const sanitizer = new sanitizerClass();
+const communication = new communicationClass(settings.serverUrl);
+
 const centerScreenBtn = new centerScreenBtnObject();
 centerScreenBtn.state = 'welcome';
 centerScreenBtn.init(7);
 
-const isDebug = window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647');
-const hardcodedPassword = isDebug ? '123456' : '';
 const busy = [];
+//#region - UX FUNCTIONS
 function setVisibleForm(formId) {
     const forms = document.getElementsByTagName('form');
     for (let i = 0; i < forms.length; i++) {
         if (forms[i].id === formId) { forms[i].classList.remove('hidden'); continue; }
         forms[i].classList.add('hidden');
     }
+}
+function setInitialInputValues() {
+    const hardcodedPassword = settings.hardcodedPassword;
+    document.getElementById('loginForm').getElementsByTagName('input')[0].value = hardcodedPassword;
+    document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].value = hardcodedPassword;
+    document.getElementById('passwordCreationForm').getElementsByTagName('input')[1].value = hardcodedPassword;
+}
+function showFormDependingOnStoredPassword() {
+    chrome.storage.local.get(['authInfo'], function(result) {
+        const { hash, salt1Base64, iv1Base64 } = sanitizer.sanitize(result.authInfo);
+        if (hash && salt1Base64 && iv1Base64) {
+            setVisibleForm('loginForm');
+            document.getElementById('loginForm').getElementsByTagName('input')[0].focus();
+        } else {
+            setVisibleForm('passwordCreationForm');
+            document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].focus();
+        }
+    });
+}
+function bottomInfo(targetForm, text, timeout = 3000) {
+    const infoElmnt = targetForm.getElementsByClassName('bottomInfo')[0];
+
+	infoElmnt.innerText = text;
+
+	setTimeout(() => {
+		infoElmnt.innerText = "";
+	}, timeout);
+}
+//#endregion
+
+//#region - FUNCTIONS
+function controlVersionAndResetIfNeeded() {
+    const appV = settings.appVersion.split('.');
+    const minV = settings.minVersionAcceptedWithoutReset.split('.');
+
+    if (parseInt(appV[0]) < parseInt(minV[0])) { resetApplication(); return; }
+    if (parseInt(appV[0]) > parseInt(minV[0])) { return; }
+
+    if (parseInt(appV[1]) < parseInt(minV[1])) { resetApplication(); return; }
+    if (parseInt(appV[1]) > parseInt(minV[1])) { return; }
+
+    if (parseInt(appV[2]) < parseInt(minV[2])) { resetApplication(); return; }
 }
 async function setNewPassword(password, passComplement = false) {
     const startTimestamp = Date.now();
@@ -40,6 +90,7 @@ async function setNewPassword(password, passComplement = false) {
     const authID = generateAuthID(); // authID - used to link the passComplement on the server
     chrome.storage.local.set({
         authInfo: {
+            appVersion: settings.appVersion,
             authID,
             authToken,
             hash: authInfo.encodedHash,
@@ -69,37 +120,6 @@ async function resetApplication() {
         }
     });
 }
-function showFormDependingOnStoredPassword() {
-    chrome.storage.local.get(['authInfo'], function(result) {
-        const { hash, salt1Base64, iv1Base64 } = sanitize(result.authInfo);
-        if (hash && salt1Base64 && iv1Base64) {
-            setVisibleForm('loginForm');
-            document.getElementById('loginForm').getElementsByTagName('input')[0].focus();
-        } else {
-            setVisibleForm('passwordCreationForm');
-            document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].focus();
-        }
-    });
-}
-function sanitize(data) {
-    if (!data) return false;
-	if (typeof data === 'number' || typeof data === 'boolean') return data;
-    if (typeof data !== 'string' && typeof data !== 'object') return 'Invalid data type';
-
-    if (typeof data === 'string') {
-        //return data.replace(/[^a-zA-Z0-9]/g, '');
-        // accept all base64 characters
-        return data.replace(/[^a-zA-Z0-9+/=$,]/g, '');
-    } else if (typeof data === 'object') {
-        const sanitized = {};
-        for (const key in data) {
-			const sanitazedValue = sanitize(data[key]);
-            sanitized[sanitize(key)] = sanitazedValue;
-        }
-        return sanitized;
-    }
-    return data;
-}
 function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1) + min); }
 function generateAuthID(length = 32) {
     const authorized = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -109,6 +129,9 @@ function generateAuthID(length = 32) {
     }
     return result;
 }
+//#endregion
+
+//#region - EVENT LISTENERS
 document.getElementById('passwordCreationForm').addEventListener('submit', async function(e) {
     if (busy.includes('passwordCreationForm')) return;
     busy.push('passwordCreationForm');
@@ -139,13 +162,13 @@ document.getElementById('passwordCreationForm').addEventListener('submit', async
             const keyPair = await cryptoLight.generateKeyPair();
             const exportedPubKey = await cryptoLight.exportPublicKey(keyPair.publicKey);
 
-            const serverResponse = await sharePubKeyWithServer(authID, exportedPubKey);
+            const serverResponse = await communication.sharePubKeyWithServer(authID, exportedPubKey);
             if (!serverResponse) { alert('Server communication failed'); busy.splice(busy.indexOf('passwordCreationForm'), 1); resetApplication(); return; }
             if (!serverResponse.success) { alert(serverResponse.message); busy.splice(busy.indexOf('passwordCreationForm'), 1); resetApplication(); return; }
 
             const serverPublicKey = await cryptoLight.publicKeyFromExported(serverResponse.serverPublicKey);
 
-            const serverResponse2 = await sendAuthDataToServer(serverPublicKey, authID, authTokenHash, encryptedPassComplement, totalTimings);
+            const serverResponse2 = await communication.sendAuthDataToServer(serverPublicKey, authID, authTokenHash, encryptedPassComplement, totalTimings);
             if (!serverResponse2) { alert('Server communication failed'); busy.splice(busy.indexOf('passwordCreationForm'), 1); resetApplication(); return; }
             if (!serverResponse2.success) { alert(serverResponse2.message); busy.splice(busy.indexOf('passwordCreationForm'), 1); resetApplication(); return; }
        }
@@ -164,34 +187,43 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
     busy.push('loginForm');
 
     e.preventDefault();
-    const input = document.getElementById('loginForm').getElementsByTagName('input')[0];
+    const targetForm = document.getElementById('loginForm');
+    const input = targetForm.getElementsByTagName('input')[0];
     let passwordReadyUse = input.value;
     input.value = '';
     if (passwordReadyUse === '') { busy.splice(busy.indexOf('loginForm'), 1); return; }
 
+    function infoAndWrongAnim(text) {
+		bottomInfo(targetForm, text);
+		input.classList.add('wrong');
+	}
+
     chrome.storage.local.get(['authInfo'], async function(result) {
-        const { authID, authToken, hash, salt1Base64, iv1Base64, serverAuthBoost } = sanitize(result.authInfo);
-        if (!hash || !salt1Base64 || !iv1Base64) { alert('Password not set'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+        const { authID, authToken, hash, salt1Base64, iv1Base64, serverAuthBoost } = sanitizer.sanitize(result.authInfo);
+        const passwordMinLength = serverAuthBoost ? 6 : 8;
+        if (passwordReadyUse.length < passwordMinLength) { infoAndWrongAnim(`Password must be at least ${passwordMinLength} characters long`); busy.splice(busy.indexOf('loginForm'), 1); return; }
+
+        if (!hash || !salt1Base64 || !iv1Base64) { infoAndWrongAnim('Password not set'); busy.splice(busy.indexOf('loginForm'), 1); return; }
         if (typeof hash !== 'string' || typeof salt1Base64 !== 'string' || typeof iv1Base64 !== 'string') { console.error('Password data corrupted'); busy.splice(busy.indexOf('loginForm'), 1); return; }
         cryptoLight.cryptoStrength = serverAuthBoost ? 'medium' : 'heavy';
 
         if (serverAuthBoost) {
             const weakEncryptionReady = await cryptoLight.generateKey(passwordReadyUse, salt1Base64, iv1Base64);
-            if (!weakEncryptionReady) { alert('Weak encryption failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+            if (!weakEncryptionReady) { infoAndWrongAnim('Weak encryption failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
             const authTokenHash = await cryptoLight.encryptText(authToken);
 
             const keyPair = await cryptoLight.generateKeyPair();
             const exportedPubKey = await cryptoLight.exportPublicKey(keyPair.publicKey);
 
-            const serverResponse = await sharePubKeyWithServer(authID, exportedPubKey);
-            if (!serverResponse) { alert('Server communication failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
-            if (!serverResponse.success) { alert(serverResponse.message); busy.splice(busy.indexOf('loginForm'), 1); return; }
+            const serverResponse = await communication.sharePubKeyWithServer(authID, exportedPubKey);
+            if (!serverResponse) { infoAndWrongAnim('Server communication failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+            if (!serverResponse.success) { infoAndWrongAnim(serverResponse.message); busy.splice(busy.indexOf('loginForm'), 1); return; }
 
             const serverPublicKey = await cryptoLight.publicKeyFromExported(serverResponse.serverPublicKey);
 
-            const serverResponse2 = await sendAuthDataToServer(serverPublicKey, authID, authTokenHash, false);
-            if (!serverResponse2) { alert('Server communication failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
-            if (!serverResponse2.success) { alert(`authID: ${authID}\n${serverResponse2.message}`); busy.splice(busy.indexOf('loginForm'), 1); return; }
+            const serverResponse2 = await communication.sendAuthDataToServer(serverPublicKey, authID, authTokenHash, false);
+            if (!serverResponse2) { infoAndWrongAnim('Server communication failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+            if (!serverResponse2.success) { infoAndWrongAnim(`authID: ${authID}\n${serverResponse2.message}`); busy.splice(busy.indexOf('loginForm'), 1); return; }
 
             const encryptedPassComplementEnc = serverResponse2.encryptedPassComplement;
             const encryptedPassComplement = await cryptoLight.decryptData(keyPair.privateKey, encryptedPassComplementEnc);
@@ -215,64 +247,8 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
         busy.splice(busy.indexOf('loginForm'), 1);
     });
 });
-
-showFormDependingOnStoredPassword();
-document.getElementById('loginForm').getElementsByTagName('input')[0].value = hardcodedPassword;
-document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].value = hardcodedPassword;
-document.getElementById('passwordCreationForm').getElementsByTagName('input')[1].value = hardcodedPassword;
-
-//#region - SERVER COMMUNICATION
-async function sharePubKeyWithServer(authID, publicKey) {
-    const data = { authID, publicKey };
-    const serverUrl = `${settings.serverUrl}/api/sharePubKey`;
-    const requestOptions = {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data)
-    };
-  
-    try {
-      const response = await fetch(serverUrl, requestOptions);
-      return await response.json();
-    } catch (error) {
-      console.error(`Error while sharing public key with server: ${error}`);
-      return false;
-    }
-}
-async function sendAuthDataToServer(serverPublicKey, authID, authTokenHash, encryptedPassComplement, totalTimings) {
-    const authTokenHashEnc = await cryptoLight.encryptData(serverPublicKey, authTokenHash);
-    const encryptedPassComplementEnc = encryptedPassComplement ? await cryptoLight.encryptData(serverPublicKey, encryptedPassComplement) : false;
-
-	const data = {
-        authID,
-        authTokenHash: btoa(String.fromCharCode.apply(null, new Uint8Array(authTokenHashEnc))),
-        encryptedPassComplement: encryptedPassComplementEnc ? btoa(String.fromCharCode.apply(null, new Uint8Array(encryptedPassComplementEnc))) : false,
-    };
-    if (totalTimings) {
-        data.argon2Time = totalTimings.argon2Time;
-        data.deriveKTime = totalTimings.deriveKTime;
-        data.totalTime = totalTimings.total;
-    }
-
-    //console.log(data);
-    const apiRoute = encryptedPassComplement ? 'createAuthInfo' : 'loginAuthInfo';
-	const serverUrl = `${settings.serverUrl}/api/${apiRoute}`;
-	const requestOptions = {
-	  method: 'POST',
-	  headers: {
-		'Content-Type': 'application/json',
-	  },
-	  body: JSON.stringify(data)
-	};
-  
-	try {
-	  const response = await fetch(serverUrl, requestOptions);
-	  return await response.json();
-	} catch (error) {
-	  console.error(`Error while sending AuthData to server: ${error}`);
-	  return false;
-	}
-}
 //#endregion
+
+controlVersionAndResetIfNeeded();
+setInitialInputValues();
+showFormDependingOnStoredPassword();

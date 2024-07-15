@@ -137,7 +137,7 @@ button {
     }
     50% {
         opacity: 1;
-        scale: 1.04;
+        scale: 1.02;
     }
     100% {
         opacity: .8;
@@ -912,6 +912,9 @@ body.dark-mode .mnemolinkBubble .wrap {
     border-color: var(--placeholder-color);
     background-color: rgb(40, 40, 40);
 }
+#authentificationModalWrap .bottomInfo, #confirmChoiceModalWrap .bottomInfo {
+    color: white;
+}
 form {
     width: 100%;
     height: 100%;
@@ -1002,11 +1005,11 @@ form button {
     width: 100%;
 }
 .modalTopText {
-    font-size: 4vh;
+    font-size: 3.6vh;
 }
 .modalTopSubText {
-    font-size: 1vh;
-    opacity: 0.4;
+    opacity: 0.8;
+    animation: blink 1s infinite;
 }
 .seedWordsRangeWrap label {
     font-size: 1.6vh;
@@ -1178,8 +1181,11 @@ form button {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 10px 20px;
-    width: 60%;
+    /*width: 60%;
     margin-left: 20%;
+    padding: 10px 0;*/
+    margin: 20px 50px;
+    padding: 10px 10px;
 }
 .mnemonicGrid.busy {
     pointer-events: none;
@@ -1188,7 +1194,8 @@ form button {
     position: absolute;
     background-color: black;
     width: 2px;
-    height: 100%;
+    margin: 10px 0;
+    height: -webkit-fill-available;
     left: 50%;
     transform: translateX(-50%);
     opacity: .1;
@@ -1223,6 +1230,7 @@ form button {
     border-bottom: 1px dotted var(--text-color);
 }
 .wordInput {
+    font-family: monospace;
     cursor: pointer;
     background-color: transparent;
     border-color: #737373;
@@ -1249,12 +1257,20 @@ form button {
     border-color: #737373;
     border-style: none none dashed none;
 }
+.wordInput.invalid {
+    /*border-color: red;*/
+    border-color: indianred;
+}
+.wordInput.valid {
+    /*border-color: green;*/
+    border-color: cornflowerblue;
+}
 .bottomInfo {
     position: absolute;
     text-align: center;
     font-weight: bold;
     left: 50%;
-    font-size: 16px;
+    font-size: 14px;
     transform: translate(-50%, -70%);
     animation: blink 1s infinite;
 }

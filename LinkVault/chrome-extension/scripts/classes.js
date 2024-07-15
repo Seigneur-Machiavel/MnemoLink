@@ -837,6 +837,158 @@ class gameControllerClass {
         this.gameEventListeners = [];
     }
 }
+class cryptoTimingsObject {
+	constructor() {
+		this.argon2Time = 0;
+		this.deriveKTime = 0;
+		this.total = 0;
+	}
+}
+class communicationClass {
+    constructor(serverUrl) {
+        this.url = serverUrl;
+		this.sanitizer = new sanitizerClass();
+    }
+
+	/**
+	 * Send MnemoLinks to server - Return server's response
+	 * @param {string} userId - userData.id
+	 * @param {object} encryptedMnemoLinksStr - userData.encryptedMnemoLinksStr
+	 * @returns {Promise<boolean>}
+	 */
+	async sendMnemoLinksToServer(userId, encryptedMnemoLinksStr) {
+		const data = { 
+			id: userId,
+			encryptedMnemoLinksStr: encryptedMnemoLinksStr,
+		};
+	
+		const serverUrl = `${settings.serverUrl}/api/storeMnemoLinks`;
+		const requestOptions = {
+		  method: 'POST',
+		  headers: {
+			'Content-Type': 'application/json',
+		  },
+		  body: JSON.stringify(data)
+		};
+	  
+		try {
+		  const response = await fetch(serverUrl, requestOptions);
+		  const result = await response.json();
+
+		  if (typeof result.success !== 'boolean') { console.error('Invalid response from server !'); return false; }
+		  console.log(`MnemoLinks sent to server: ${result.success}`);
+		  return result.success;
+		} catch (error) {
+		  console.error(`Error while sending MnemoLinks to server: ${error}`);
+		  return false;
+		}
+	}
+	/**
+	 * Send pubKey with server - Return server's pubKey (sanitized)
+	 * @param {string} authID
+	 * @param {Uint8Array} publicKey
+	 * @returns {Promise<boolean | Uint8Array>}
+	 */
+	async sharePubKeyWithServer(authID, publicKey) {
+		const data = { authID, publicKey };
+		const stringifiedData = JSON.stringify(data);
+		const serverUrl = `${this.url}/api/sharePubKey`;
+
+		const requestOptions = {
+		  method: 'POST',
+		  headers: {
+			'Content-Type': 'application/json',
+		  },
+		  body: stringifiedData
+		};
+	  
+		try {
+		  const response = await fetch(serverUrl, requestOptions);
+		  const result = await response.json();
+
+		  if (typeof result.success !== 'boolean') { console.error('Invalid response from server !'); return false; }
+		  if (result.message) { result.message = this.sanitizer.sanitize(result.message); }
+		  if (result.serverPublicKey) { result.serverPublicKey = this.sanitizer.sanitize(result.serverPublicKey); }
+		  return result;
+		} catch (error) {
+		  console.error(`Error while sharing public key with server: ${error}`);
+		  return false;
+		}
+	}
+	/**
+	 * Send encrypted auth data to server - Return server's response
+	 * @param {Uint8Array} serverPublicKey
+	 * @param {string} authID
+	 * @param {string} authTokenHash
+	 * @param {string} encryptedPassComplement
+	 * @param {cryptoTimingsObject} totalTimings
+	 * @returns {Promise<boolean | object>}
+	 */
+	async sendAuthDataToServer(serverPublicKey, authID, authTokenHash, encryptedPassComplement, totalTimings) {
+		if (!serverPublicKey || !authID || !authTokenHash) { console.error('Missing data !'); return false; }
+
+		const authTokenHashEnc = await cryptoLight.encryptData(serverPublicKey, authTokenHash);
+		const encryptedPassComplementEnc = encryptedPassComplement ? await cryptoLight.encryptData(serverPublicKey, encryptedPassComplement) : false;
+	
+		const data = {
+			authID,
+			authTokenHash: btoa(String.fromCharCode.apply(null, new Uint8Array(authTokenHashEnc))),
+			encryptedPassComplement: encryptedPassComplementEnc ? btoa(String.fromCharCode.apply(null, new Uint8Array(encryptedPassComplementEnc))) : false,
+		};
+		if (totalTimings) {
+			data.argon2Time = totalTimings.argon2Time;
+			data.deriveKTime = totalTimings.deriveKTime;
+			data.totalTime = totalTimings.total;
+		}
+	
+		//console.log(data);
+		const apiRoute = encryptedPassComplement ? 'createAuthInfo' : 'loginAuthInfo';
+		const serverUrl = `${settings.serverUrl}/api/${apiRoute}`;
+		const requestOptions = {
+		  method: 'POST',
+		  headers: {
+			'Content-Type': 'application/json',
+		  },
+		  body: JSON.stringify(data)
+		};
+	  
+		try {
+		  const response = await fetch(serverUrl, requestOptions);
+		  const result = await response.json();
+
+		  if (typeof result.success !== 'boolean') { console.error('Invalid response from server !'); return false; }
+		  if (result.message) { result.message = this.sanitizer.sanitize(result.message); }
+		  if (result.encryptedPassComplement) { result.encryptedPassComplement = this.sanitizer.sanitize(result.encryptedPassComplement); }
+		  return result;
+		} catch (error) {
+		  console.error(`Error while sending AuthData to server: ${error}`);
+		  return false;
+		}
+	}
+}
+class sanitizerClass {
+	constructor() {
+		this.validTypeToReturn = ['number', 'boolean'];
+	}
+
+	sanitize(data) {
+		if (!data) return false;
+		if (this.validTypeToReturn.includes(typeof data)) return data;
+		if (typeof data !== 'string' && typeof data !== 'object') return 'Invalid data type';
+	
+		if (typeof data === 'string') {
+			return data.replace(/[^a-zA-Z0-9+/=$,]/g, '');
+		} else if (typeof data === 'object') {
+			const sanitized = {};
+			for (const key in data) {
+				const sanitazedValue = this.sanitize(data[key]);
+				sanitized[this.sanitize(key)] = sanitazedValue;
+			}
+			return sanitized;
+		}
+		return data;
+	}
+}
 //#endregion
 
 if (false) {
@@ -850,5 +1002,7 @@ if (false) {
         svgLinkObject,
         mnemoLinkSVGObject,
         gameControllerClass,
+		communicationClass,
+		sanitizerClass,
     };
 }

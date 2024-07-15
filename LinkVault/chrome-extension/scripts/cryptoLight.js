@@ -277,9 +277,4 @@ const cryptoLight = {
     }
 }
 
-
-if (window.location.href.includes('localhost')) {
-    module.exports = {
-        cryptoLight
-    };
-}
+if (window.location.href.includes('localhost')) { module.exports = { cryptoLight} };

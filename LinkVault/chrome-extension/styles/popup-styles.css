@@ -83,6 +83,12 @@ button {
     border-radius: 10px;
     font-size: large;
 }
+.bottomInfo {
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+    animation: blink 1s infinite;
+}
 
 .inlineCheckBox {
     margin-top: 20px;
