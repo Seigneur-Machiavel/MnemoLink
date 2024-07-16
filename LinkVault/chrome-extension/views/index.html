@@ -18,6 +18,7 @@
     <script src="../scripts/cryptoLight.js"></script>
     <script src="../scripts/anime.min.js"></script>
     <script src="../scripts/classes.js"></script>
+    <script src="../scripts/htmlAnimations.js"></script>
     <script src="../scripts/mnemoLinkerLoader.js" type="module"></script>
     <script src="../games/gamesinfo.js"></script>
     <script src="../scripts/main.js" defer></script>
@@ -187,7 +188,8 @@
         </div>
         <div class="modalWrap hidden" id="masterMnemonicModalWrap">
             <div class="modal">
-                <div style="display: flex; justify-content: space-between;">
+                <h2 class="modalTopText">Create Master Mnemonic</h2>
+                <div style="display: flex; justify-content: space-between; margin: 20px;">
                     <div style="display: flex; flex-direction: column; justify-content: space-evenly; width: 136px;">
                         <select class="optionsList" style="display: none;">
                             <option>BIP-0039</option>
@@ -200,10 +202,9 @@
                             </div>
                         </div>
                     </div>
-                    <div style="text-align: center;">
-                        <h2 class="modalTopText">Create Master Mnemonic</h2>
+                    <div style="text-align: center; transform: translateY(60%); color: var(--placeholder-color);">
                         <!--<p class="modalTopSubText">it's about finding a balance between ease of memorization and security.</p>-->
-                        <p class="modalTopSubText">to be saved until memorized!<br>(you will be accompanied in this process)</p>
+                        <p class="modalTopSubText">To be saved until memorized!<br>(you will be accompanied in this process)</p>
                     </div>
                     <div class="bipLanguageBtnWrap">
                         <button class="arrowButton">&#11164;</button>
@@ -268,11 +269,10 @@
         </div>
         <div class="modalWrap hidden" id="mnemonicModalWrap">
             <div class="modal">
-                <div style="display: flex; justify-content: space-between;">
+                <h2 class="modalTopText">New link</h2>
+                <div style="display: flex; justify-content: space-between; margin: 20px;">
                     <div style="display: flex; flex-direction: column; justify-content: space-evenly; width: 136px;">
-                        <select class="optionsList" style="display: none;">
-                            <option>BIP-0039</option>
-                        </select>
+                        <select class="optionsList" style="display: none;"> <option>BIP-0039</option> </select>
                         <select class="optionsList" style="display: none;"></select>
                         <div style="display: flex; align-items: center;">
                             <div class="wrap seedWordsRangeWrap">
@@ -281,9 +281,8 @@
                             </div>
                         </div>
                     </div>
-                    <div style="text-align: center;">
-                        <h2 class="modalTopText">New link</h2>
-                        <p class="modalTopSubText">Enter a mnemonic to link or click the flag to generate a new one.</p>
+                    <div style="text-align: center; transform: translateY(60%); color: var(--placeholder-color);">
+                        <p class="modalTopSubText">Enter an existing mnemonic<br>or<br>click the flag to generate a new one.</p>
                     </div>
                     <div class="bipLanguageBtnWrap">
                         <button class="arrowButton">&#11164;</button>
@@ -349,7 +348,7 @@
                 <p class="footerText footerVersion">LinkVault: <span id="footerVersion">v0.0</span></p>
             </div>
             <div class="footerRight">
-                <a href="https://discord.gg/s5Ayh9Nk7A" target="_blank" class="footerLink">Discord</a>
+                <a href="https://discord.com/invite/s5Ayh9Nk7A" target="_blank" class="footerLink">Discord</a>
             </div>
         </div>
     </div>

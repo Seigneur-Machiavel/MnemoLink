@@ -7,6 +7,7 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion )
 		tempDataClass, mnemoBubbleObject, svgLinkObject, mnemoLinkSVGObject, gameControllerClass,
 		communicationClass, sanitizerClass } = require("./classes.js");
 	const { gamesInfoByCategory, GameInfoClass, CategoryInfoClass } = require("../games/gamesinfo.js");
+	const { htmlAnimations } = require("./htmlAnimations.js");
 }
 
 
@@ -16,7 +17,7 @@ let MnemoLinkerLastest = null; // FOR FAST ACCESS TO THE LATEST VERSION (need to
 /** @type {MnemoLinker} */
 let emptyMnemoLinker = null; // ONLY USED FOR BASIC USAGE, NEVER USE THIS GLOBAL VARIABLE FOR CRYPTOGRAPHY !!
 
-const isProduction = !(window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'));
+const isProduction = true // !(window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'));
 const settings = {
 	appVersion: chrome.runtime.getManifest().version,
 	hardcodedPassword: isProduction ? '' : '123456',
@@ -38,6 +39,7 @@ const tempData = new tempDataClass();
 const sanitizer = new sanitizerClass();
 const communication = new communicationClass(settings.serverUrl);
 
+let UXupdateLoopRunning = false;
 const mousePos = { x: 0, y: 0 };
 const timeOuts = {};
 /** @type {mnemoBubbleObject[]} */
@@ -331,7 +333,7 @@ setTimeout(async () => {
 async function asyncInitLoad(logs = false) {
 	fillMnemoLinkList();
 	initMnemoLinkBubbles();
-	requestAnimationFrame(UXupdateLoop);
+	if (!UXupdateLoopRunning) { requestAnimationFrame(UXupdateLoop); UXupdateLoopRunning = true; }
 	if (logs) { console.log('Ready to decrypt!'); }
 	return true;
 };
@@ -484,6 +486,7 @@ async function centerScreenBtnAction() {
 	if (!cryptoLight.key) {
 		eHTML.modals.authentification.input.value = settings.hardcodedPassword;
 		openModal('authentification');
+		eHTML.modals.authentification.input.focus();
 		centerScreenBtn.element.classList.remove('busy');
 		return;
 	}
@@ -862,8 +865,8 @@ function positionMnemoLinkBubbles(windowWidth = window.innerWidth, windowHeight 
 	let circleRadius = window.innerHeight * extRadiusInFractionOfVH;
 	if (isModalOpen) { circleRadius *= 0.5; }
 
-	const maxSpeed = .16; // .32
-	const acceleration = 0.004;
+	const maxSpeed = .2; // .32
+	const acceleration = 0.0027;
 	const center_x = windowWidth / 2;
 	const center_y = windowHeight / 2;
 	
@@ -1166,10 +1169,14 @@ eHTML.modals.authentification.loginForm.addEventListener('submit', function(e) {
 	let passwordReadyUse = input.value;
 	input.value = '';
 
+	const button = eHTML.modals.authentification.button;
+    button.innerHTML = htmlAnimations.horizontalBtnLoading;
+
 	function infoAndWrongAnim(text) {
 		modalInfo(text);
 		input.classList.add('wrong');
 		cryptoLight.clear();
+		button.innerHTML = 'Unlock';
 	}
 	
 	chrome.storage.local.get(['authInfo'], async function(result) {
@@ -1204,13 +1211,13 @@ eHTML.modals.authentification.loginForm.addEventListener('submit', function(e) {
 			const passComplement = await cryptoLight.decryptText(encryptedPassComplement);
 
 			passwordReadyUse = `${passwordReadyUse}${passComplement}`;
-			cryptoLight.clear();
 		}
 
 		const res = await cryptoLight.generateKey(passwordReadyUse, salt1Base64, iv1Base64, hash);
 		if (!res) { console.error('Error while generateKey - cryptoLight'); return; }
 		if (!res.hashVerified) { console.error('Error while verifying hash'); return; }
 
+		button.innerHTML = 'Unlock';
 		passwordReadyUse = null;
 
 		await asyncInitLoad(true);

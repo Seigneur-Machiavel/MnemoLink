@@ -181,7 +181,7 @@ class centerScreenBtnObject {
 
 			await this.popDotAnimation(['unlocked']);
 			
-			// console.log('idleAnimation duration:', Date.now() - startTimestamp);
+			//console.log('idleAnimation duration:', Date.now() - startTimestamp);
 			await new Promise(r => setTimeout(r, this.idleAnimationLoopMs - ( Date.now() - startTimestamp )));
 		}
 	}
