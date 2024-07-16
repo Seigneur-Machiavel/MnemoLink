@@ -6,6 +6,10 @@
     --text-color: rgb(0, 0, 0);
     --placeholder-color: rgb(125, 125, 125);
     --placeholderLight-color: rgb(200, 200, 200);
+    --security-border-color: rgb(248 252 255);
+    --invalid-color: indianred;
+    --valid-color: cornflowerblue;
+    --correct-color: green;
     /*--modal-background-color: rgb(255, 255, 255);*/
 
     --dashboard-open-child-transition-delay: 0.2s;
@@ -20,6 +24,7 @@
     --text-color: rgb(255, 255, 255);
     --placeholder-color: rgb(125, 125, 125);
     --placeholderLight-color: rgb(75, 75, 75);
+    --security-border-color: rgb(35 37 39);
 }
 ::-webkit-scrollbar {
     width: 8px;
@@ -478,7 +483,7 @@ body.dark-mode .mnemolinkBubble:not(.showing) {
 .mnemolinkBubble:not(.showing).hoverFromList, .mnemolinkBubble:not(.showing):hover {
     filter: drop-shadow(-3px 2px 4px rgba(0,0,0, .2));
     z-index: 2;
-    transform: translateX(-50%) translateY(-50%) scale(1.04);
+    transform: translateX(-50%) translateY(-50%) scale(.9);
 }
 body.dark-mode .mnemolinkBubble:not(.showing).hoverFromList, body.dark-mode .mnemolinkBubble:not(.showing):hover {
     filter: drop-shadow(-3px 2px 4px rgba(255,255,255, .2));
@@ -869,7 +874,7 @@ body.dark-mode .mnemolinkBubble .wrap {
     background-color: var(--background-color-light);
 }
 .mnemolinkInput.wrong {
-    border-color: red;
+    border-color: var(--invalid-color);
     animation: shake 0.5s;
 }
 #dashboard.invertColors .mnemolinkInput {
@@ -936,8 +941,11 @@ input:focus {
     outline: none;
 }
 form input.wrong {
-    border: 2px solid red;
+    border: 2px solid var(--invalid-color);
     animation: shake 0.5s;
+}
+form input.correct {
+    border: 2px solid var(--valid-color);
 }
 @keyframes shake {
     0% { transform: translateX(0); }
@@ -996,13 +1004,27 @@ form button {
     background-color: var(--background-color);
     border-width: 2vh;
     border-style: solid;
-    border-color: var(--background-color-light);
+    /*border-color: var(--background-color-light);*/
+    border-color: var(--security-border-color);
 }
-.modalsWrap.invertColors .modalWrap {
-    background-color: var(--background-color-dark);
+.modalsWrap.invertColors .modalWrap, .modalsWrap.invertColors .modal h2 {
+    background-color: var(--background-color-dark) !important;
 }
 .modal {
     width: 100%;
+}
+.modal h2 {
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, -115%);
+    background-color: var(--background-color);
+    padding: 0 20px;
+}
+#mnemonicModalWrap .modal, #masterMnemonicModalWrap .modal {
+    border-style: solid;
+    border-radius: 20px;
+    border-width: 3px;
+    width: auto;
 }
 .modalTopText {
     font-size: 3.6vh;
@@ -1010,6 +1032,9 @@ form button {
 .modalTopSubText {
     opacity: 0.8;
     animation: blink 1s infinite;
+}
+.seedWordsRangeWrap {
+    text-align: center;
 }
 .seedWordsRangeWrap label {
     font-size: 1.6vh;
@@ -1038,7 +1063,8 @@ form button {
     justify-content: center;
     align-items: center;
     border-top: #8a8a8a36 solid 1px;
-    margin-top: 2vh;
+    /*margin-top: 2vh;*/
+    margin: 2vh 4vh 0vh;
 }
 .horizontalButtonsList button {
     background-color: transparent;
@@ -1071,7 +1097,7 @@ form button {
 }
 .modalButton.disabled {
     cursor: not-allowed;
-    background-color: #bcbcbc;
+    background-color: #87878729;
     box-shadow: 0 0 2px 0 rgba(0, 0, 0, 0.1);
     transform: none;
 }
@@ -1259,11 +1285,11 @@ form button {
 }
 .wordInput.invalid {
     /*border-color: red;*/
-    border-color: indianred;
+    border-color: var(--invalid-color);
 }
 .wordInput.valid {
     /*border-color: green;*/
-    border-color: cornflowerblue;
+    border-color: var(--valid-color);
 }
 .bottomInfo {
     position: absolute;
@@ -1271,7 +1297,8 @@ form button {
     font-weight: bold;
     left: 50%;
     font-size: 14px;
-    transform: translate(-50%, -70%);
+    /*transform: translate(-50%, -70%);*/
+    transform: translate(-50%, -30%);
     animation: blink 1s infinite;
 }
 
@@ -1288,6 +1315,7 @@ form button {
     display: flex;
     align-items: center;
     width: 136px;
+    justify-content: flex-end;
 }
 .languageSelectionBtn {
     transition: transform .12s ease-in-out, opacity .16s ease-in-out;

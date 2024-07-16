@@ -1,9 +1,10 @@
 if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
 	const { cryptoLight } = require("./cryptoLight.js");
     const { lockCircleObject, centerScreenBtnObject, communicationClass, sanitizerClass } = require("./classes.js");
+    const { htmlAnimations } = require("./htmlAnimations.js");
 }
 
-const isProduction = !(window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'));
+const isProduction = true //!(window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'));
 const settings = {
     appVersion: chrome.runtime.getManifest().version,
     minVersionAcceptedWithoutReset: '1.2.0',
@@ -74,7 +75,6 @@ async function setNewPassword(password, passComplement = false) {
     const passwordReadyUse = passComplement ? `${password}${passComplement}` : password;
     const authInfo = await cryptoLight.generateKey(passwordReadyUse);
     if (!authInfo || !authInfo.encodedHash || !authInfo.salt1Base64 || !authInfo.iv1Base64) { console.error('cryptoLight.generateKey() failed'); return false; }
-    cryptoLight.clear();
 
     const weakEncryptionReady = await cryptoLight.generateKey(password, authInfo.salt1Base64, authInfo.iv1Base64);
     if (!weakEncryptionReady) { console.error('cryptoLight.generateKey() failed'); return false; }
@@ -193,12 +193,20 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
     input.value = '';
     if (passwordReadyUse === '') { busy.splice(busy.indexOf('loginForm'), 1); return; }
 
+    const button = targetForm.getElementsByTagName('button')[0];
+    button.innerHTML = htmlAnimations.horizontalBtnLoading;
+
     function infoAndWrongAnim(text) {
 		bottomInfo(targetForm, text);
 		input.classList.add('wrong');
+        cryptoLight.clear();
+        button.innerHTML = 'Unlock';
 	}
 
     chrome.storage.local.get(['authInfo'], async function(result) {
+        const startTimestamp = Date.now();
+        const totalTimings = { argon2Time: 0, deriveKTime: 0, total: 0 };
+
         const { authID, authToken, hash, salt1Base64, iv1Base64, serverAuthBoost } = sanitizer.sanitize(result.authInfo);
         const passwordMinLength = serverAuthBoost ? 6 : 8;
         if (passwordReadyUse.length < passwordMinLength) { infoAndWrongAnim(`Password must be at least ${passwordMinLength} characters long`); busy.splice(busy.indexOf('loginForm'), 1); return; }
@@ -211,6 +219,9 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
             const weakEncryptionReady = await cryptoLight.generateKey(passwordReadyUse, salt1Base64, iv1Base64);
             if (!weakEncryptionReady) { infoAndWrongAnim('Weak encryption failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
             const authTokenHash = await cryptoLight.encryptText(authToken);
+            totalTimings.argon2Time = weakEncryptionReady.argon2Time;
+            totalTimings.deriveKTime = weakEncryptionReady.deriveKTime;
+            console.log(`weakEncryption time: ${totalTimings.argon2Time + totalTimings.deriveKTime} ms`);
 
             const keyPair = await cryptoLight.generateKeyPair();
             const exportedPubKey = await cryptoLight.exportPublicKey(keyPair.publicKey);
@@ -230,17 +241,23 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
             const passComplement = await cryptoLight.decryptText(encryptedPassComplement);
 
             passwordReadyUse = `${passwordReadyUse}${passComplement}`;
-            cryptoLight.clear();
         }
 
         const res = await cryptoLight.generateKey(passwordReadyUse, salt1Base64, iv1Base64, hash);
-        if (!res) { alert('Key derivation failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+        if (!res) { infoAndWrongAnim('Key derivation failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+        
+        cryptoLight.clear();
+        button.innerHTML = 'Unlock';
+
+        totalTimings.argon2Time += res.argon2Time;
+        totalTimings.deriveKTime += res.deriveKTime;
+        totalTimings.total = Date.now() - startTimestamp;
+        console.log(totalTimings);
 
         if (res.hashVerified) {
-            input.value = '';
             chrome.runtime.sendMessage({action: "openPage", password: passwordReadyUse});
         } else {
-            input.classList.add('wrong');
+            infoAndWrongAnim('Wrong password');
         }
         
         passwordReadyUse = null;

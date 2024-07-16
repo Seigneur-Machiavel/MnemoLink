@@ -155,8 +155,8 @@ const cryptoLight = {
 	 */
 	async generateArgon2DeterministicUint8(passwordStr, saltStr = 'toto', length = 16) {
 		const time = 2; // The number of iterations
-		//const mem = 2**14; // The memory cost
         const mem = this.argon2Mem[this.cryptoStrength]; // The memory cost
+        //const mem = 2**18; // The memory cost
 		const hashLen = length; // The length of the hash
 		const parallelism = 1; // The number of threads
 		const type = 2; // The type of the hash (0=Argon2d, 1=Argon2i, 2=Argon2id)
@@ -171,7 +171,6 @@ const cryptoLight = {
      */
     async generateArgon2Hash(strongEntropyPassStr, salt, length = 64) {
         const time = 2; // The number of iterations
-        //const mem = 2**6; // The memory cost
         const mem = this.argon2Mem['light']; // The memory cost
         const hashLen = length; // The length of the hash
         const parallelism = 1; // The number of threads
