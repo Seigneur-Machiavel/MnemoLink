@@ -1,10 +1,10 @@
 if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
 	const { cryptoLight } = require("./cryptoLight.js");
-    const { lockCircleObject, centerScreenBtnObject, communicationClass, sanitizerClass } = require("./classes.js");
+    const { lockCircleObject, centerScreenBtnObject, communicationClass, authInfoObject, sanitizerClass } = require("./classes.js");
     const { htmlAnimations } = require("./htmlAnimations.js");
 }
 
-const isProduction = true //!(window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'));
+const isProduction = true // !(window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'));
 const settings = {
     appVersion: chrome.runtime.getManifest().version,
     minVersionAcceptedWithoutReset: '1.2.0',
@@ -33,17 +33,19 @@ function setInitialInputValues() {
     document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].value = hardcodedPassword;
     document.getElementById('passwordCreationForm').getElementsByTagName('input')[1].value = hardcodedPassword;
 }
-function showFormDependingOnStoredPassword() {
-    chrome.storage.local.get(['authInfo'], function(result) {
-        const { hash, salt1Base64, iv1Base64 } = sanitizer.sanitize(result.authInfo);
-        if (hash && salt1Base64 && iv1Base64) {
-            setVisibleForm('loginForm');
-            document.getElementById('loginForm').getElementsByTagName('input')[0].focus();
-        } else {
-            setVisibleForm('passwordCreationForm');
-            document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].focus();
-        }
-    });
+/**
+ * Show the form depending on the stored auth info
+ * @param {authInfoObject} sanitizedAuthInfo - result of chrome.storage.local.get(['authInfo']).authInfo
+ */
+function showFormDependingOnStoredPassword(sanitizedAuthInfo) {
+    const { hash, salt1Base64, iv1Base64 } = sanitizedAuthInfo;
+    if (hash && salt1Base64 && iv1Base64) {
+        setVisibleForm('loginForm');
+        document.getElementById('loginForm').getElementsByTagName('input')[0].focus();
+    } else {
+        setVisibleForm('passwordCreationForm');
+        document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].focus();
+    }
 }
 function bottomInfo(targetForm, text, timeout = 3000) {
     const infoElmnt = targetForm.getElementsByClassName('bottomInfo')[0];
@@ -57,17 +59,41 @@ function bottomInfo(targetForm, text, timeout = 3000) {
 //#endregion
 
 //#region - FUNCTIONS
-function controlVersionAndResetIfNeeded() {
-    const appV = settings.appVersion.split('.');
-    const minV = settings.minVersionAcceptedWithoutReset.split('.');
+async function start() {
+    setInitialInputValues();
 
-    if (parseInt(appV[0]) < parseInt(minV[0])) { resetApplication(); return; }
-    if (parseInt(appV[0]) > parseInt(minV[0])) { return; }
+    const authInfoResult = await chrome.storage.local.get(['authInfo']);
+    /** @type {authInfoObject} */
+    const sanitizedAuthInfo = authInfoResult.authInfo ? sanitizer.sanitize(authInfoResult.authInfo) : {};
 
-    if (parseInt(appV[1]) < parseInt(minV[1])) { resetApplication(); return; }
-    if (parseInt(appV[1]) > parseInt(minV[1])) { return; }
+    if (authInfoResult.authInfo) {
+        const resetNecessary = controlVersion(sanitizedAuthInfo);
+        if (resetNecessary) { await resetApplication(); }
+    }
 
-    if (parseInt(appV[2]) < parseInt(minV[2])) { resetApplication(); return; }
+    showFormDependingOnStoredPassword(sanitizedAuthInfo);
+}
+/**
+ * Check if the stored password is compatible with the current version of the application
+ * @param {object} sanitizedAuthInfo - result of chrome.storage.local.get(['authInfo']).authInfo
+ * @returns {boolean} - true if reset is necessary
+ */
+function controlVersion(sanitizedAuthInfo) {
+        const { appVersion, serverAuthBoost } = sanitizedAuthInfo;
+        if (!appVersion) { return true; }
+
+        // Here we can proceed check for version compatibility
+        /*const appV = settings.appVersion.split('.');
+        const minV = settings.minVersionAcceptedWithoutReset.split('.');
+
+        if (parseInt(appV[0]) < parseInt(minV[0])) { return true; }
+        if (parseInt(appV[0]) > parseInt(minV[0])) { return false; }
+
+        if (parseInt(appV[1]) < parseInt(minV[1])) { return true; }
+        if (parseInt(appV[1]) > parseInt(minV[1])) { return false; }
+
+        if (parseInt(appV[2]) < parseInt(minV[2])) { return true; }*/
+        return false;
 }
 async function setNewPassword(password, passComplement = false) {
     const startTimestamp = Date.now();
@@ -88,7 +114,7 @@ async function setNewPassword(password, passComplement = false) {
     cryptoLight.clear();
 
     const authID = generateAuthID(); // authID - used to link the passComplement on the server
-    chrome.storage.local.set({
+    await chrome.storage.local.set({
         authInfo: {
             appVersion: settings.appVersion,
             authID,
@@ -116,7 +142,8 @@ async function resetApplication() {
             console.error(error);
         } else {
             console.log('Application reset');
-            showFormDependingOnStoredPassword();
+            setVisibleForm('passwordCreationForm');
+            document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].focus();
         }
     });
 }
@@ -266,6 +293,4 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
 });
 //#endregion
 
-controlVersionAndResetIfNeeded();
-setInitialInputValues();
-showFormDependingOnStoredPassword();
+start();

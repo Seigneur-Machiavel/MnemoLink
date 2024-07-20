@@ -17,7 +17,7 @@ let MnemoLinkerLastest = null; // FOR FAST ACCESS TO THE LATEST VERSION (need to
 /** @type {MnemoLinker} */
 let emptyMnemoLinker = null; // ONLY USED FOR BASIC USAGE, NEVER USE THIS GLOBAL VARIABLE FOR CRYPTOGRAPHY !!
 
-const isProduction = true // !(window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'));
+const isProduction = true; // !(window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'));
 const settings = {
 	appVersion: chrome.runtime.getManifest().version,
 	hardcodedPassword: isProduction ? '' : '123456',
@@ -176,8 +176,6 @@ const save = {
 	},
 	async storeDataLocally(key = "toto", data, logs = false) {
 		try {
-			//const result = await chrome.storage.local.set({ [key]: data });
-			//console.log(result);
 			await chrome.storage.local.set({ [key]: data });
 			if (logs) { console.log(`${key} stored, data: ${JSON.stringify(data)}`); }
 		} catch (error) {
@@ -1139,17 +1137,23 @@ document.addEventListener('DOMContentLoaded', function() {
 		
 		if (response && response.password) {
 			chrome.storage.local.get(['authInfo'], async function(result) {
-				
-				const { salt1Base64, iv1Base64, hash, serverAuthBoost } = sanitizer.sanitize(result.authInfo);
-				cryptoLight.cryptoStrength = serverAuthBoost ? 'medium' : 'heavy';
-
-				const res = await cryptoLight.generateKey(response.password, salt1Base64, iv1Base64, hash);
-				if (!res) { console.error('Error while initializing cryptoLight'); return; }
-				if (!res.hashVerified) { console.error('Error while verifying hash'); return; }
-				
-				//passwordReadyUse = null;
-				await asyncInitLoad(true);
-				centerScreenBtnAction();
+				try {
+					const { salt1Base64, iv1Base64, hash, serverAuthBoost } = sanitizer.sanitize(result.authInfo);
+					cryptoLight.cryptoStrength = serverAuthBoost ? 'medium' : 'heavy';
+	
+					const res = await cryptoLight.generateKey(response.password, salt1Base64, iv1Base64, hash);
+					if (!res) { console.error('Error while initializing cryptoLight'); return; }
+					//if (!res.hashVerified) { console.error('Error while verifying hash'); return; }
+					if (!res.hashVerified) { throw new Error('Error while verifying hash'); }
+					
+					//passwordReadyUse = null;
+					await asyncInitLoad(true);
+					centerScreenBtnAction();	
+				} catch (error) {
+					console.log(error);
+					console.log('Authentication required');
+					openModal('authentification');
+				}
 			});
 		} else {
 			console.log('No password received, authentication required');

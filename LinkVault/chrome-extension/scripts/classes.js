@@ -837,13 +837,6 @@ class gameControllerClass {
         this.gameEventListeners = [];
     }
 }
-class cryptoTimingsObject {
-	constructor() {
-		this.argon2Time = 0;
-		this.deriveKTime = 0;
-		this.total = 0;
-	}
-}
 class communicationClass {
     constructor(serverUrl) {
         this.url = serverUrl;
@@ -966,6 +959,17 @@ class communicationClass {
 		}
 	}
 }
+class authInfoObject {
+	constructor() {
+		this.appVersion = "";
+		this.authID = "";
+		this.authToken = "";
+		this.hash = "";
+		this.salt1Base64 = "";
+		this.iv1Base64 = "";
+		this.serverAuthBoost = false;
+	}
+}
 class sanitizerClass {
 	constructor() {
 		this.validTypeToReturn = ['number', 'boolean'];
@@ -1003,6 +1007,7 @@ if (false) {
         mnemoLinkSVGObject,
         gameControllerClass,
 		communicationClass,
+		authInfoObject,
 		sanitizerClass,
     };
 }
