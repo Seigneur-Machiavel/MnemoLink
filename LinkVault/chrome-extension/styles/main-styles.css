@@ -350,7 +350,7 @@ body.dark-mode .categorySheet.active {
     pointer-events: none;
 }
 .categorySheet .categoryBtn:hover > .wrap {
-    animation: categoryBtnGlitch .12s;
+    animation: categoryBtnGlitch .12s, blink 1.2s;
 }
 @keyframes categoryBtnGlitch {
     0% {

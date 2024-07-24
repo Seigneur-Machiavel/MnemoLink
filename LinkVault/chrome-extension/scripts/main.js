@@ -10,7 +10,6 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion )
 	const { htmlAnimations } = require("./htmlAnimations.js");
 }
 
-
 //#region - VARIABLES
 /** @type {MnemoLinker} */
 let MnemoLinkerLastest = null; // FOR FAST ACCESS TO THE LATEST VERSION (need to be use as : new MnemoLinkerLastest()
@@ -30,7 +29,7 @@ const settings = {
 	fastFillMode: true,
 	saveLogs: true,
 	mnemolinkBubblesMinCircleSpots: 6,
-	serverUrl: isProduction ? "https://www.linkvault.app": "http://localhost:4340"
+	serverUrl: isProduction ? "https://www.linkvault.app" : "http://localhost:4340"
 }
 const centerScreenBtn = new centerScreenBtnObject();
 const userData = new userDataClass();

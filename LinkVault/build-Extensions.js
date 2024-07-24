@@ -2,14 +2,15 @@ const fs = require('fs-extra');
 const path = require('path');
 const archiver = require('archiver');
 
-const folderPath = "../builds"
+const mnemoLinkerBuildsfolderPath = "../builds"
 const chromeExtensionFolder = 'chrome-extension';
 const mozillaExtensionFolder = 'mozilla-extension';
+const extensionZIPsFolderPath = "extension-zips"
 
 function addCodeLine(str = "", codeStr = '') { return str + codeStr + '\n'; }
 function buildMnemoLinkerLoader() {
 	const destinationPath = path.join(__dirname, `${chromeExtensionFolder}/scripts/MnemoLinker`);
-    const files = fs.readdirSync(folderPath);
+    const files = fs.readdirSync(mnemoLinkerBuildsfolderPath);
   
     let latestVersion = [0, 1]; // will look like 0.1
 	let versions = [];
@@ -23,7 +24,7 @@ function buildMnemoLinkerLoader() {
 			latestVersion = versionNumber;
 		}
 		versions.push(versionNumber);
-		fs.copyFileSync(path.join(folderPath, file), path.join(destinationPath, file));
+		fs.copyFileSync(path.join(mnemoLinkerBuildsfolderPath, file), path.join(destinationPath, file));
     }
 	
 	// BUILD mnemoLinkerLoader.js
@@ -89,8 +90,11 @@ function main(deleteMozillaFolder = false) {
 	fs.writeFileSync(path.join(__dirname, `${mozillaExtensionFolder}/manifest.json`), JSON.stringify(moazillaManifest, null, 2));
 
 	// ZIP THE FOLDERS
-	const chromeZipPath = path.join(__dirname, `${chromeExtensionFolder}-${manifestVersion}.zip`);
-	const mozillaZipPath = path.join(__dirname, `${mozillaExtensionFolder}-${manifestVersion}.zip`);
+	//const chromeZipPath = path.join(__dirname, `${chromeExtensionFolder}-${manifestVersion}.zip`);
+	//const mozillaZipPath = path.join(__dirname, `${mozillaExtensionFolder}-${manifestVersion}.zip`);
+	// now in extensionZIPsFolderPath
+	const chromeZipPath = path.join(__dirname, extensionZIPsFolderPath, `${chromeExtensionFolder}-${manifestVersion}.zip`);
+	const mozillaZipPath = path.join(__dirname, extensionZIPsFolderPath, `${mozillaExtensionFolder}-${manifestVersion}.zip`);
 
 	zipDirectory(path.join(__dirname, chromeExtensionFolder), chromeZipPath).then(() => {
 		console.log(`Chrome extension zipped at: ${chromeZipPath}`);
