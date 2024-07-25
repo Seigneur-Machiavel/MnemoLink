@@ -68,6 +68,8 @@ class centerScreenBtnObject {
 		this.delayBeforeIdleAnimationIfLocked = 20000;
 		this.idleAnimationLoopMs = 4000;
 		this.state = 'locked'; // 'locked' or 'unlocked' or 'welcome'
+		this.centerScreenBtnWrap = document.getElementById('centerScreenBtnWrap');
+		this.pickAxe = document.getElementById('pickAxe'); // only available in the popup
 		this.elementWrap = document.getElementById('centerScreenBtn').parentElement;
 		this.element = document.getElementById('centerScreenBtn');
 

@@ -331,9 +331,21 @@ async function asyncInitLoad(logs = false) {
 	fillMnemoLinkList();
 	initMnemoLinkBubbles();
 	if (!UXupdateLoopRunning) { requestAnimationFrame(UXupdateLoop); UXupdateLoopRunning = true; }
+	heartBeat(1000);
 	if (logs) { console.log('Ready to decrypt!'); }
 	return true;
 };
+async function heartBeat(delay = 1000) {
+	if (!cryptoLight.key) { return; }
+
+	while(cryptoLight.key) {
+		await chrome.storage.local.set({vaultUnlocked: true, timestamp: Date.now()});
+		await new Promise(resolve => setTimeout(resolve, delay));
+	}
+
+	chrome.storage.local.set({vaultUnlocked: false});
+	console.log('Vault locked!');
+}
 function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1) + min); }
 function cryptoRnd(min, max) {
 	const crypto = window.crypto;
@@ -1025,6 +1037,7 @@ function setGameCategoryTooltip(eventTarget) {
 //#region - GAME FUNCTIONS
 async function loadGame(category = "ScribeQuest", folderName = "give_me_ya_seed") {
 	const gameContainer = eHTML.gameContainer;
+	// This is, and need to be, internal code. Never fetch from external sources! (because of innerHTML = gameContent)
 	const content = await fetch(`../games/${category}/${folderName}/index.html`)
 
 	if (!content.ok) {
@@ -1948,5 +1961,10 @@ eHTML.modals.inputMnemonic.confirmBtn.addEventListener('click', async (event) =>
 	closeModal();
 
 	modal.confirmBtn.classList.remove('busy');
+});
+window.addEventListener('beforeunload', async (event) => {
+	chrome.storage.local.set({vaultUnlocked: false});
+	console.log('Vault locked!');
+	event.preventDefault();
 });
 //#endregion

@@ -1,4 +1,5 @@
-if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
+if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)-
+    const anime = require("./anime.min.js");
 	const { cryptoLight } = require("./cryptoLight.js");
     const { lockCircleObject, centerScreenBtnObject, communicationClass, authInfoObject, sanitizerClass } = require("./classes.js");
     const { htmlAnimations } = require("./htmlAnimations.js");
@@ -13,18 +14,31 @@ const settings = {
 };
 const sanitizer = new sanitizerClass();
 const communication = new communicationClass(settings.serverUrl);
-
 const centerScreenBtn = new centerScreenBtnObject();
 centerScreenBtn.state = 'welcome';
 centerScreenBtn.init(7);
+let miningState = 'disabled';
 
 const busy = [];
 //#region - UX FUNCTIONS
 function setVisibleForm(formId) {
+    centerScreenBtn.centerScreenBtnWrap.classList.remove('active');
+    const centerScreenBtnContrainer = document.getElementsByClassName('centerScreenBtnContrainer')[0];
+    centerScreenBtnContrainer.classList.remove('hidden');
+
     const forms = document.getElementsByTagName('form');
     for (let i = 0; i < forms.length; i++) {
         if (forms[i].id === formId) { forms[i].classList.remove('hidden'); continue; }
         forms[i].classList.add('hidden');
+    }
+
+    if (formId === "miningForm") {
+        centerScreenBtn.centerScreenBtnWrap.classList.add('active');
+    }
+
+    if (formId === "settingsForm") {
+        const centerScreenBtnContrainer = document.getElementsByClassName('centerScreenBtnContrainer')[0];
+        centerScreenBtnContrainer.classList.add('hidden');
     }
 }
 function setInitialInputValues() {
@@ -56,10 +70,106 @@ function bottomInfo(targetForm, text, timeout = 3000) {
 		infoElmnt.innerText = "";
 	}, timeout);
 }
+async function miningAnimationLoop() {
+    const pickAxe = centerScreenBtn.pickAxe;
+    pickAxe.style.transform = 'rotate(0deg) translateX(20%) translateY(0%) scale(.6)';
+    const minDuration = 50;
+    let circleAnim = null;
+
+    while(true) {
+        const miningIsActive = await updateMiningState();
+        const miningIntensity = getIntensityFromSpan();
+
+        //const speed = miningIntensity * 100;
+        //const duration = (1000 - speed) < minDuration ? minDuration : 1000 - speed;
+        const pauseDuration = miningIntensity === 10 ? 0 : 2000 / (1.4 ** miningIntensity);
+        const duration = pauseDuration < minDuration ? minDuration : pauseDuration;
+        
+        await new Promise(resolve => setTimeout(resolve, duration));
+        if (!miningIsActive || miningIntensity === 0) {
+            centerScreenBtn.state = 'welcome';
+            continue;
+        }
+
+        // Pull
+        anime({
+            targets: pickAxe,
+            rotate: '0deg',
+            /*translateX: '0%',
+            translateY: '-20%',*/
+            translateX: '40%',
+            translateY: '10%',
+            scale: .6,
+
+            easing: 'easeOutQuad',
+            duration: duration * .7,
+        });
+
+        setTimeout(async () => {
+            centerScreenBtn.state = 'mining';
+            centerScreenBtn.lockCircles.forEach( lc => lc.setShape('hexagon', true) );
+        }, 20);
+        await new Promise(resolve => setTimeout(resolve, duration * .7));
+
+        // Shot
+        circleAnim = anime({
+            targets: pickAxe,
+            rotate: '-100deg',
+            translateX: '20%',
+            translateY: '-10%',
+            scale: .62,
+            
+            //easing: 'spring(1, 80, 10, 0)',
+            // easing accelation and choc
+            easing: 'easeInQuad',
+            duration: duration * .3,
+        });
+
+        circleAnim = setTimeout(async () => { 
+            for (let i = centerScreenBtn.lockCircles.length - 1; i >= 0; i--) {
+                centerScreenBtn.lockCircles[i].setShape('dot');
+                await new Promise(r => setTimeout(r, 20));
+            }
+        }, duration * .26);
+        await new Promise(resolve => setTimeout(resolve, duration * .3));
+    }
+}
+function setIntensityRangeValue(value) {
+    const rangeInput = document.getElementsByName('intensity')[0];
+    rangeInput.value = value;
+
+    const rangeSpan = document.getElementById('intensityValueStr');
+    rangeSpan.innerText = value;
+}
 //#endregion
 
 //#region - FUNCTIONS
-async function start() {
+(async () => {
+    // Check if the vault is unlocked: if not, show the "password creation/login" form
+    const result = await chrome.storage.local.get(['vaultUnlocked', 'timestamp']);
+    if (!result || !result.vaultUnlocked) {
+        await initAuth();
+    } else {
+        console.log('Vault is unlocked');
+
+        setVisibleForm('miningForm');
+
+        const miningIsActive = await updateMiningState();
+        if (miningIsActive) { // continue mining
+            console.log(`popup send: startMining (from previous state)`);
+            await chrome.runtime.sendMessage({action: "startMining"});
+            centerScreenBtn.pickAxe.classList.add('visible');
+        }
+
+        const intensity = await getIntensityFromStorage();
+        setIntensityRangeValue(intensity);
+        miningAnimationLoop();
+
+        const bottomBar = document.getElementById('bottomBar');
+        bottomBar.classList.remove('hidden');
+    }
+})();
+async function initAuth() {
     setInitialInputValues();
 
     const authInfoResult = await chrome.storage.local.get(['authInfo']);
@@ -156,9 +266,56 @@ function generateAuthID(length = 32) {
     }
     return result;
 }
+/** @return {Promise<boolean>} - true if mining is active */
+async function updateMiningState() {
+    const result = await chrome.storage.local.get(['miningState']);
+    if (!result) { return; }
+
+    const miningState = sanitizer.sanitize(result.miningState);
+    return miningState === 'enabled';
+}
+async function getIntensityFromStorage() {
+    const result = await chrome.storage.local.get(['miningIntensity']);
+    if (!result) { return; }
+
+    return sanitizer.sanitize(result.miningIntensity);
+}
+function getIntensityFromSpan() {
+    const rangeSpan = document.getElementById('intensityValueStr');
+    return parseInt(rangeSpan.innerText);
+}
+async function toogleMining(miningIsActive = false) {
+    if (miningIsActive) {
+        console.log(`popup send: stopMining`);
+        await chrome.runtime.sendMessage({action: "stopMining"});
+        centerScreenBtn.pickAxe.classList.remove('visible');
+    } else {
+        console.log(`popup send: startMining`);
+        await chrome.runtime.sendMessage({action: "startMining"});
+        centerScreenBtn.pickAxe.classList.add('visible');
+    }
+}
 //#endregion
 
 //#region - EVENT LISTENERS
+chrome.storage.onChanged.addListener(function(changes, namespace) {
+    for (let key in changes) {
+        switch (key) {
+            case 'hashRate':
+                const hashRate = changes[key].newValue;
+
+                const hashRateElmnt = document.getElementById('hashRateValueStr');
+                hashRateElmnt.innerText = hashRate.toFixed(2);
+                break;
+            case 'miningIntensity':
+                const intensity = changes[key].newValue;
+                setIntensityRangeValue(intensity);
+                break;
+            default:
+                break;
+        }
+    }
+});
 document.getElementById('passwordCreationForm').addEventListener('submit', async function(e) {
     if (busy.includes('passwordCreationForm')) return;
     busy.push('passwordCreationForm');
@@ -204,10 +361,6 @@ document.getElementById('passwordCreationForm').addEventListener('submit', async
     }
     
     busy.splice(busy.indexOf('passwordCreationForm'), 1);
-});
-document.getElementById('loginForm').addEventListener('input', function(e) {
-    const input = e.target;
-    if (input.classList.contains('wrong')) { input.classList.remove('wrong'); }
 });
 document.getElementById('loginForm').addEventListener('submit', function(e) {
     if (busy.includes('loginForm')) { return; }
@@ -291,6 +444,34 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
         busy.splice(busy.indexOf('loginForm'), 1);
     });
 });
-//#endregion
+document.addEventListener('click', function(e) {
+    switch (e.target.id) {
+        case 'miningBtn':
+            setVisibleForm('miningForm');
+            break;
+        case 'settingsBtn':
+            setVisibleForm('settingsForm');
+            break;
+        default:
+            break;
+    }
+});
+document.addEventListener('input', (event) => {
+	const isLoginForm = event.target.form.id === 'loginForm';
+    if (isLoginForm) {
+        const input = event.target;
+        if (input.classList.contains('wrong')) { input.classList.remove('wrong'); }
+    }
 
-start();
+	const isIntensityRange = event.target.name === "intensity";
+    if (isIntensityRange) {
+        const rangeValue = event.target.value;
+        chrome.storage.local.set({miningIntensity: rangeValue});
+        console.log(`intensity set to ${rangeValue}`);
+    }
+});
+centerScreenBtn.centerScreenBtnWrap.addEventListener('click', async function() {
+    const miningIsActive = await updateMiningState();
+    await toogleMining(miningIsActive);
+});
+//#endregion
