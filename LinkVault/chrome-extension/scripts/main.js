@@ -16,10 +16,9 @@ let MnemoLinkerLastest = null; // FOR FAST ACCESS TO THE LATEST VERSION (need to
 /** @type {MnemoLinker} */
 let emptyMnemoLinker = null; // ONLY USED FOR BASIC USAGE, NEVER USE THIS GLOBAL VARIABLE FOR CRYPTOGRAPHY !!
 
-const isProduction = true; // !(window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'));
 const settings = {
 	appVersion: chrome.runtime.getManifest().version,
-	hardcodedPassword: isProduction ? '' : '123456',
+	hardcodedPassword: '123456',
 	animationsLevel: 1,
 	mnemoLinkerVersion: window.MnemoLinker.latestVersion,
 	defaultBip: "BIP-0039",
@@ -29,7 +28,8 @@ const settings = {
 	fastFillMode: true,
 	saveLogs: true,
 	mnemolinkBubblesMinCircleSpots: 6,
-	serverUrl: isProduction ? "https://www.linkvault.app" : "http://localhost:4340"
+	//serverUrl: isProduction ? "https://www.linkvault.app" : "http://localhost:4340"
+	serverUrl: "http://localhost:4340"
 }
 const centerScreenBtn = new centerScreenBtnObject();
 const userData = new userDataClass();
@@ -242,11 +242,14 @@ const load = {
 //#endregion
 
 //#region - PRELOAD FUNCTIONS
-async function loadMnemoLinkerLatestVersion() {
+async function loadMnemoLinkerLastest() {
+	// load the latest version of MnemoLinker
 	MnemoLinkerLastest = await window.MnemoLinker["v" + window.MnemoLinker.latestVersion];
 	emptyMnemoLinker = new MnemoLinkerLastest();
-}; loadMnemoLinkerLatestVersion();
+}; loadMnemoLinkerLastest();
 (async () => {
+	await pingServerAndSetMode();
+
 	// load all data associated with the user
 	await load.all();
 	if (userData.preferences.darkMode) { eHTML.toggleDarkModeButton.checked = true; toggleDarkMode(eHTML.toggleDarkModeButton); }
@@ -255,14 +258,26 @@ async function loadMnemoLinkerLatestVersion() {
 	fillGamesLists();
 
 	// send mnemo links to the server if needed
-	if (userData.preferences.autoCloudSync && !userData.state.synchronizedWithCloud) { 
-		const isSync = await communication.sendMnemoLinksToServer(userData.id, userData.encryptedMnemoLinksStr);
-		if (isSync) { 
-			userData.state.synchronizedWithCloud = true;
-			save.userState();
-		} else { console.error('Error while synchronizing with the cloud'); }
+	if (userData.preferences.autoCloudSync && !userData.state.synchronizedWithCloud) {
+		await syncWithCloud();
 	}
 })();
+async function pingServerAndSetMode() {
+	const localServerIsRunning = await communication.pingServer("http://localhost:4340");
+	const webServerIsRunning = await communication.pingServer("https://www.linkvault.app");
+	if (!localServerIsRunning && webServerIsRunning) {
+		console.info('Running as production mode...');
+		settings.hardcodedPassword = '';
+		settings.serverUrl = "https://www.linkvault.app";
+		communication.url = settings.serverUrl;
+		return;
+	} else if (localServerIsRunning) {
+		console.info('Running as development mode...');
+		return;
+	}
+
+	console.info('Cannot connect to any server!');
+}
 function toggleDarkMode(element) {
 	if (element.checked) {
 		document.body.classList.add('dark-mode');
@@ -488,6 +503,16 @@ function extractMnemonicFromInputs(modal = eHTML.modals.inputMasterMnemonic) {
 
 	return result;
 }
+async function syncWithCloud() {
+	console.log('Synchronizing with the cloud...');
+	const isSync = await communication.sendMnemoLinksToServer(userData.id, userData.encryptedMnemoLinksStr);
+	console.log(`Synchronization with the cloud ${isSync ? 'successful' : 'failed'}`);
+
+	if (isSync) { 
+		userData.state.synchronizedWithCloud = true;
+		save.userState();
+	}
+}
 async function centerScreenBtnAction() {
 	if (centerScreenBtn.element.classList.contains('busy')) { return; }
 	centerScreenBtn.element.classList.add('busy');
@@ -513,13 +538,8 @@ async function centerScreenBtnAction() {
 	const newState = await toggleDashboard();
 	if (newState === 'close') {
 		cryptoLight.clear();
-
 		if (userData.preferences.autoCloudSync && !userData.state.synchronizedWithCloud) { 
-			const isSync = await communication.sendMnemoLinksToServer(userData.id, userData.encryptedMnemoLinksStr);
-			if (isSync) { 
-				userData.state.synchronizedWithCloud = true;
-				save.userState();
-			} else { console.error('Error while synchronizing with the cloud'); }
+			await syncWithCloud();
 		}
 	}
 
@@ -1160,7 +1180,7 @@ document.addEventListener('DOMContentLoaded', function() {
 					
 					//passwordReadyUse = null;
 					await asyncInitLoad(true);
-					centerScreenBtnAction();	
+					centerScreenBtnAction();
 				} catch (error) {
 					console.log(error);
 					console.log('Authentication required');
@@ -1961,10 +1981,5 @@ eHTML.modals.inputMnemonic.confirmBtn.addEventListener('click', async (event) =>
 	closeModal();
 
 	modal.confirmBtn.classList.remove('busy');
-});
-window.addEventListener('beforeunload', async (event) => {
-	chrome.storage.local.set({vaultUnlocked: false});
-	console.log('Vault locked!');
-	event.preventDefault();
 });
 //#endregion

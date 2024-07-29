@@ -441,7 +441,7 @@ class tempDataClass {
 		this.rndButtonsPressed = 0;
 		this.mnemonic = new mnemonicClass();
 	}
-};
+}
 class mnemoBubbleObject {
 	constructor(label, mnemoLinkerVersion, x = 0, y = 0) {
 		/** @type {HTMLElement} */
@@ -845,6 +845,15 @@ class communicationClass {
 		this.sanitizer = new sanitizerClass();
     }
 
+	async pingServer(serverUrl) {
+		try {
+			const response = await fetch(`${serverUrl}/api/ping`);
+			const result = await response.json();
+			if (result.success) { return true; }
+		} catch (error) {
+		}
+		return false;
+	}
 	/**
 	 * Send MnemoLinks to server - Return server's response
 	 * @param {string} userId - userData.id
@@ -995,6 +1004,182 @@ class sanitizerClass {
 		return data;
 	}
 }
+class Miner {
+	/**
+	* @param {centerScreenBtnObject} centerScreenBtn
+	* @param {communicationClass} communication
+	*/
+	constructor(centerScreenBtn, communication) {
+		this.connectionState = null;
+		this.sanitizer = new sanitizerClass();
+		this.centerScreenBtn = centerScreenBtn;
+		this.communication = communication;
+	}
+
+	async init() {
+		this.connectionState = await this.getConnectionStateFromStorage();
+		const miningIsActive = await this.isMiningActive();
+        if (miningIsActive) { // continue mining
+            console.log(`popup send: startMining (from previous state)`);
+            await chrome.runtime.sendMessage({action: "startMining"});
+            this.centerScreenBtn.pickAxe.classList.remove('invisible');
+        }
+
+		this.initListeners();
+        const intensity = await this.getIntensityFromStorage();
+        this.setIntensityRangeValue(intensity);
+        this.miningAnimationLoop();
+	}
+	async toogleMining() {
+		const miningIsActive = await this.isMiningActive();
+		if (miningIsActive) {
+			console.log(`popup send: stopMining`);
+			await chrome.runtime.sendMessage({action: "stopMining"});
+		} else {
+			console.log(`popup send: startMining`);
+			await chrome.runtime.sendMessage({action: "startMining"});
+		}
+	}
+	async miningAnimationLoop() {
+		const pickAxe = this.centerScreenBtn.pickAxe;
+		pickAxe.style.transform = 'rotate(0deg) translateX(20%) translateY(0%) scale(.6)';
+		const minDuration = 50;
+		let circleAnim = null;
+	
+		while(true) {
+			const miningIsActive = await this.isMiningActive();
+			const miningIntensity = this.getIntensityFromSpan();
+	
+			let pauseDuration = miningIntensity === 10 ? 0 : 2000 / (1.4 ** miningIntensity);
+			if (this.connectionState !== 'connected') { pauseDuration = 1000; }
+			const duration = pauseDuration < minDuration ? minDuration : pauseDuration;
+			
+			await new Promise(resolve => setTimeout(resolve, duration));
+
+			if (!miningIsActive || miningIntensity === 0) {
+				this.centerScreenBtn.pickAxe.classList.add('invisible');
+				this.centerScreenBtn.state = 'welcome';
+				continue;
+			} else {
+				//this.centerScreenBtn.state = 'unlocked';
+				this.centerScreenBtn.state = 'mining';
+				this.centerScreenBtn.pickAxe.classList.remove('invisible');
+			}
+			
+			if (this.connectionState !== 'connected') {
+				// rotate (loading)
+				circleAnim = anime({
+					targets: pickAxe,
+					rotate: '+=360deg',
+					translateX: ['-10%', '0%', '10%'],
+					translateY: '0%',
+					scale: [.6, .64, .6],
+					opacity: [0, 1],
+					
+					easing: 'easeOutQuad',
+					duration: duration * .5,
+				});
+				continue;
+			}
+	
+			// Pull
+			circleAnim = anime({
+				targets: pickAxe,
+				rotate: '0deg',
+				translateX: '40%',
+				translateY: '10%',
+				scale: .6,
+	
+				easing: 'easeOutQuad',
+				duration: duration * .7,
+			});
+	
+			setTimeout(async () => {
+				this.centerScreenBtn.lockCircles.forEach( lc => lc.setShape('hexagon', true) );
+			}, 20);
+			await new Promise(resolve => setTimeout(resolve, duration * .7));
+	
+			// Shot
+			circleAnim = anime({
+				targets: pickAxe,
+				rotate: '-100deg',
+				translateX: '20%',
+				translateY: '-10%',
+				scale: .62,
+				easing: 'easeInQuad',
+				duration: duration * .3,
+			});
+	
+			setTimeout(async () => { 
+				for (let i = this.centerScreenBtn.lockCircles.length - 1; i >= 0; i--) {
+					this.centerScreenBtn.lockCircles[i].setShape('dot');
+					await new Promise(r => setTimeout(r, 20));
+				}
+			}, duration * .26);
+			await new Promise(resolve => setTimeout(resolve, duration * .3));
+		}
+	}
+	/** @return {Promise<boolean>} - true if mining is active */
+	async isMiningActive() {
+		const result = await chrome.storage.local.get(['miningState']);
+		if (!result) { return; }
+
+		const miningState = sanitizer.sanitize(result.miningState);
+		return miningState === 'enabled';
+	}
+	async getConnectionStateFromStorage() {
+		const result = await chrome.storage.local.get(['connectionState']);
+		if (!result) { return; }
+	
+		return sanitizer.sanitize(result.connectionState);
+	}
+	async getIntensityFromStorage() {
+		const result = await chrome.storage.local.get(['miningIntensity']);
+		if (!result) { return; }
+	
+		return sanitizer.sanitize(result.miningIntensity);
+	}
+	setIntensityRangeValue(value = 1) {
+		const rangeInput = document.getElementsByName('intensity')[0];
+		rangeInput.value = value;
+	
+		const rangeSpan = document.getElementById('intensityValueStr');
+		rangeSpan.innerText = value;
+	}
+	getIntensityFromSpan() { // MERGE TO MINER CLASSE
+		const rangeSpan = document.getElementById('intensityValueStr');
+		return parseInt(rangeSpan.innerText);
+	}
+	initListeners() {
+		chrome.storage.onChanged.addListener((changes, namespace) => {
+			//console.log(`storage listener received: ${JSON.stringify(changes)}`);
+			for (let key in changes) {
+				switch (key) {
+					case 'hashRate':
+						const hashRate = this.sanitizer.sanitize(changes[key].newValue);
+						const hashRateElmnt = document.getElementById('hashRateValueStr');
+						hashRateElmnt.innerText = hashRate.toFixed(2);
+						break;
+					case 'miningIntensity':
+						const intensity = this.sanitizer.sanitize(changes[key].newValue);
+						this.setIntensityRangeValue(intensity);
+						break;
+					case 'connectionState':
+						//console.log(`connectionState listener received: ${changes[key].newValue}`);
+						const connectionState = this.sanitizer.sanitize(changes[key].newValue);
+						this.connectionState = connectionState;
+						break;
+					default:
+						break;
+				}
+			}
+		});
+
+		this.centerScreenBtn.centerScreenBtnWrap.addEventListener('click', async () => {
+			await this.toogleMining();
+		});
+	}
+}
 //#endregion
 
 if (false) {
@@ -1011,5 +1196,6 @@ if (false) {
 		communicationClass,
 		authInfoObject,
 		sanitizerClass,
+		Miner,
     };
 }

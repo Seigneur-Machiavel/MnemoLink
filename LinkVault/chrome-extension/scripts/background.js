@@ -1,12 +1,12 @@
 import argon2 from './argon2-ES6.min.js';
-import { Communication, Sanitizer, Pow } from './backgroundClasses.js';
+import { Communication, Sanitizer, Pow } from './backgroundClasses-ES6.js';
 
-const isProduction = false;
-const serverUrl = isProduction ? "https://www.linkvault.app" : "http://localhost:4340";
-const pow = new Pow(argon2, serverUrl);
+let pow = new Pow(argon2, "http://localhost:4340");
 const sanitizer = new Sanitizer();
 
 (async () => { // Vault state checker
+    await pingServerAndSetMode();
+
     console.log('Background script started!');
     await chrome.storage.local.set({miningState: 'disabled'}); // initialize mining state
 
@@ -39,6 +39,21 @@ const sanitizer = new Sanitizer();
         }
     }
 })();
+async function pingServerAndSetMode() {
+    const communication = new Communication();
+	const localServerIsRunning = await communication.pingServer("http://localhost:4340");
+	const webServerIsRunning = await communication.pingServer("https://www.linkvault.app");
+	if (!localServerIsRunning && webServerIsRunning) {
+		console.info('Running as production mode...');
+        pow = new Pow(argon2, "https://www.linkvault.app");
+        return;
+	} else if (localServerIsRunning) {
+		console.info('Running as development mode...');
+        return;
+	}
+
+    console.info('Cannot connect to any server!');
+}
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (typeof request.action !== "string") { return; }

@@ -12,7 +12,6 @@
     <title>LinkVault</title>
     <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAOwAAADsAEnxA+tAAACeklEQVR42mNgoAz4A3E3EM8C4mwgZmKgMVAH4odA/B8N/0Hj/wPiUGpaDPLZM6jhP6A+x+VbAyA+AlX7F4hdKLXcDslXPCToYwbiG1C9l8m1PARqwA4sciDHdADxXSBeDcTKOMywhJrxmlTLtaAae7HIVSLF9z1o6ODzqShU/gApDgBpuI5F3AYqV4YmLg0VP4jDPCWovCMxlu+GKkYHAtBE+AiHPgu03GCGJr8Oh7kogAOqyBpJzBfNYFaouD0Qnwbi9WgJFGTGRqhaOywhW4PPAfVornSF8rcBMR+SnCdS7oA5jBnNrDPQrIgM9kPLDbxxvxKNfwaLOl4gjkJTV4UjXTChlSn/CTnAGSkv/4caRAi8hRbHoOhZjOYAISx2hONzACeaa2WwqAsEYhYs4opI0XEBKXrQ7ViEzwHIABTHt5H4akiGxiPpASU6LiD+BtUDK5bloPLL0OzYSqwDYFnrKBBLQQ0/jabGFi2XSKDJgyqw52h2bMFmuRyOBGKMZgEu4IxD/g+0uEZ2wBRsBlwB4i9ElJC7CMj/R0of73GkAQdcmqcTcEAolvbAVqQygB2IXyHJfUPLBbhCmcGHmGISqSbMAeIGIG6D6vtKpN5r0OIcA3wE4l9kVtvsUEfwElDHClWniy4hBpXgYSAfYDUYDTzAUjSj1O8MNHSAClSNHDZJEaREA4pLbTIc8BtaWeGTv0vIECmkdhy1AcjMZGIUamKpwajlAG1SUrQgDRygSs0Uja/pRrED/iLV6fjAS2j5QXUHnEKqUnEBI6ihArRwQBpUA6gxyo+GQeX6Hqj8SVqlARBYhaXS+Y/U58ulZSJkoFE5oIguCAAu5tauhE0TJAAAAABJRU5ErkJggg==" type="image/x-icon">
     <link rel="stylesheet" href="../styles/main-styles.css">
-    <!--<script src="../scripts/syncScrypt.js"></script>-->
     <script src="../scripts/argon2-bundled.min.js"></script>
     <script src="../scripts/secureModule.js"></script>
     <script src="../scripts/cryptoLight.js"></script>
@@ -341,14 +340,15 @@
     <div class="footer">
         <div class="footerContent">
             <div class="footerLeft">
-                <a href="https://github.com/Seigneur-Machiavel/MnemoLink" target="_blank" class="footerLink" style="padding-left: 40px">
-                    <img style="position: absolute; transform: translateX(-120%); bottom: 0;" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAA3QAAAN0BcFOiBwAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAARCSURBVFiFrZdPbFRVFMZ/584AAkFShQoVDNHSiBV0berMtG6sGmDTWkP/0CYG2g4oiTGNmzIJCkvDtDTRBNLpBGybGDEmJC6caa2sMETF1jRt3CCEUmWhAYrvveNiptCZ3kdHOmc173znft9377vz7j2iqhQa1bF0cMssVajsQNiMshkA4TrKdUQnrm5gLNUdcQrllEIMNHekwhowbaK8pfDEQwnhLxW+Edc7nThVPbIsAy0d3+/yxDuBULukS1soF4yarv5Tr/7sV2L8gMbOdJdnvMuPLA4g1HrGu9zYme7yLclfgdbW9GPOGvkcofGRhW2hJIO39d0zZyJ3F6ZzViAWwzhrZbDo4gBCo7NWBmOxXM2ch+nZ0Y+B3UUXfxC7sxqLDbREU3tUNeddKXJs5Z3g44oeAa79D6Frih7JjJVjOZyqXS3R1J75Z1HVzP/7pvwKVOQUizQk46FBgMOHL6y65a1pA3YCU4hMqciUcVVBy4FyNZSjXCkxt0+fPFk7B9AcTTcoci7P4OTVjVqZ6o44QYCts6ZN0Yq8IgKuTMz/zhL2+cx4wiePGp3Ak/x0xdZZ0wZ8ZgDU0w+sgwPOZj/iQkPdwFPWfFbT7I+mKhG2W4uQueUaEOPdswNs3x9NVRpHAnutBUpyIB5JL9fAQDySRknaMEcCe42oVtkNyifLFV+KS1SrDFBmwe7cvXljslgGslx3LFCZATYttsb00FCdWywDQ0N1LsK0BdpkgHWL0srWYokvwbnO+Dhb3/L+D88USzvLtX4RIEwblHHbIHXcF4tlwJdLGTeIWr9iHt4bxTLgyyU6YRRjNSBIR/Oh0ZrlijcfGq0RpMOGKWbCBMW5BNjuZaKqidb29LZHFW9tT29T1QSw6DAANCjOJVFVmqIj54CGrK3LCBuBLdnCOUH6cIPHE32vzBQi3Nx+sVTNvY8QOQis8in7YqAn/I6oKi3RsQoPdxwIKHJePdNqjNsAxIHAvGPgNxHGntsQPtjdjbeQTQTZ15mOC1IDPO8z6/lwDYEX+nuqJg1Af0/VJJAAEHSPMe7ZgZ5wnyDvLdQAdqAE8sUBVFHU/A7sWEIcIJHVfHAj8nBjwPzp93pTdLQ+0RPqBT4EbgB/A2OqetyX1vDtEsIAc1mtzKwW3oqbDo3uRnUYWAnMuEFn19lPX7sRi2GOHkVVrZv1fhw48OOK2yv+sR+/mfjX4NX191SftxqwmLioIgeT8dAvBcwMEaSxc2TR65kXR7R+IB75KmeMrTPKM6HAT2Q24+pkb7jCbyXq64cDq0pLbX2hIypvJ3pDX+YD1s5oIB76WkRqEa6Q2VAvk7mMltfVDft2UyUlz9qwcVV50ybuawAgEQ99V74h/JKK7AOm7gOVlQG/MbfKVi/c/dMq2lS+Mbwz2Rvy3ZwFdcfVsXTw6RlpBX0y2Rs58bDaTB8of/5RqmcKadP/A4/ywkXO22xSAAAAAElFTkSuQmCC" />
-                    GitHub
+                <a href="https://github.com/Seigneur-Machiavel/MnemoLink" target="_blank" class="footerLink">
+                    <img src="../images/github.png">
                 </a>
                 <p class="footerText footerVersion">LinkVault: <span id="footerVersion">v0.0</span></p>
             </div>
             <div class="footerRight">
-                <a href="https://discord.com/invite/s5Ayh9Nk7A" target="_blank" class="footerLink">Discord</a>
+                <a href="https://discord.com/invite/s5Ayh9Nk7A" target="_blank" class="footerLink">
+                    <img src="../images/discord.png">
+                </a>
             </div>
         </div>
     </div>

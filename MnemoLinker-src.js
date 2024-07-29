@@ -2,7 +2,6 @@ if (false) { // CODE NEVER REACHED, SHOWS THE IMPORTS FOR DOCUMENTATION PURPOSES
 	const bip39 = require('./bip39 3.1.0.js');
 }
 
-const syncScrypt = typeof(exports) !== 'undefined' ? require('./syncScrypt.js') : null;
 const BIPTablesHardcoded = {};
 const BIPOfficialNamesHardcoded = {};
 const versionHardcoded = [];
@@ -317,30 +316,6 @@ class MnemoLinker {
 
 		const decryptedText = new TextDecoder().decode(new Uint8Array(decryptedContent));
 		return decryptedText;
-	}
-	/**
-	 * Generate a salt using the master mnemonic as a password, and the IV as a salt.
-	 * - The salt is generated using the Scrypt algorithm
-	 * - Memory cost provides better security over Brute Force attacks
-	 * @param {string} masterMnemonicStr - The master mnemonic as a string
-	 * @param {string} IVStr - The IV as a string
-	 * @param {number} length - The desired length of the salt
-	 * @returns 
-	 */
-	#generateScryptSalt(masterMnemonicStr, IVStr = 'toto', length = saltLength) {
-		const passwordStr = masterMnemonicStr;
-		const saltStr = IVStr;
-		const CPUCost = 4;
-		const memoryCost = 2**8;
-		const parallelism = 1;
-
-		let Uint8Salt = null;
-		try {
-			Uint8Salt = window.syncScrypt(passwordStr, saltStr, CPUCost, memoryCost, parallelism, length);
-		} catch (error) {
-			Uint8Salt = syncScrypt(passwordStr, saltStr, CPUCost, memoryCost, parallelism, length);
-		}
-		return Uint8Salt;
 	}
 	/**
 	 * Generate a salt using the master mnemonic as a password, and the IV as a salt.

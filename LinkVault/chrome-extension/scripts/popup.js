@@ -1,23 +1,22 @@
 if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)-
     const anime = require("./anime.min.js");
 	const { cryptoLight } = require("./cryptoLight.js");
-    const { lockCircleObject, centerScreenBtnObject, communicationClass, authInfoObject, sanitizerClass } = require("./classes.js");
+    const { lockCircleObject, centerScreenBtnObject, communicationClass, authInfoObject, sanitizerClass, Miner } = require("./classes.js");
     const { htmlAnimations } = require("./htmlAnimations.js");
 }
 
-const isProduction = true // !(window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'));
 const settings = {
     appVersion: chrome.runtime.getManifest().version,
     minVersionAcceptedWithoutReset: '1.2.0',
-    hardcodedPassword: isProduction ? '' : '123456',
-    serverUrl: isProduction ? "https://www.linkvault.app": "http://localhost:4340"
+    hardcodedPassword: '123456',
+    serverUrl: "http://localhost:4340"
 };
 const sanitizer = new sanitizerClass();
 const communication = new communicationClass(settings.serverUrl);
 const centerScreenBtn = new centerScreenBtnObject();
+const miner = new Miner(centerScreenBtn, communication);
 centerScreenBtn.state = 'welcome';
 centerScreenBtn.init(7);
-let miningState = 'disabled';
 
 const busy = [];
 //#region - UX FUNCTIONS
@@ -70,105 +69,44 @@ function bottomInfo(targetForm, text, timeout = 3000) {
 		infoElmnt.innerText = "";
 	}, timeout);
 }
-async function miningAnimationLoop() {
-    const pickAxe = centerScreenBtn.pickAxe;
-    pickAxe.style.transform = 'rotate(0deg) translateX(20%) translateY(0%) scale(.6)';
-    const minDuration = 50;
-    let circleAnim = null;
-
-    while(true) {
-        const miningIsActive = await updateMiningState();
-        const miningIntensity = getIntensityFromSpan();
-
-        //const speed = miningIntensity * 100;
-        //const duration = (1000 - speed) < minDuration ? minDuration : 1000 - speed;
-        const pauseDuration = miningIntensity === 10 ? 0 : 2000 / (1.4 ** miningIntensity);
-        const duration = pauseDuration < minDuration ? minDuration : pauseDuration;
-        
-        await new Promise(resolve => setTimeout(resolve, duration));
-        if (!miningIsActive || miningIntensity === 0) {
-            centerScreenBtn.state = 'welcome';
-            continue;
-        }
-
-        // Pull
-        anime({
-            targets: pickAxe,
-            rotate: '0deg',
-            /*translateX: '0%',
-            translateY: '-20%',*/
-            translateX: '40%',
-            translateY: '10%',
-            scale: .6,
-
-            easing: 'easeOutQuad',
-            duration: duration * .7,
-        });
-
-        setTimeout(async () => {
-            centerScreenBtn.state = 'mining';
-            centerScreenBtn.lockCircles.forEach( lc => lc.setShape('hexagon', true) );
-        }, 20);
-        await new Promise(resolve => setTimeout(resolve, duration * .7));
-
-        // Shot
-        circleAnim = anime({
-            targets: pickAxe,
-            rotate: '-100deg',
-            translateX: '20%',
-            translateY: '-10%',
-            scale: .62,
-            
-            //easing: 'spring(1, 80, 10, 0)',
-            // easing accelation and choc
-            easing: 'easeInQuad',
-            duration: duration * .3,
-        });
-
-        circleAnim = setTimeout(async () => { 
-            for (let i = centerScreenBtn.lockCircles.length - 1; i >= 0; i--) {
-                centerScreenBtn.lockCircles[i].setShape('dot');
-                await new Promise(r => setTimeout(r, 20));
-            }
-        }, duration * .26);
-        await new Promise(resolve => setTimeout(resolve, duration * .3));
-    }
-}
-function setIntensityRangeValue(value) {
-    const rangeInput = document.getElementsByName('intensity')[0];
-    rangeInput.value = value;
-
-    const rangeSpan = document.getElementById('intensityValueStr');
-    rangeSpan.innerText = value;
-}
 //#endregion
 
 //#region - FUNCTIONS
-(async () => {
+(async () => { // --- START ---
+    await pingServerAndSetMode();
+
     // Check if the vault is unlocked: if not, show the "password creation/login" form
-    const result = await chrome.storage.local.get(['vaultUnlocked', 'timestamp']);
+    const result = await chrome.storage.local.get(['vaultUnlocked']);
+    console.log(`Vault is ${result.vaultUnlocked ? 'unlocked' : 'locked'}`);
+
     if (!result || !result.vaultUnlocked) {
         await initAuth();
     } else {
-        console.log('Vault is unlocked');
-
         setVisibleForm('miningForm');
 
-        const miningIsActive = await updateMiningState();
-        if (miningIsActive) { // continue mining
-            console.log(`popup send: startMining (from previous state)`);
-            await chrome.runtime.sendMessage({action: "startMining"});
-            centerScreenBtn.pickAxe.classList.add('visible');
-        }
-
-        const intensity = await getIntensityFromStorage();
-        setIntensityRangeValue(intensity);
-        miningAnimationLoop();
+        miner.init();
+        centerScreenBtn.delayBeforeIdleAnimationIfLocked = 1;
 
         const bottomBar = document.getElementById('bottomBar');
         bottomBar.classList.remove('hidden');
     }
 })();
+async function pingServerAndSetMode() {
+	const localServerIsRunning = await communication.pingServer("http://localhost:4340");
+	const webServerIsRunning = await communication.pingServer("https://www.linkvault.app");
+	if (!localServerIsRunning && webServerIsRunning) {
+		console.log('Running as production mode...');
+		settings.hardcodedPassword = '';
+		settings.serverUrl = "https://www.linkvault.app";
+		communication.url = settings.serverUrl;
+        return;
+	} else if (localServerIsRunning) {
+		console.info('Running as development mode...');
+        return;
+	}
+
+	console.info('Cannot connect to any server!');
+}
 async function initAuth() {
     setInitialInputValues();
 
@@ -266,56 +204,9 @@ function generateAuthID(length = 32) {
     }
     return result;
 }
-/** @return {Promise<boolean>} - true if mining is active */
-async function updateMiningState() {
-    const result = await chrome.storage.local.get(['miningState']);
-    if (!result) { return; }
-
-    const miningState = sanitizer.sanitize(result.miningState);
-    return miningState === 'enabled';
-}
-async function getIntensityFromStorage() {
-    const result = await chrome.storage.local.get(['miningIntensity']);
-    if (!result) { return; }
-
-    return sanitizer.sanitize(result.miningIntensity);
-}
-function getIntensityFromSpan() {
-    const rangeSpan = document.getElementById('intensityValueStr');
-    return parseInt(rangeSpan.innerText);
-}
-async function toogleMining(miningIsActive = false) {
-    if (miningIsActive) {
-        console.log(`popup send: stopMining`);
-        await chrome.runtime.sendMessage({action: "stopMining"});
-        centerScreenBtn.pickAxe.classList.remove('visible');
-    } else {
-        console.log(`popup send: startMining`);
-        await chrome.runtime.sendMessage({action: "startMining"});
-        centerScreenBtn.pickAxe.classList.add('visible');
-    }
-}
 //#endregion
 
 //#region - EVENT LISTENERS
-chrome.storage.onChanged.addListener(function(changes, namespace) {
-    for (let key in changes) {
-        switch (key) {
-            case 'hashRate':
-                const hashRate = changes[key].newValue;
-
-                const hashRateElmnt = document.getElementById('hashRateValueStr');
-                hashRateElmnt.innerText = hashRate.toFixed(2);
-                break;
-            case 'miningIntensity':
-                const intensity = changes[key].newValue;
-                setIntensityRangeValue(intensity);
-                break;
-            default:
-                break;
-        }
-    }
-});
 document.getElementById('passwordCreationForm').addEventListener('submit', async function(e) {
     if (busy.includes('passwordCreationForm')) return;
     busy.push('passwordCreationForm');
@@ -466,12 +357,9 @@ document.addEventListener('input', (event) => {
 	const isIntensityRange = event.target.name === "intensity";
     if (isIntensityRange) {
         const rangeValue = event.target.value;
-        chrome.storage.local.set({miningIntensity: rangeValue});
-        console.log(`intensity set to ${rangeValue}`);
+        const valueAsNumber = parseInt(rangeValue);
+        chrome.storage.local.set({miningIntensity: valueAsNumber});
+        //console.log(`intensity set to ${rangeValue}`);
     }
-});
-centerScreenBtn.centerScreenBtnWrap.addEventListener('click', async function() {
-    const miningIsActive = await updateMiningState();
-    await toogleMining(miningIsActive);
 });
 //#endregion

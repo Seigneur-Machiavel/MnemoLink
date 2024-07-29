@@ -1388,6 +1388,12 @@ form button {
     justify-content: space-between;
     align-items: center;
 }
+.footer a img {
+    width: 40px; height: 40px;
+}
+.footer a:hover {
+    transform: scale(1.04);
+}
 .footerLeft {
     display: flex;
     align-items: center;
@@ -1407,6 +1413,9 @@ form button {
 }
 .footerText {
     font-size: 12px;
+}
+.footerText.footerVersion {
+    margin: 20px 0 0;
 }
 
 /* DARK MODE SWITCH */

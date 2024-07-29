@@ -7,6 +7,23 @@
     --correct-color: green;
 }
 
+.input-range {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 10px 0;
+    height: 12px;
+    background: plum;
+    opacity: 0.7;
+}
+.input-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: rgb(127, 127, 127);
+    cursor: pointer;
+    border-radius: 50%;
+  }
 .wrap {
     position: relative;
     width: 100%;
@@ -93,9 +110,6 @@ button {
     font-size: 14px;
     animation: blink 1s infinite;
 }
-.inlineCheckBox {
-    margin-top: 20px;
-}
 #settingsForm {
     margin: 20px 0;
 }
@@ -145,6 +159,36 @@ button {
 }
 #bottomBar .inlineCheckBox {
     width: 220px;
+}
+
+#miningForm {
+    align-items: flex-start;
+    margin: 0 30px 20px;
+    width: auto;
+    color: #c1c1c1;
+}
+.inlineRange {
+    display: flex;
+    flex-direction: column;
+    background-color: #ffffff0d;
+    padding: 10px;
+    width: -webkit-fill-available;
+    border-radius: 6px;
+    filter: drop-shadow(2px 3px 4px rgba(0, 0, 0, .4));
+}
+.inlineRange label {
+    font-size: medium;
+    font-weight: bold;
+}
+.inlineRange input {
+    width: auto;
+    margin: 6px 0 0;
+}
+#miningForm h2 {
+    margin: 14px 0 0;
+}
+#miningForm h2 span {
+    color: var(--text-color);
 }
 
 /* Center Screen Button - Visual only */
@@ -198,11 +242,11 @@ button {
     height: 100%;
     margin-left: 50%;
     transform: scale(.6) rotate(0deg) translate(20%, 0%);
-    opacity: 0;
+    opacity: 1;
     transition: opacity 0.24s ease-in-out;
 }
-#pickAxe.visible {
-    opacity: 1;
+#pickAxe.invisible {
+    opacity: 0 !important;
 }
 .lockCircle {
     position: absolute;
