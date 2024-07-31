@@ -2,9 +2,41 @@ if (false) { // CODE NEVER REACHED, SHOWS THE IMPORTS FOR DOCUMENTATION PURPOSES
 	const bip39 = require('./bip39 3.1.0.js');
 }
 
-const BIPTablesHardcoded = {};
-const BIPOfficialNamesHardcoded = {};
-const versionHardcoded = [];
+const BIPTablesHardcoded = {
+    "BIP-0039": {
+        "chinesetraditional": {
+            "officialLanguageStr": "chinese_traditional"
+        },
+        "czech": {
+            "officialLanguageStr": "czech"
+        },
+        "english": {
+            "officialLanguageStr": "english"
+        },
+        "french": {
+            "officialLanguageStr": "french"
+        },
+        "italian": {
+            "officialLanguageStr": "italian"
+        },
+        "japanese": {
+            "officialLanguageStr": "japanese"
+        },
+        "korean": {
+            "officialLanguageStr": "korean"
+        },
+        "portuguese": {
+            "officialLanguageStr": "portuguese"
+        },
+        "spanish": {
+            "officialLanguageStr": "spanish"
+        }
+    }
+};
+const BIPOfficialNamesHardcoded = {
+    "BIP-0039": "bip39"
+};
+const versionHardcoded = [1,5];
 const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 const argon2KeyLen = 32; // need to be a multiple of 2
@@ -21,14 +53,11 @@ const IVStrLength = 16; // need to be a multiple of 2
  * @param {Object} params.officialBIPs - The official BIPs - > Only used with nodeJS!
  * @param {string} params.version - The version of the table - > Only used with nodeJS!
  */
-class MnemoLinker {
+export class MnemoLinker {
 	constructor(params = { masterMnemonic: null, mnemonic: null, BIPTables: undefined, officialBIPs: undefined, version: undefined}) {
-		this.minMnemonicLength = 10;
-		this.memByMnemoLen = { "10": 2**19, "11": 2**18, "12": 2**16 };
+		this.minMnemonicLength = 12;
 		this.cryptoLib = this.#getCryptoLib();
 		this.argon2Lib = this.#getArgon2Lib();
-		this.useArgon2Worker = false;
-		this.argon2Worker = null;
 		this.officialBIPs = params.officialBIPs ? params.officialBIPs : {}; // Only used when file called as "lastBuildControl.js"
 		this.BIPTables = params.BIPTables ? params.BIPTables : BIPTablesHardcoded;
 		this.BIPOfficialNames = BIPOfficialNamesHardcoded;
@@ -59,6 +88,7 @@ class MnemoLinker {
 	 */
 	#init() {
 		if (!this.cryptoLib) { console.error('Crypto library not found'); return false; }
+		if (!this.argon2Lib) { console.error('Argon2 library not found'); return false; }
 
 		if (typeof this.params.masterMnemonic !== 'string' && typeof this.params.masterMnemonic !== 'object') { console.error('masterMnemonic is not a string or an array'); return false; }
 		this.master.mnemonic = typeof this.params.masterMnemonic === 'string' ? this.params.masterMnemonic.split(' ') : this.params.masterMnemonic;
@@ -72,17 +102,6 @@ class MnemoLinker {
 
 		if (!this.#detectMnemonicsLanguage()) { console.error('detectMnemonicsLanguage() failed'); return false; }
 		this.initialized = true;
-	}
-	async #initArgon2Worker() { // Front extension only !
-		try {
-			const workerCode = await loadScriptAsText('../scripts/argon2Worker.js');
-			const blob = new Blob([workerCode], { type: 'application/javascript' });
-			this.argon2Worker = new Worker(URL.createObjectURL(blob));
-		} catch (error) {
-			console.error('Error initializing the Argon2 worker:', error);
-			return false;
-		}
-		return true;
 	}
 	#isInitialized(initIfNot = true) {
 		try {
@@ -326,46 +345,16 @@ class MnemoLinker {
 	 * @param {string} saltStr - Usually a random string
 	 * @param {number} length - The length of the hash - default 32
 	 * @param {number} mem - Usually between 2 ** 14 and 2 ** 20 - default 2 ** 14
-	 * @returns { promise<Uint8Array> } - The hash
+	 * @returns {Uint8Array} - The hash as a Uint8Array
 	 */
-	async #deriveArgon2Hash(masterMnemonicStr, saltStr = 'toto', length = 32, mem = this.memByMnemoLen["12"]) {
+	async #deriveArgon2Hash(masterMnemonicStr, saltStr = 'toto', length = 32, mem = 2**14) {
 		const passwordStr = masterMnemonicStr;
 		const time = 2; // The number of iterations
 		const hashLen = length; // The length of the hash
 		const parallelism = 1; // The number of threads
 		const type = 2; // The type of the hash (0=Argon2d, 1=Argon2i, 2=Argon2id)
 
-		const paramsNavigator = {
-			pass: passwordStr,
-			time,
-			mem,
-			hashLen,
-			parallelism,
-			type,
-			salt: saltStr
-		};
-
-		if (this.useArgon2Worker) { // Front extension only ! -- avoid freezing the navigator
-			if (!this.argon2Worker) { await this.#initArgon2Worker(); }
-			const workerPromise = new Promise((resolve, reject) => {
-				this.argon2Worker.onmessage = function(e) {
-					if (!e.data) { resolve('No data received!'); return; }
-					if (typeof e.data === 'string') { resolve(e.data); return; }
-					if (typeof e.data.encoded !== 'string') { resolve('Encoded must be a string!'); return; }
-					if (typeof e.data.hash !== 'object') { resolve('Hash must be an object!'); return; }
-					if (e.data.hash.constructor !== Uint8Array) { resolve('Hash must be an Uint8Array!'); return; }
-					if (typeof e.data.hashHex !== 'string') { resolve('HashHex must be a string!'); return; }
-					
-					resolve(e.data.hash);
-				};
-			});
-
-			this.argon2Worker.postMessage(paramsNavigator);
-			return await workerPromise;
-		};
-
-		if (!this.argon2Lib) { console.error('Argon2 library not found'); return false; }
-		if (typeof(exports) !== 'undefined') { // Node.js
+		if (typeof(exports) !== 'undefined') {
 			const result = await this.argon2Lib.hash(
 				passwordStr,
 				{
@@ -379,8 +368,18 @@ class MnemoLinker {
 				}
 			);
 			return result;
-		} else { // Navigator
-			const result = await this.argon2Lib.hash(paramsNavigator);
+		} else {
+			const result = await this.argon2Lib.hash(
+				{
+					pass: passwordStr,
+					time,
+					mem,
+					hashLen,
+					parallelism,
+					type,
+					salt: saltStr
+				}
+			);
 			return result.hash;
 		}
 	}
@@ -453,11 +452,38 @@ class MnemoLinker {
 
 		return uuid;
 	}
-	#getMemFromMnemonicLength(mnemonicLength) {
-		const mnemoLenStr = mnemonicLength.toString();
-		const mem = this.memByMnemoLen[mnemoLenStr];
-		if (!mem) { return this.memByMnemoLen["12"]; }
-		return mem;
+	#uuidToString(uuid) {
+		if(uuid.length !== 16) {
+			throw new Error('uuid buffer length must be 16');
+		}
+	
+		let raw = '';
+	
+		for(let i = 0; i < 16; i++) {
+			raw += this.#byteToHex(uuid[i]).toString(16);
+		}
+	
+		return this.#formatUUIDString(raw);
+	}
+	#byteToHex(n) {
+		const str = n.toString(16);
+	
+		if(str.length === 1) {
+			return '0' + str;
+		}
+	
+		return str;
+	}
+	#formatUUIDString(uuidStr) {
+		const segments = [
+			uuidStr.substr(0, 8),
+			uuidStr.substr(8, 4),
+			uuidStr.substr(12, 4),
+			uuidStr.substr(16, 4),
+			uuidStr.substr(20)
+		];
+	
+		return segments.join('-').toLowerCase();
 	}
 
 	// PUBLIC METHODS
@@ -470,15 +496,13 @@ class MnemoLinker {
 	async genPublicId(desiredLength = 32) {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 
-		const encodedMasterMnemonicBase64Str = await this.#encodeMnemonic(this.master.mnemonic, 24);
+		const encodedMasterMnemonicBase64Str = this.#encodeMnemonic(this.master.mnemonic, 24);
 		if (!encodedMasterMnemonicBase64Str) { console.error('Unable to encode the master mnemonic'); return false; }
 
 		const fixedSalt = new Uint8Array([255, 133, 156, 2, 47, 9, 159, 140, 255, 133, 156, 2, 47, 9, 159, 140]);
-		const argon2Hash = await this.#deriveArgon2Hash(this.master.mnemonic.join(' '), fixedSalt, desiredLength * 2, 2**18);
-		if (!argon2Hash) { console.error('Unable to derive the Argon2 hash'); return false; }
-
+		const argon2Hash = await this.#deriveArgon2Hash(this.master.mnemonic.join(' '), fixedSalt, desiredLength * 2, 2**14);
 		const idUint8 = await this.#createUUIDv5Binary('LinkVault', argon2Hash);
-		const id = this.uint8ArrayToBase64(idUint8).replace(/=|\//g, '');
+		const id = this.uint8ArrayToBase64(idUint8).replace(/=/g, '');
 
 		return id;
 	}
@@ -489,24 +513,20 @@ class MnemoLinker {
 	 * - The salt is generated using the Scrypt algorithm by deriving the master mnemonic within the IV as a salt
 	 * - The MnemoLink is composed of the encrypted mnemonic, the BIP and language as preffix, and the IV and version as suffix
 	 */
-	async encryptMnemonic(autoMem = true) {
+	async encryptMnemonic() {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 		//const startTimestamp = Date.now();
 		const IV = this.#generateIV();
-		const mnemonicLength = this.master.mnemonic.length;
-		const mem = autoMem ? this.#getMemFromMnemonicLength(mnemonicLength) : undefined;
-		const argon2Hash = await this.#deriveArgon2Hash(this.master.mnemonic.join(' '), IV.IVBase64Str, argon2KeyLen, mem);
-		if (!argon2Hash) { console.error('Unable to derive the Argon2 hash'); return false; }
-
+		const argon2Hash = await this.#deriveArgon2Hash(this.master.mnemonic.join(' '), IV.IVBase64Str, argon2KeyLen);
 		const key = await this.#importArgon2KeyAsAesGcm(argon2Hash);
 		
-		const encodedMnemonicBase64Str = await this.#encodeMnemonic(this.origin.mnemonic, 24);
+		const encodedMnemonicBase64Str = this.#encodeMnemonic(this.origin.mnemonic, 24);
 		const encryptedMnemonicStr = await this.#encryptText(encodedMnemonicBase64Str, key, IV.IVUnit8Array);
 		//console.log('Encryption time:', Date.now() - startTimestamp, 'ms');
 
 		// control validity
 		const controlEncodedMnemonicBase64Str = await this.#decryptText(encryptedMnemonicStr, key, IV.IVUnit8Array);
-		const decodedMnemonicStr = await this.#decodeMnemonic(controlEncodedMnemonicBase64Str, this.origin.bip, this.origin.language);
+		const decodedMnemonicStr = this.#decodeMnemonic(controlEncodedMnemonicBase64Str, this.origin.bip, this.origin.language);
 		if (!this.origin.mnemonic.join(' ') === decodedMnemonicStr) { console.error('Decrypted mnemonic is not valid'); return false; }
 
 		const originPrefix = this.#getOriginPrefix();
@@ -514,7 +534,7 @@ class MnemoLinker {
 
 		return originPrefix + encryptedMnemonicStr + IV.IVBase64Str + versionSuffix;
 	}
-	async decryptMnemoLink(mnemoLink = '', autoMem = true) {
+	async decryptMnemoLink(mnemoLink = '') {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
 
 		const { encryptedMnemonic, bip, language, version, IVUnit8Array, IVBase64Str } = this.dissectMnemoLink(mnemoLink);
@@ -524,17 +544,13 @@ class MnemoLinker {
 			return false;
 		}
 
-		const mnemonicLength = this.master.mnemonic.length;
-		const mem = autoMem ? this.#getMemFromMnemonicLength(mnemonicLength) : undefined;
-		const argon2Hash = await this.#deriveArgon2Hash(this.master.mnemonic.join(' '), IVBase64Str, argon2KeyLen, mem);
-		if (!argon2Hash) { console.error('Unable to derive the Argon2 hash'); return false; }
-
+		const argon2Hash = await this.#deriveArgon2Hash(this.master.mnemonic.join(' '), IVBase64Str, argon2KeyLen);
 		const key = await this.#importArgon2KeyAsAesGcm(argon2Hash);
 		
 		const decryptedMnemonicStr = await this.#decryptText(encryptedMnemonic, key, IVUnit8Array);
 		if (!decryptedMnemonicStr) { console.error('decryptedMnemonicStr is empty'); return false; }
 
-		const decodedMnemonic = await this.#decodeMnemonic(decryptedMnemonicStr, bip, language);
+		const decodedMnemonic = this.#decodeMnemonic(decryptedMnemonicStr, bip, language);
 		if (!decodedMnemonic) { console.error('decodedMnemonic is empty'); return false; }
 		
 		return decodedMnemonic;
@@ -649,13 +665,8 @@ class MnemoLinker {
 
 		return { bip, language, wordsTable, bestLanguage: bestSearch.language };
 	}
-	terminate() {
-		if (this.argon2Worker) { this.argon2Worker.terminate(); }
-	}
 }
 
 /* CODE RELEASED ONLY WHEN EXPORTED --- DONT USE "//" or "/*" COMMENTS IN THIS SECTION !!! ---
 */
 
-//END --- ANY CODE AFTER THIS LINE WILL BE REMOVED DURING EXPORT, SHOULD BE USE FOR TESTING ONLY ---
-if (typeof(exports) !== 'undefined') { module.exports = MnemoLinker }

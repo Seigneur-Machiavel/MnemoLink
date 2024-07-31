@@ -350,7 +350,7 @@ body.dark-mode .categorySheet.active {
     pointer-events: none;
 }
 .categorySheet .categoryBtn:hover > .wrap {
-    animation: categoryBtnGlitch .12s;
+    animation: categoryBtnGlitch .12s, blink 1.2s;
 }
 @keyframes categoryBtnGlitch {
     0% {
@@ -912,13 +912,23 @@ body.dark-mode .mnemolinkBubble .wrap {
 }
 
 /* modals */
-#authentificationModalWrap, #confirmChoiceModalWrap {
+#waitingForConnectionModalWrap, #authentificationModalWrap, #confirmChoiceModalWrap {
     width: 300px !important;
     border-color: var(--placeholder-color);
     background-color: rgb(40, 40, 40);
 }
 #authentificationModalWrap .bottomInfo, #confirmChoiceModalWrap .bottomInfo {
     color: white;
+}
+#waitingForConnectionModalWrap .loadingSvgDiv {
+    margin-top: 40px;
+    width: 240px;
+    height: 42px;
+}
+#waitingForConnectionModalWrap h2 {
+    color: white;
+    background-color: rgb(40, 40, 40) !important;
+    animation: blink 1s infinite;
 }
 form {
     width: 100%;
@@ -1388,6 +1398,12 @@ form button {
     justify-content: space-between;
     align-items: center;
 }
+.footer a img {
+    width: 40px; height: 40px;
+}
+.footer a:hover {
+    transform: scale(1.04);
+}
 .footerLeft {
     display: flex;
     align-items: center;
@@ -1407,6 +1423,9 @@ form button {
 }
 .footerText {
     font-size: 12px;
+}
+.footerText.footerVersion {
+    margin: 20px 0 0;
 }
 
 /* DARK MODE SWITCH */

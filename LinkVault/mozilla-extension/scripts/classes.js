@@ -68,6 +68,8 @@ class centerScreenBtnObject {
 		this.delayBeforeIdleAnimationIfLocked = 20000;
 		this.idleAnimationLoopMs = 4000;
 		this.state = 'locked'; // 'locked' or 'unlocked' or 'welcome'
+		this.centerScreenBtnWrap = document.getElementById('centerScreenBtnWrap');
+		this.pickAxe = document.getElementById('pickAxe'); // only available in the popup
 		this.elementWrap = document.getElementById('centerScreenBtn').parentElement;
 		this.element = document.getElementById('centerScreenBtn');
 
@@ -405,7 +407,9 @@ class userDataClass {
 		try {
 			/** @type {MnemoLinker} */
 			const targetMnemoLinker = new targetMnemoLinkerClass( { masterMnemonic: masterMnemonicStr } );
+			targetMnemoLinker.useArgon2Worker = true;
 			const mnemoLinkDecrypted = await targetMnemoLinker.decryptMnemoLink(mnemoLinkEncrypted);
+			targetMnemoLinker.terminate(); // terminate worker
 			if (!mnemoLinkDecrypted) { if (logs) { console.error('mnemoLinkDecrypted not found !'); return false; } }
 			
 			return mnemoLinkDecrypted;
@@ -439,7 +443,7 @@ class tempDataClass {
 		this.rndButtonsPressed = 0;
 		this.mnemonic = new mnemonicClass();
 	}
-};
+}
 class mnemoBubbleObject {
 	constructor(label, mnemoLinkerVersion, x = 0, y = 0) {
 		/** @type {HTMLElement} */
@@ -456,6 +460,8 @@ class mnemoBubbleObject {
 			x: x / eHTML.vault.mnemolinksBubblesContainer.offsetWidth * 100,
 			y: y / eHTML.vault.mnemolinksBubblesContainer.offsetHeight * 100,
 		};
+		this.fakeCiphering = false;
+		this.readyToShow = false;
 	}
 	createMnemoLinkBubbleElement(label = 'toto', mnemoLinkerVersion = 'v0.1') {
 		const newMnemoLink = document.createElement('div');
@@ -516,13 +522,62 @@ class mnemoBubbleObject {
 		});
 		return true;
 	}
-	async prepareBubbleToShow(label, mnemonicStr, fakeCipher = true) {
+	async prepareBubbleToShow(label, fakeCipher = true) {
 		if (this.label !== label) { console.error('label mismatch !'); return; }
-
+		
+		this.fakeCiphering = true;
 		const duration = 240;
 		centerScreenBtn.hide(duration);
 		this.toCenterContainer(duration);
 		await new Promise(r => setTimeout(r, duration * .4));
+		
+		// clear bubble
+		this.element.innerHTML = '';
+		this.element.classList.add('showing');
+	
+		// title
+		const emptyDiv = document.createElement('div');
+		const titleH2 = document.createElement('h2');
+		titleH2.innerText = label;
+		emptyDiv.appendChild(titleH2);
+		
+		// mnemonic grid
+		const gridHtml = document.createElement('div');
+		gridHtml.classList.add('miniMnemonicGrid');
+		for (let i = 0; i < 12; i++) {
+			const fakeWordLength = rnd(3, 7);
+			const wordDiv = document.createElement('div');
+			wordDiv.innerText = fakeCipher ? this.#generateRndString( fakeWordLength ) : mnemonic[i];
+			gridHtml.appendChild(wordDiv);
+		};
+
+		emptyDiv.appendChild(gridHtml);
+		emptyDiv.classList.add('mnemonicBubbleContent');
+		this.element.appendChild(emptyDiv);
+
+		const wordDivs = gridHtml.querySelectorAll('div');
+		while (!this.readyToShow) {
+			for (let i = 0; i < wordDivs.length; i++) {
+				const newRndWordLength = rnd(3, 7);
+				const newRndWord = this.#generateRndString( newRndWordLength );
+				for (let j = 0; j < newRndWord.length; j++) {
+					const char = newRndWord.charAt(j);
+					// replace the "fake cipher" char at position j by the real char
+					wordDivs[i].innerText = wordDivs[i].innerText.substring(0, j) + char + wordDivs[i].innerText.substring(j + 1);
+					await new Promise(r => setTimeout(r, settings.delayBeetweenChar));
+					if (this.readyToShow) { break; }
+				}
+				if (this.readyToShow) { break; }
+				if (newRndWordLength < wordDivs[i].innerText.length) { wordDivs[i].innerText = newRndWord; }
+			}
+		}
+
+		this.fakeCiphering = false;
+	}
+	async prepareMiniGridToDecipher(label, mnemonicStr, fakeCipher = true) {
+		if (this.label !== label) { console.error('label mismatch !'); return; }
+		this.readyToShow = true;
+		while (this.fakeCiphering) { await new Promise(r => setTimeout(r, 40)); }
 		
 		// clear bubble
 		this.element.innerHTML = '';
@@ -546,15 +601,19 @@ class mnemoBubbleObject {
 
 		emptyDiv.appendChild(gridHtml);
 		
-		// copy and download buttons
-		const activeClassBtnsWrap = fakeCipher ? '' : ' active';
-		emptyDiv.innerHTML += `<div class="buttonsWrap${activeClassBtnsWrap}">
-		<div class="copyBtn" id="bubbleCopyBtn">Copy</div>
-		<div class="downloadBtn" id="bubbleDownloadBtn">Download</div>
-		</div>`;
+		setTimeout(() => {
+			// copy and download buttons
+			const activeClassBtnsWrap = fakeCipher ? '' : ' active';
+			emptyDiv.innerHTML += `<div class="buttonsWrap${activeClassBtnsWrap}">
+			<div class="copyBtn" id="bubbleCopyBtn">Copy</div>
+			<div class="downloadBtn" id="bubbleDownloadBtn">Download</div>
+			</div>`;
+		}, 600);
 		
 		emptyDiv.classList.add('mnemonicBubbleContent');
 		this.element.appendChild(emptyDiv);
+
+		return true;
 	}
 	#generateRndString(length = 12) {
 		let rndStr = "";
@@ -837,19 +896,21 @@ class gameControllerClass {
         this.gameEventListeners = [];
     }
 }
-class cryptoTimingsObject {
-	constructor() {
-		this.argon2Time = 0;
-		this.deriveKTime = 0;
-		this.total = 0;
-	}
-}
 class communicationClass {
     constructor(serverUrl) {
         this.url = serverUrl;
 		this.sanitizer = new sanitizerClass();
     }
 
+	async pingServer(serverUrl) {
+		try {
+			const response = await fetch(`${serverUrl}/api/ping`);
+			const result = await response.json();
+			if (result.success) { return true; }
+		} catch (error) {
+		}
+		return false;
+	}
 	/**
 	 * Send MnemoLinks to server - Return server's response
 	 * @param {string} userId - userData.id
@@ -961,9 +1022,20 @@ class communicationClass {
 		  if (result.encryptedPassComplement) { result.encryptedPassComplement = this.sanitizer.sanitize(result.encryptedPassComplement); }
 		  return result;
 		} catch (error) {
-		  console.error(`Error while sending AuthData to server: ${error}`);
+		  console.info(`Error while sending AuthData to server: ${error}`);
 		  return false;
 		}
+	}
+}
+class authInfoObject {
+	constructor() {
+		this.appVersion = "";
+		this.authID = "";
+		this.authToken = "";
+		this.hash = "";
+		this.salt1Base64 = "";
+		this.iv1Base64 = "";
+		this.serverAuthBoost = false;
 	}
 }
 class sanitizerClass {
@@ -977,7 +1049,8 @@ class sanitizerClass {
 		if (typeof data !== 'string' && typeof data !== 'object') return 'Invalid data type';
 	
 		if (typeof data === 'string') {
-			return data.replace(/[^a-zA-Z0-9+/=$,]/g, '');
+			//return data.replace(/[^a-zA-Z0-9+/=$,]/g, ''); // DEPRECATED - losing "."
+			return data.replace(/[^a-zA-Z0-9+\/=.$,]/g, '');
 		} else if (typeof data === 'object') {
 			const sanitized = {};
 			for (const key in data) {
@@ -987,6 +1060,182 @@ class sanitizerClass {
 			return sanitized;
 		}
 		return data;
+	}
+}
+class Miner {
+	/**
+	* @param {centerScreenBtnObject} centerScreenBtn
+	* @param {communicationClass} communication
+	*/
+	constructor(centerScreenBtn, communication) {
+		this.connectionState = null;
+		this.sanitizer = new sanitizerClass();
+		this.centerScreenBtn = centerScreenBtn;
+		this.communication = communication;
+	}
+
+	async init() {
+		this.connectionState = await this.getConnectionStateFromStorage();
+		const miningIsActive = await this.isMiningActive();
+        if (miningIsActive) { // continue mining
+            console.log(`popup send: startMining (from previous state)`);
+            await chrome.runtime.sendMessage({action: "startMining"});
+            this.centerScreenBtn.pickAxe.classList.remove('invisible');
+        }
+
+		this.initListeners();
+        const intensity = await this.getIntensityFromStorage();
+        this.setIntensityRangeValue(intensity);
+        this.miningAnimationLoop();
+	}
+	async toogleMining() {
+		const miningIsActive = await this.isMiningActive();
+		if (miningIsActive) {
+			console.log(`popup send: stopMining`);
+			await chrome.runtime.sendMessage({action: "stopMining"});
+		} else {
+			console.log(`popup send: startMining`);
+			await chrome.runtime.sendMessage({action: "startMining"});
+		}
+	}
+	async miningAnimationLoop() {
+		const pickAxe = this.centerScreenBtn.pickAxe;
+		pickAxe.style.transform = 'rotate(0deg) translateX(20%) translateY(0%) scale(.6)';
+		const minDuration = 50;
+		let circleAnim = null;
+	
+		while(true) {
+			const miningIsActive = await this.isMiningActive();
+			const miningIntensity = this.getIntensityFromSpan();
+	
+			let pauseDuration = miningIntensity === 10 ? 0 : 2000 / (1.4 ** miningIntensity);
+			if (this.connectionState !== 'connected') { pauseDuration = 1000; }
+			const duration = pauseDuration < minDuration ? minDuration : pauseDuration;
+			
+			await new Promise(resolve => setTimeout(resolve, duration));
+
+			if (!miningIsActive || miningIntensity === 0) {
+				this.centerScreenBtn.pickAxe.classList.add('invisible');
+				this.centerScreenBtn.state = 'welcome';
+				continue;
+			} else {
+				//this.centerScreenBtn.state = 'unlocked';
+				this.centerScreenBtn.state = 'mining';
+				this.centerScreenBtn.pickAxe.classList.remove('invisible');
+			}
+			
+			if (this.connectionState !== 'connected') {
+				// rotate (loading)
+				circleAnim = anime({
+					targets: pickAxe,
+					rotate: '+=360deg',
+					translateX: ['-10%', '0%', '10%'],
+					translateY: '0%',
+					scale: [.6, .64, .6],
+					opacity: [0, 1],
+					
+					easing: 'easeOutQuad',
+					duration: duration * .5,
+				});
+				continue;
+			}
+	
+			// Pull
+			circleAnim = anime({
+				targets: pickAxe,
+				rotate: '0deg',
+				translateX: '40%',
+				translateY: '10%',
+				scale: .6,
+	
+				easing: 'easeOutQuad',
+				duration: duration * .7,
+			});
+	
+			setTimeout(async () => {
+				this.centerScreenBtn.lockCircles.forEach( lc => lc.setShape('hexagon', true) );
+			}, 20);
+			await new Promise(resolve => setTimeout(resolve, duration * .7));
+	
+			// Shot
+			circleAnim = anime({
+				targets: pickAxe,
+				rotate: '-100deg',
+				translateX: '20%',
+				translateY: '-10%',
+				scale: .62,
+				easing: 'easeInQuad',
+				duration: duration * .3,
+			});
+	
+			setTimeout(async () => { 
+				for (let i = this.centerScreenBtn.lockCircles.length - 1; i >= 0; i--) {
+					this.centerScreenBtn.lockCircles[i].setShape('dot');
+					await new Promise(r => setTimeout(r, 20));
+				}
+			}, duration * .26);
+			await new Promise(resolve => setTimeout(resolve, duration * .3));
+		}
+	}
+	/** @return {Promise<boolean>} - true if mining is active */
+	async isMiningActive() {
+		const result = await chrome.storage.local.get(['miningState']);
+		if (!result) { return; }
+
+		const miningState = sanitizer.sanitize(result.miningState);
+		return miningState === 'enabled';
+	}
+	async getConnectionStateFromStorage() {
+		const result = await chrome.storage.local.get(['connectionState']);
+		if (!result) { return; }
+	
+		return sanitizer.sanitize(result.connectionState);
+	}
+	async getIntensityFromStorage() {
+		const result = await chrome.storage.local.get(['miningIntensity']);
+		if (!result) { return; }
+	
+		return sanitizer.sanitize(result.miningIntensity);
+	}
+	setIntensityRangeValue(value = 1) {
+		const rangeInput = document.getElementsByName('intensity')[0];
+		rangeInput.value = value;
+	
+		const rangeSpan = document.getElementById('intensityValueStr');
+		rangeSpan.innerText = value;
+	}
+	getIntensityFromSpan() { // MERGE TO MINER CLASSE
+		const rangeSpan = document.getElementById('intensityValueStr');
+		return parseInt(rangeSpan.innerText);
+	}
+	initListeners() {
+		chrome.storage.onChanged.addListener((changes, namespace) => {
+			//console.log(`storage listener received: ${JSON.stringify(changes)}`);
+			for (let key in changes) {
+				switch (key) {
+					case 'hashRate':
+						const hashRate = this.sanitizer.sanitize(changes[key].newValue);
+						const hashRateElmnt = document.getElementById('hashRateValueStr');
+						hashRateElmnt.innerText = hashRate.toFixed(2);
+						break;
+					case 'miningIntensity':
+						const intensity = this.sanitizer.sanitize(changes[key].newValue);
+						this.setIntensityRangeValue(intensity);
+						break;
+					case 'connectionState':
+						//console.log(`connectionState listener received: ${changes[key].newValue}`);
+						const connectionState = this.sanitizer.sanitize(changes[key].newValue);
+						this.connectionState = connectionState;
+						break;
+					default:
+						break;
+				}
+			}
+		});
+
+		this.centerScreenBtn.centerScreenBtnWrap.addEventListener('click', async () => {
+			await this.toogleMining();
+		});
 	}
 }
 //#endregion
@@ -1003,6 +1252,8 @@ if (false) {
         mnemoLinkSVGObject,
         gameControllerClass,
 		communicationClass,
+		authInfoObject,
 		sanitizerClass,
+		Miner,
     };
 }

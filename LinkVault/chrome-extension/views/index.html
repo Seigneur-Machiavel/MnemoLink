@@ -166,6 +166,14 @@
     </div>
 
     <div class="modalsWrap hidden fold">
+        <div class="modalWrap hidden" id="waitingForConnectionModalWrap">
+            <div class="modal">
+                <form id="waitingForConnectionForm">
+                    <h2>Waiting for connection...</h2>
+                    <div class="loadingSvgDiv"></div>
+                </form>
+            </div>
+        </div>
         <div class="modalWrap hidden" id="authentificationModalWrap">
             <div class="modal">
                 <form id="loginForm">
@@ -197,7 +205,7 @@
                         <div style="display: flex; align-items: center;">
                             <div class="wrap seedWordsRangeWrap">
                                 <label for="seedWords">Seed words: <span class="seedWordsValueStr">12</span></label>
-                                <input type="range" name="seedWords" min="12" max="24" value="12" step="1">
+                                <input type="range" name="seedWords" min="10" max="24" value="12" step="1">
                             </div>
                         </div>
                     </div>
@@ -258,9 +266,6 @@
                         <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAACXBIWXMAAACxAAAAsQHGLUmNAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAASlJREFUSInt0z1OQlEQBeAP8WcHFCxAGuzcg6WRhETXYtQYlqGlf52hsXQFlhZqb9DOEg0GCwbfC/HBfagdJ5m8e++bOWdmMkM6angIq5WIS0YLw7BWatBSCYFqwfnPBObCQmAh8H8CVWxJ29ha+CbvBnSMNvYZjXhryza5HW+N8Bni+CeiWS2q4zYnkkcj/tVLJP6NVVzLMn7BUe6+L8t8iBuszSPSzZF8Fpy74TsXJiuZtKTMT/GG7cRKUjLfCc4TGETA5YxK8iKz2nIVfoNl2SRNC/gwGs2DuHfirQgr8V2C11B7RGVKUCoqwTVEDy5kpR/+UqQSHGO+swo2cCdr0RPujUaxDKpoYj3u79gc/9xDX/E4lrU+diczaOLcqG/zEveCozkm/QLDg3YsFTo2qgAAAABJRU5ErkJggg==" />
                     </button>
                     <button class="modalButton disabled">Save
-                        <!--
-                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAA3NCSVQICAjb4U/gAAAACXBIWXMAABdsAAAXbAHnC+qbAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAK5QTFRF////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAIAAAIAAAHAAAHAAAHBgAGBQAFBAAEBAAEBAAEBAAEBAAEAwADAwADAwADAwADAgAFAgAEAgAEAgAEAgAEAgAEBAIEBAIEAwEEAwEEAwEEAwEEAwEEAgEEAgEEAgEEBAEEBAEEBAEEAwEDAwEFAwEEAwEDAwEEAwEEAwEEAwEEAwEEAwEEAwEEAwEEAwEE4+8CqgAAADl0Uk5TAAEDBgcMDRATICEiIyUmLDI+P0BCRUxOVl9rd3h5f4CBiqutsrS7z9LU1dbZ2+Dn6+zw8fT1/P3+NMDcPgAAALBJREFUOE+l08cOwjAQRdGEAKGFGnrvvbfc//8xFoBMMhKzyOyefCTb47FlxS+v6pjg+PnoegeW2W9wVzz7EXAEzvVPaANM0yEAwKP7Dj0AtkUBYJIygGtTAtaeAQQjWwAuDQNg7gpAMLANYF8SAGbDn3BrScAplMYJASK1yCiAQ1kB3H0FsNPARtuiEu+Q8ppao5RWa4+lPbc2MMrI/RtadezVj2Pl/KQJTq0QXY9dLytSffZNDb5YAAAAAElFTkSuQmCC" />
-                        -->
                     </button>
                 </div>
                 <p class="bottomInfo"></p>

@@ -912,13 +912,23 @@ body.dark-mode .mnemolinkBubble .wrap {
 }
 
 /* modals */
-#authentificationModalWrap, #confirmChoiceModalWrap {
+#waitingForConnectionModalWrap, #authentificationModalWrap, #confirmChoiceModalWrap {
     width: 300px !important;
     border-color: var(--placeholder-color);
     background-color: rgb(40, 40, 40);
 }
 #authentificationModalWrap .bottomInfo, #confirmChoiceModalWrap .bottomInfo {
     color: white;
+}
+#waitingForConnectionModalWrap .loadingSvgDiv {
+    margin-top: 40px;
+    width: 240px;
+    height: 42px;
+}
+#waitingForConnectionModalWrap h2 {
+    color: white;
+    background-color: rgb(40, 40, 40) !important;
+    animation: blink 1s infinite;
 }
 form {
     width: 100%;

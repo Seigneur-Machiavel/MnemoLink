@@ -2,7 +2,6 @@ if (false) { // CODE NEVER REACHED, SHOWS THE IMPORTS FOR DOCUMENTATION PURPOSES
 	const bip39 = require('./bip39 3.1.0.js');
 }
 
-const syncScrypt = typeof(exports) !== 'undefined' ? require('./syncScrypt.js') : null;
 const BIPTablesHardcoded = {
     "BIP-0039": {
         "chinesetraditional": {
@@ -37,11 +36,10 @@ const BIPTablesHardcoded = {
 const BIPOfficialNamesHardcoded = {
     "BIP-0039": "bip39"
 };
-const versionHardcoded = [1,1];
+const versionHardcoded = [1,6];
 const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
-const PBKDF2Iterations = 200001;
-const saltLength = 32; // need to be a multiple of 2
+const argon2KeyLen = 32; // need to be a multiple of 2
 const IVStrLength = 16; // need to be a multiple of 2
 
 /**
@@ -303,32 +301,20 @@ export class MnemoLinker {
 		const mnemonicStr = mnemonic.join(' ');
 		return mnemonicStr;
 	}
-	async #deriveK(masterMnemonic, saltUnit16Array, iterations = PBKDF2Iterations) {
-		const salt = saltUnit16Array;
-		const keyMaterial = await this.cryptoLib.subtle.importKey(
-			"raw",
-			new TextEncoder().encode(masterMnemonic),
-			{ name: "PBKDF2" },
-			false,
-			["deriveKey"]
-		);
-	
-		const derivedKey = await this.cryptoLib.subtle.deriveKey(
-			{
-				name: "PBKDF2",
-				salt: new TextEncoder().encode(salt),
-				iterations,
-				hash: "SHA-256"
-			},
-			keyMaterial,
-			{ name: "AES-GCM", length: 256 },
-			false,
-			["encrypt", "decrypt"]
-		);
-
-		//const toto = await this.cryptoLib.subtle.exportKey("raw", derivedKey);
-
-		return derivedKey;
+	async #importArgon2KeyAsAesGcm(argon2Key) {
+		try {
+			const keyMaterial = await this.cryptoLib.subtle.importKey(
+				"raw",
+				argon2Key,
+				{ name: "AES-GCM" },
+				false,
+				["encrypt", "decrypt"]
+			);
+			return keyMaterial;
+		} catch (error) {
+			console.error('Error importing Argon2 key as AES-GCM:', error);
+			return null;
+		}
 	}
 	async #encryptText(str, key, iv = new Uint8Array(16)) {
 		const buffer = new TextEncoder().encode(str);
@@ -353,42 +339,17 @@ export class MnemoLinker {
 		return decryptedText;
 	}
 	/**
-	 * Generate a salt using the master mnemonic as a password, and the IV as a salt.
-	 * - The salt is generated using the Scrypt algorithm
-	 * - Memory cost provides better security over Brute Force attacks
-	 * @param {string} masterMnemonicStr - The master mnemonic as a string
-	 * @param {string} IVStr - The IV as a string
-	 * @param {number} length - The desired length of the salt
-	 * @returns 
-	 */
-	#generateScryptSalt(masterMnemonicStr, IVStr = 'toto', length = saltLength) {
-		const passwordStr = masterMnemonicStr;
-		const saltStr = IVStr;
-		const CPUCost = 4;
-		const memoryCost = 2**8;
-		const parallelism = 1;
-
-		let Uint8Salt = null;
-		try {
-			Uint8Salt = window.syncScrypt(passwordStr, saltStr, CPUCost, memoryCost, parallelism, length);
-		} catch (error) {
-			Uint8Salt = syncScrypt(passwordStr, saltStr, CPUCost, memoryCost, parallelism, length);
-		}
-		return Uint8Salt;
-	}
-	/**
-	 * Generate a salt using the master mnemonic as a password, and the IV as a salt.
-	 * - The salt is generated using the Argon2 algorithm
+	 * Generate a hash using the master mnemonic as a password, and the IV as a salt.
 	 * - The memory cost provides better security over Brute Force attacks
 	 * @param {string} masterMnemonicStr
-	 * @param {string} IVStr
-	 * @param {number} length
+	 * @param {string} saltStr - Usually a random string
+	 * @param {number} length - The length of the hash - default 32
+	 * @param {number} mem - Usually between 2 ** 14 and 2 ** 20 - default 2 ** 14
+	 * @returns {Uint8Array} - The hash as a Uint8Array
 	 */
-	async #generateArgon2Salt(masterMnemonicStr, IVStr = 'toto', length = saltLength) {
+	async #deriveArgon2Hash(masterMnemonicStr, saltStr = 'toto', length = 32, mem = 2**14) {
 		const passwordStr = masterMnemonicStr;
-		const saltStr = IVStr;
 		const time = 2; // The number of iterations
-		const mem = 2**14; // The memory cost
 		const hashLen = length; // The length of the hash
 		const parallelism = 1; // The number of threads
 		const type = 2; // The type of the hash (0=Argon2d, 1=Argon2i, 2=Argon2id)
@@ -472,6 +433,58 @@ export class MnemoLinker {
 			return false 
 		};
 	}
+	async #createUUIDv5Binary(saltStr, name) {
+		const salt = new TextEncoder().encode(saltStr);
+		const combined = new Uint8Array(salt.length + name.length);
+		combined.set(salt, 0);
+		combined.set(name, salt.length);
+	  
+		const hashBuffer = await this.cryptoLib.subtle.digest('SHA-1', combined)
+		const hashArray = new Uint8Array(hashBuffer);
+		const uuid = new Uint8Array(16);
+
+		uuid.set(hashArray.slice(0, 4), 0); // time_low
+		uuid.set(hashArray.slice(4, 6), 4); // time_mid
+		uuid.set(hashArray.slice(6, 8), 6); // time_hi_and_version
+		uuid[6] = (uuid[6] & 0x0f) | 0x50; // version 5
+		uuid[8] = (hashArray[8] & 0x3f) | 0x80; // clock_seq_hi_and_reserved
+		uuid.set(hashArray.slice(8, 16), 8); // the rest
+
+		return uuid;
+	}
+	#uuidToString(uuid) {
+		if(uuid.length !== 16) {
+			throw new Error('uuid buffer length must be 16');
+		}
+	
+		let raw = '';
+	
+		for(let i = 0; i < 16; i++) {
+			raw += this.#byteToHex(uuid[i]).toString(16);
+		}
+	
+		return this.#formatUUIDString(raw);
+	}
+	#byteToHex(n) {
+		const str = n.toString(16);
+	
+		if(str.length === 1) {
+			return '0' + str;
+		}
+	
+		return str;
+	}
+	#formatUUIDString(uuidStr) {
+		const segments = [
+			uuidStr.substr(0, 8),
+			uuidStr.substr(8, 4),
+			uuidStr.substr(12, 4),
+			uuidStr.substr(16, 4),
+			uuidStr.substr(20)
+		];
+	
+		return segments.join('-').toLowerCase();
+	}
 
 	// PUBLIC METHODS
 	/**
@@ -486,26 +499,12 @@ export class MnemoLinker {
 		const encodedMasterMnemonicBase64Str = this.#encodeMnemonic(this.master.mnemonic, 24);
 		if (!encodedMasterMnemonicBase64Str) { console.error('Unable to encode the master mnemonic'); return false; }
 
-		const fixedSalt = new Uint16Array([0, 2, 1, 3]);
-		const fixedIV = new Uint8Array([0, 1, 2, 3, 5, 4, 6, 7, 8, 9, 11, 10, 12, 13, 14, 15]);
-		const key = await this.#deriveK(encodedMasterMnemonicBase64Str, fixedSalt, PBKDF2Iterations / 16);
-		const id = await this.#encryptText(encodedMasterMnemonicBase64Str, key, fixedIV);
+		const fixedSalt = new Uint8Array([255, 133, 156, 2, 47, 9, 159, 140, 255, 133, 156, 2, 47, 9, 159, 140]);
+		const argon2Hash = await this.#deriveArgon2Hash(this.master.mnemonic.join(' '), fixedSalt, desiredLength * 2, 2**14);
+		const idUint8 = await this.#createUUIDv5Binary('LinkVault', argon2Hash);
+		const id = this.uint8ArrayToBase64(idUint8).replace(/=|\//g, '');
 
-		const controlBase64Str = await this.#decryptText(id, key, fixedIV);
-		const decodedStr = this.#decodeMnemonic(controlBase64Str, this.origin.bip, this.origin.language);
-		if (!this.master.mnemonic.join(' ') === decodedStr) { console.error('Decrypted ID is not valid'); return false; }
-
-		let reducedId = '';
-		const acceptedChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-		for (let i = 0; i < id.length; i++) {
-			const char = id[i];
-			if (acceptedChars.includes(char)) { reducedId += char; }
-			if (reducedId.length >= desiredLength) { break; }
-		}
-
-		if (reducedId.length !== desiredLength) { console.error('reducedId length is not desiredLength'); return false; }
-
-		return reducedId;
+		return id;
 	}
 	/**
 	 * Encrypt the mnemonic using the master mnemonic as a key.
@@ -516,16 +515,15 @@ export class MnemoLinker {
 	 */
 	async encryptMnemonic() {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
-		
+		//const startTimestamp = Date.now();
 		const IV = this.#generateIV();
-		//const saltUint8Array = this.#generateScryptSalt(this.master.mnemonic.join(' '), IV.IVBase64Str, saltLength);
-		const saltUint8Array = await this.#generateArgon2Salt(this.master.mnemonic.join(' '), IV.IVBase64Str, saltLength);
-		const encodedMasterMnemonicBase64Str = this.#encodeMnemonic(this.master.mnemonic, 24);
-		const encodedMnemonicBase64Str = this.#encodeMnemonic(this.origin.mnemonic, 24);
-
-		const key = await this.#deriveK(encodedMasterMnemonicBase64Str, saltUint8Array);
-		const encryptedMnemonicStr = await this.#encryptText(encodedMnemonicBase64Str, key, IV.IVUnit8Array);
+		const argon2Hash = await this.#deriveArgon2Hash(this.master.mnemonic.join(' '), IV.IVBase64Str, argon2KeyLen);
+		const key = await this.#importArgon2KeyAsAesGcm(argon2Hash);
 		
+		const encodedMnemonicBase64Str = this.#encodeMnemonic(this.origin.mnemonic, 24);
+		const encryptedMnemonicStr = await this.#encryptText(encodedMnemonicBase64Str, key, IV.IVUnit8Array);
+		//console.log('Encryption time:', Date.now() - startTimestamp, 'ms');
+
 		// control validity
 		const controlEncodedMnemonicBase64Str = await this.#decryptText(encryptedMnemonicStr, key, IV.IVUnit8Array);
 		const decodedMnemonicStr = this.#decodeMnemonic(controlEncodedMnemonicBase64Str, this.origin.bip, this.origin.language);
@@ -538,7 +536,6 @@ export class MnemoLinker {
 	}
 	async decryptMnemoLink(mnemoLink = '') {
 		if (!this.#isInitialized()) { console.error('MnemoLinker not initialized'); return false; }
-		const timings = { startTimestamp: Date.now() };
 
 		const { encryptedMnemonic, bip, language, version, IVUnit8Array, IVBase64Str } = this.dissectMnemoLink(mnemoLink);
 		if (version.join(".") !== this.version.join(".")) { 
@@ -546,25 +543,16 @@ export class MnemoLinker {
 			console.error(`Invalid MnemoLink version number: ${version.join(".")} | current: ${this.version.join(".")}`);
 			return false;
 		}
-		
-		//const saltUint8Array = this.#generateScryptSalt(this.master.mnemonic.join(' '), IVBase64Str, saltLength);
-		const saltUint8Array = await this.#generateArgon2Salt(this.master.mnemonic.join(' '), IVBase64Str, saltLength);
-		timings.saltsGenerated = Date.now() - timings.startTimestamp;
-		timings.checkPoint = Date.now();
 
-		const encodedMasterMnemonicBase64Str = this.#encodeMnemonic(this.master.mnemonic, 24);
-		const key = await this.#deriveK(encodedMasterMnemonicBase64Str, saltUint8Array);
-		timings.deriveK = Date.now() - timings.checkPoint;
+		const argon2Hash = await this.#deriveArgon2Hash(this.master.mnemonic.join(' '), IVBase64Str, argon2KeyLen);
+		const key = await this.#importArgon2KeyAsAesGcm(argon2Hash);
 		
 		const decryptedMnemonicStr = await this.#decryptText(encryptedMnemonic, key, IVUnit8Array);
 		if (!decryptedMnemonicStr) { console.error('decryptedMnemonicStr is empty'); return false; }
 
 		const decodedMnemonic = this.#decodeMnemonic(decryptedMnemonicStr, bip, language);
 		if (!decodedMnemonic) { console.error('decodedMnemonic is empty'); return false; }
-
-		timings.total = Date.now() - timings.startTimestamp;
-		console.info(`decryptTimings=> total: ${timings.total}ms | salt:${timings.saltsGenerated}ms | dKey: ${timings.deriveK}ms`);
-
+		
 		return decodedMnemonic;
 	}
 	dissectMnemoLink(mnemoLink = '') {

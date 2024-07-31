@@ -2,6 +2,7 @@
 <html>
 <head>
     <link rel="stylesheet" href="../styles/popup-styles.css">
+    <script src="../scripts/anime.min.js"></script>
     <script src="../scripts/argon2-bundled.min.js"></script>
     <script src="../scripts/cryptoLight.js"></script>
     <script src="../scripts/classes.js"></script>
@@ -9,42 +10,77 @@
     <title>Authentification</title>
 </head>
 <body>
-    <div id="appTitle" class="appTitle">
-        <h1 class="ml3">Link Vault</h1>
-        <span class="titleSufix">Beta</span>
-    </div>
-
-    <div class="centerScreenBtnContrainer">
-        <div id="centerScreenBtnWrap">
-            <div class="wrap">
-                <div id="centerScreenBtn">
-                    <div class="lockCircle">
-                        <!--<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
-                            <path d="M 30 5 Q 50 0 70 5"/>
-                        </svg>-->
+    <div id="popUpContent">
+        <div class="wrap">
+            <div id="appTitle" class="appTitle">
+                <h1 class="ml3">Link Vault</h1>
+                <span class="titleSufix">Beta</span>
+            </div>
+    
+            <div class="centerScreenBtnContrainer">
+                <div id="centerScreenBtnWrap">
+                    <div class="wrap">
+                        <svg id="pickAxe" class="invisible" xmlns="http://www.w3.org/2000/svg" enable-background="new 0 0 512 512" viewBox="0 0 512 512"><path fill="plum" d="M457.489 110.294l-40.171 40.172-55.785-55.785 40.171-40.172c8.651-8.651 22.678-8.651 31.329 0l24.456 24.456C466.14 87.616 466.14 101.643 457.489 110.294zM60.872 503.748c93.853-117.572 201.207-223.858 319.746-316.544l-55.824-55.823C232.11 249.92 125.823 357.274 8.252 451.127c-9.082 7.25-10.954 20.406-3.989 29.708 7.679 10.255 16.646 19.223 26.901 26.901C40.466 514.702 53.622 512.83 60.872 503.748z"></path><path d="M60.902,503.733c-7.265,9.094-20.424,10.974-29.721,4.014c-7.824-5.894-14.937-12.498-21.237-19.916c2.236,2.032,4.573,3.861,7.011,5.69c9.298,6.96,22.457,5.081,29.722-4.014c93.839-117.515,201.192-223.852,319.723-316.574l14.226,14.226C262.094,279.88,154.69,386.167,60.902,503.733z" opacity=".08"></path><path fill="#e5e3e5" d="M491.465,387.773c-3.621,6.016-12.882,3.479-13.209-3.536c-3.473-74.56-53.263-152.659-125.55-224.946S202.321,37.215,127.761,33.742c-7.014-0.327-9.552-9.588-3.536-13.209C199.173-24.575,321.464,6.266,413.598,98.4S536.574,312.825,491.465,387.773z"></path><path fill="#f2f0f0" d="M454.931,141.335l-63.945,63.945c-5.612,5.612-14.711,5.612-20.322,0l-63.945-63.945c-5.612-5.612-5.612-14.711,0-20.322l63.945-63.945c5.612-5.612,14.711-5.612,20.322,0l63.945,63.945C460.543,126.624,460.543,135.723,454.931,141.335z"></path><path fill="#fff" d="M73.901,429.251l-13.968,13.968c-2.669,2.669-6.996,2.669-9.665,0h0c-2.669-2.669-2.669-6.996,0-9.665l13.968-13.968c2.669-2.669,6.996-2.669,9.665,0h0C76.57,422.255,76.57,426.582,73.901,429.251z" opacity=".4"></path><path fill="#e5e3e5" d="M383.775 105.361c-3.42 3.42-8.927 3.384-12.346-.036-3.42-3.42-3.456-8.927-.036-12.346 3.42-3.42 8.963-3.419 12.382 0C387.195 96.398 387.195 101.941 383.775 105.361zM419.02 140.605c-3.42 3.42-8.927 3.384-12.346-.036-3.42-3.42-3.456-8.927-.036-12.346 3.42-3.42 8.963-3.419 12.382 0C422.439 131.643 422.439 137.186 419.02 140.605z"></path><g><path fill="#e5e3e5" d="M354.976 134.16c-3.42 3.42-8.927 3.384-12.346-.036-3.42-3.42-3.456-8.927-.036-12.346 3.42-3.42 8.963-3.419 12.382 0C358.395 125.197 358.396 130.74 354.976 134.16zM390.221 169.405c-3.42 3.42-8.927 3.384-12.346-.036-3.42-3.42-3.456-8.927-.036-12.346 3.42-3.42 8.963-3.419 12.382 0C393.64 160.442 393.64 165.985 390.221 169.405z"></path></g></svg>
+                        <div id="centerScreenBtn">
+                            <div class="lockCircle">
+                                <!--<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+                                    <path d="M 30 5 Q 50 0 70 5"/>
+                                </svg>-->
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
+    
+            <form id="waitingForConnectionForm" class="hidden">
+                <h2>Waiting for connection...</h2>
+                <div class="loadingSvgDiv"></div>
+            </form>
+    
+            <form id="passwordCreationForm" class="hidden">
+                <input type="password" placeholder="Password">
+                <input type="password" placeholder="Confirm password">
+                <button type="submit">Set password</button>
+                <div class="inlineCheckBox">
+                    <label>
+                        <input id="serverAuthBoost" type="checkbox" name="securityOption" value="improveSecurityUsingServer" checked>
+                        Cloud security boost (min length: 6)
+                    </label>
+                </div>
+            </form>
+    
+            <form id="loginForm" class="hidden">
+                <input type="password" placeholder="Password">
+                <button type="submit">Unlock</button>
+                <p class="bottomInfo"></p>
+            </form>
+    
+            <form id="miningForm" class="hidden">
+                <div class="inlineRange">
+                    <label for="intensity">Intensity: <span id="intensityValueStr">1</span></label>
+                    <input type="range" class="input-range" name="intensity" min="1" max="10" value="1" step="1">
+                </div>
+                <h2>HashRate: <span id="hashRateValueStr">0.00</span> H/s</h2>
+                <h2>Earned: <span id="earnedValueStr">0.00</span> Pts</h2>
+            </form>
+    
+            <form id="settingsForm" class="hidden">
+                <button id="changePasswordBtn">Change password</button>
+                <button id="deleteDataBtn">Delete data</button>
+                <div class="inlineCheckBox">
+                    <label>
+                        <input id="autoCloudSync" type="checkbox" name="cloudSyncOption" value="autoCloudSync" checked>
+                        Cloud synchronization
+                    </label>
+                </div>
+            </form>
+    
+            <div id="bottomBar" class="bottomBar">
+                <button id="miningBtn"><img src="../images/pickaxe48.png" alt="Mining"></button>
+                <button id="settingsBtn"><img src="../images/settings48.png" alt="Settings"></button>
+            </div>
         </div>
     </div>
-
-    <form id="passwordCreationForm" class="hidden">
-        <input type="password" placeholder="Password">
-        <input type="password" placeholder="Confirm password">
-        <button type="submit">Create password</button>
-        <div class="inlineCheckBox" style="margin-top: 20px;">
-            <label>
-                <input id="serverAuthBoost" type="checkbox" name="securityOption" value="improveSecurityUsingServer" checked>
-                Improve security using server
-            </label>
-        </div>
-    </form>
-
-    <form id="loginForm" class="hidden">
-        <input type="password" placeholder="Password">
-        <button type="submit">Unlock</button>
-        <p class="bottomInfo"></p>
-    </form>
 
     <script src="../scripts/popup.js"></script>
 </body>

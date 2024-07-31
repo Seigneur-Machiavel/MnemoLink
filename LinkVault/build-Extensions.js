@@ -6,6 +6,7 @@ const mnemoLinkerBuildsfolderPath = "../builds"
 const chromeExtensionFolder = 'chrome-extension';
 const mozillaExtensionFolder = 'mozilla-extension';
 const extensionZIPsFolderPath = "extension-zips"
+const ignoreMnemolinkerVersionsBefore = [1, 6];
 
 function addCodeLine(str = "", codeStr = '') { return str + codeStr + '\n'; }
 function buildMnemoLinkerLoader() {
@@ -20,6 +21,8 @@ function buildMnemoLinkerLoader() {
 	
 		const version = file.split('_v')[1].split('.js')[0].split('.');
 		const versionNumber = [Number(version[0]), Number(version[1])];
+		if (versionNumber[0] < ignoreMnemolinkerVersionsBefore[0] || (versionNumber[0] === ignoreMnemolinkerVersionsBefore[0] && versionNumber[1] < ignoreMnemolinkerVersionsBefore[1])) { continue; }
+
 		if (versionNumber[0] > latestVersion[0] || (versionNumber[0] === latestVersion[0] && versionNumber[1] > latestVersion[1])) {
 			latestVersion = versionNumber;
 		}
@@ -90,9 +93,6 @@ function main(deleteMozillaFolder = false) {
 	fs.writeFileSync(path.join(__dirname, `${mozillaExtensionFolder}/manifest.json`), JSON.stringify(moazillaManifest, null, 2));
 
 	// ZIP THE FOLDERS
-	//const chromeZipPath = path.join(__dirname, `${chromeExtensionFolder}-${manifestVersion}.zip`);
-	//const mozillaZipPath = path.join(__dirname, `${mozillaExtensionFolder}-${manifestVersion}.zip`);
-	// now in extensionZIPsFolderPath
 	const chromeZipPath = path.join(__dirname, extensionZIPsFolderPath, `${chromeExtensionFolder}-${manifestVersion}.zip`);
 	const mozillaZipPath = path.join(__dirname, extensionZIPsFolderPath, `${mozillaExtensionFolder}-${manifestVersion}.zip`);
 

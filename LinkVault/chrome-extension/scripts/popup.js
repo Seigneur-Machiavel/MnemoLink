@@ -5,12 +5,14 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)-
     const { htmlAnimations } = require("./htmlAnimations.js");
 }
 
+cryptoLight.useArgon2Worker = true; console.log('Argon2 worker enabled!');
 const settings = {
     appVersion: chrome.runtime.getManifest().version,
     minVersionAcceptedWithoutReset: '1.2.0',
     hardcodedPassword: '123456',
     serverUrl: "http://localhost:4340"
 };
+let resizePopUpAnimations = [];
 const sanitizer = new sanitizerClass();
 const communication = new communicationClass(settings.serverUrl);
 const centerScreenBtn = new centerScreenBtnObject();
@@ -20,7 +22,46 @@ centerScreenBtn.init(7);
 
 const busy = [];
 //#region - UX FUNCTIONS
-function setVisibleForm(formId) {
+function resizePopUp(applyBLur = true, duration = 200) {
+    const contentDiv = document.getElementById('popUpContent');
+    const contentWrap = contentDiv.children[0];
+    const contentDivHeight = contentDiv.offsetHeight;
+    const contentWrapHeight = contentWrap.offsetHeight;
+    const contentHeight = Math.max(contentDivHeight, contentWrapHeight);
+    const newHeight = contentHeight; // + 29;
+    console.log(`New height: ${newHeight}px`);
+    resizePopUpAnimations = [];
+    
+    resizePopUpAnimations[0] = anime({
+        targets: 'body',
+        width: '300px',
+        height: `${newHeight}px`,
+        filter: applyBLur ? 'blur(2px)' : 'blur(0px)',
+        duration,
+        easing: 'easeInOutQuad',
+        complete: () => {
+            if (!applyBLur) { return; }
+            resizePopUpAnimations[1] = anime({
+                targets: 'body',
+                filter: ['blur(4px) brightness(1.4)', 'blur(0px) brightness(1)'],
+                easing: 'easeInOutQuad',
+                duration: 400
+            });
+        }
+    });
+}
+async function setMiningIntensityFromLocalStorage() {
+    const miningIntensity = await chrome.storage.local.get('miningIntensity');
+    const intensity = miningIntensity.miningIntensity || 1;
+    document.getElementsByName('intensity')[0].value = intensity;
+    document.getElementById('intensityValueStr').innerText = intensity;
+}
+function setVisibleForm(formId, applyBLur = true) {
+    const miningBtn = document.getElementById('miningBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+    miningBtn.classList.add('active');
+    settingsBtn.classList.add('active');
+
     centerScreenBtn.centerScreenBtnWrap.classList.remove('active');
     const centerScreenBtnContrainer = document.getElementsByClassName('centerScreenBtnContrainer')[0];
     centerScreenBtnContrainer.classList.remove('hidden');
@@ -31,14 +72,23 @@ function setVisibleForm(formId) {
         forms[i].classList.add('hidden');
     }
 
+    if (formId === "passwordCreationForm" || formId === "loginForm") {
+        miningBtn.classList.remove('active');
+    }
+
     if (formId === "miningForm") {
         centerScreenBtn.centerScreenBtnWrap.classList.add('active');
+        miningBtn.classList.remove('active');
+        setTimeout(async () => { setMiningIntensityFromLocalStorage() }, 100);
     }
 
     if (formId === "settingsForm") {
         const centerScreenBtnContrainer = document.getElementsByClassName('centerScreenBtnContrainer')[0];
         centerScreenBtnContrainer.classList.add('hidden');
+        settingsBtn.classList.remove('active');
     }
+
+    resizePopUp(applyBLur);
 }
 function setInitialInputValues() {
     const hardcodedPassword = settings.hardcodedPassword;
@@ -50,7 +100,7 @@ function setInitialInputValues() {
  * Show the form depending on the stored auth info
  * @param {authInfoObject} sanitizedAuthInfo - result of chrome.storage.local.get(['authInfo']).authInfo
  */
-function showFormDependingOnStoredPassword(sanitizedAuthInfo) {
+function showFormDependingOnStoredPassword(sanitizedAuthInfo) { // DEPRECATED
     const { hash, salt1Base64, iv1Base64 } = sanitizedAuthInfo;
     if (hash && salt1Base64 && iv1Base64) {
         setVisibleForm('loginForm');
@@ -69,43 +119,71 @@ function bottomInfo(targetForm, text, timeout = 3000) {
 		infoElmnt.innerText = "";
 	}, timeout);
 }
+function setWaitingForConnectionFormLoading(loading = true) {
+    const waitingForConnectionForm = document.getElementById('waitingForConnectionForm');
+    const loadingSvg = waitingForConnectionForm.getElementsByClassName('loadingSvgDiv')[0];
+    loadingSvg.innerHTML = loading ? htmlAnimations.horizontalBtnLoading : '';
+}
+function setWaitingForConnectionFormText(text) {
+    const waitingForConnectionForm = document.getElementById('waitingForConnectionForm');
+    const blinkingText = waitingForConnectionForm.getElementsByTagName('h2')[0];
+    blinkingText.innerText = text;
+}
+function initUI() {
+    document.body.style.width = "0px";
+    document.body.style.height = "0px";
+}
 //#endregion
 
 //#region - FUNCTIONS
 (async () => { // --- START ---
-    await pingServerAndSetMode();
+    initUI();
+    setWaitingForConnectionFormLoading();
 
     // Check if the vault is unlocked: if not, show the "password creation/login" form
-    const result = await chrome.storage.local.get(['vaultUnlocked']);
-    console.log(`Vault is ${result.vaultUnlocked ? 'unlocked' : 'locked'}`);
+    const vaultState = await chrome.storage.local.get(['vaultUnlocked']);
+    console.log(`Vault is ${vaultState.vaultUnlocked ? 'unlocked' : 'locked'}`);
 
-    if (!result || !result.vaultUnlocked) {
+    if (!vaultState || !vaultState.vaultUnlocked) {
         await initAuth();
     } else {
+        const connectionResult = await pingServerAndSetMode();
+        if (!connectionResult) { return; }
+
         setVisibleForm('miningForm');
 
         miner.init();
         centerScreenBtn.delayBeforeIdleAnimationIfLocked = 1;
 
-        const bottomBar = document.getElementById('bottomBar');
-        bottomBar.classList.remove('hidden');
+        /*const bottomBar = document.getElementById('bottomBar');
+        bottomBar.classList.remove('hidden');*/ // --> now it's always visible
     }
 })();
-async function pingServerAndSetMode() {
-	const localServerIsRunning = await communication.pingServer("http://localhost:4340");
-	const webServerIsRunning = await communication.pingServer("https://www.linkvault.app");
-	if (!localServerIsRunning && webServerIsRunning) {
-		console.log('Running as production mode...');
-		settings.hardcodedPassword = '';
-		settings.serverUrl = "https://www.linkvault.app";
-		communication.url = settings.serverUrl;
-        return;
-	} else if (localServerIsRunning) {
-		console.info('Running as development mode...');
-        return;
-	}
+async function pingServerAndSetMode(iterations = 10, delay = 2000) {
+    let tries = 0;
+    while (tries < iterations) {
+        const localServerIsRunning = await communication.pingServer("http://localhost:4340");
+        const webServerIsRunning = await communication.pingServer("https://www.linkvault.app");
+        if (!localServerIsRunning && webServerIsRunning) {
+            console.log('Running as production mode...');
+            settings.hardcodedPassword = '';
+            settings.serverUrl = "https://www.linkvault.app";
+            communication.url = settings.serverUrl;
+            return 'production';
+        } else if (localServerIsRunning) {
+            console.info('Running as development mode...');
+            return 'development';
+        }
 
-	console.info('Cannot connect to any server!');
+        if (tries === 0) {setVisibleForm('waitingForConnectionForm');}
+        tries++;
+        setWaitingForConnectionFormText(`Waiting for connection... (${tries}/${iterations})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    setWaitingForConnectionFormLoading(false);
+    setWaitingForConnectionFormText('Cannot connect to any server!');
+    return false;
 }
 async function initAuth() {
     setInitialInputValues();
@@ -119,7 +197,19 @@ async function initAuth() {
         if (resetNecessary) { await resetApplication(); }
     }
 
-    showFormDependingOnStoredPassword(sanitizedAuthInfo);
+    if (authInfoResult.authInfo && authInfoResult.authInfo.serverAuthBoost) {
+        const connectionResult = await pingServerAndSetMode();
+        if (!connectionResult) { return; }
+    }
+
+    //showFormDependingOnStoredPassword(sanitizedAuthInfo);
+    const { hash, salt1Base64, iv1Base64 } = sanitizedAuthInfo;
+    if (hash && salt1Base64 && iv1Base64) {
+        chrome.runtime.sendMessage({action: "openPage", password: null});
+    } else {
+        setVisibleForm('passwordCreationForm');
+        document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].focus();
+    }
 }
 /**
  * Check if the stored password is compatible with the current version of the application
@@ -128,6 +218,8 @@ async function initAuth() {
  */
 function controlVersion(sanitizedAuthInfo) {
         const { appVersion, serverAuthBoost } = sanitizedAuthInfo;
+        console.log(`App version: ${appVersion}, minVersionAcceptedWithoutReset: ${settings.minVersionAcceptedWithoutReset}`);
+        console.log(appVersion)
         if (!appVersion) { return true; }
 
         // Here we can proceed check for version compatibility
@@ -217,7 +309,7 @@ document.getElementById('passwordCreationForm').addEventListener('submit', async
     cryptoLight.cryptoStrength = serverAuthBoost ? 'medium' : 'heavy';
 
     const passComplement = serverAuthBoost ? cryptoLight.generateRndBase64(32) : false;
-    const passwordMinLength = serverAuthBoost ? 6 : 8;
+    const passwordMinLength = serverAuthBoost ? 6 : 12;
     const password = document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].value;
     const passwordConfirm = document.getElementById('passwordCreationForm').getElementsByTagName('input')[1].value;
     
@@ -226,7 +318,10 @@ document.getElementById('passwordCreationForm').addEventListener('submit', async
     } else if (password.length < passwordMinLength) {
         alert(`Password must be at least ${passwordMinLength} characters long`);
     } else {
+        const button = document.getElementById('passwordCreationForm').getElementsByTagName('button')[0];
+        button.innerHTML = htmlAnimations.horizontalBtnLoading;
         const passwordCreatedInfo = await setNewPassword(password, passComplement);
+        setTimeout(() => { button.innerHTML = 'Set password'; }, 1000);
         if (!passwordCreatedInfo) { alert('Password setting failed'); busy.splice(busy.indexOf('passwordCreationForm'), 1); return; }
 
         document.getElementById('passwordCreationForm').getElementsByTagName('input')[0].value = '';
@@ -248,12 +343,12 @@ document.getElementById('passwordCreationForm').addEventListener('submit', async
             if (!serverResponse2.success) { alert(serverResponse2.message); busy.splice(busy.indexOf('passwordCreationForm'), 1); resetApplication(); return; }
        }
 
-        chrome.runtime.sendMessage({action: "openPage", password, passComplement});
+        chrome.runtime.sendMessage({action: "openPage", password: passComplement ? `${password}${passComplement}` : password });
     }
     
     busy.splice(busy.indexOf('passwordCreationForm'), 1);
 });
-document.getElementById('loginForm').addEventListener('submit', function(e) {
+document.getElementById('loginForm').addEventListener('submit', async function(e) { // DEPRECATED
     if (busy.includes('loginForm')) { return; }
     busy.push('loginForm');
 
@@ -274,74 +369,75 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
         button.innerHTML = 'Unlock';
 	}
 
-    chrome.storage.local.get(['authInfo'], async function(result) {
-        const startTimestamp = Date.now();
-        const totalTimings = { argon2Time: 0, deriveKTime: 0, total: 0 };
+    const authInfoResult = await chrome.storage.local.get(['authInfo']);
+    if (!authInfoResult || !authInfoResult.authInfo) { infoAndWrongAnim('Password not set'); busy.splice(busy.indexOf('loginForm'), 1); return; }
 
-        const { authID, authToken, hash, salt1Base64, iv1Base64, serverAuthBoost } = sanitizer.sanitize(result.authInfo);
-        const passwordMinLength = serverAuthBoost ? 6 : 8;
-        if (passwordReadyUse.length < passwordMinLength) { infoAndWrongAnim(`Password must be at least ${passwordMinLength} characters long`); busy.splice(busy.indexOf('loginForm'), 1); return; }
+    const startTimestamp = Date.now();
+    const totalTimings = { argon2Time: 0, deriveKTime: 0, total: 0 };
 
-        if (!hash || !salt1Base64 || !iv1Base64) { infoAndWrongAnim('Password not set'); busy.splice(busy.indexOf('loginForm'), 1); return; }
-        if (typeof hash !== 'string' || typeof salt1Base64 !== 'string' || typeof iv1Base64 !== 'string') { console.error('Password data corrupted'); busy.splice(busy.indexOf('loginForm'), 1); return; }
-        cryptoLight.cryptoStrength = serverAuthBoost ? 'medium' : 'heavy';
+    const { authID, authToken, hash, salt1Base64, iv1Base64, serverAuthBoost } = sanitizer.sanitize(authInfoResult.authInfo);
+    const passwordMinLength = serverAuthBoost ? 6 : 12;
+    if (passwordReadyUse.length < passwordMinLength) { infoAndWrongAnim(`Password must be at least ${passwordMinLength} characters long`); busy.splice(busy.indexOf('loginForm'), 1); return; }
 
-        if (serverAuthBoost) {
-            const weakEncryptionReady = await cryptoLight.generateKey(passwordReadyUse, salt1Base64, iv1Base64);
-            if (!weakEncryptionReady) { infoAndWrongAnim('Weak encryption failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
-            const authTokenHash = await cryptoLight.encryptText(authToken);
-            totalTimings.argon2Time = weakEncryptionReady.argon2Time;
-            totalTimings.deriveKTime = weakEncryptionReady.deriveKTime;
-            console.log(`weakEncryption time: ${totalTimings.argon2Time + totalTimings.deriveKTime} ms`);
+    if (!hash || !salt1Base64 || !iv1Base64) { infoAndWrongAnim('Password not set'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+    if (typeof hash !== 'string' || typeof salt1Base64 !== 'string' || typeof iv1Base64 !== 'string') { console.error('Password data corrupted'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+    cryptoLight.cryptoStrength = serverAuthBoost ? 'medium' : 'heavy';
 
-            const keyPair = await cryptoLight.generateKeyPair();
-            const exportedPubKey = await cryptoLight.exportPublicKey(keyPair.publicKey);
+    if (serverAuthBoost) {
+        const weakEncryptionReady = await cryptoLight.generateKey(passwordReadyUse, salt1Base64, iv1Base64);
+        if (!weakEncryptionReady) { infoAndWrongAnim('Weak encryption failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+        const authTokenHash = await cryptoLight.encryptText(authToken);
+        totalTimings.argon2Time = weakEncryptionReady.argon2Time;
+        totalTimings.deriveKTime = weakEncryptionReady.deriveKTime;
+        console.log(`weakEncryption time: ${totalTimings.argon2Time + totalTimings.deriveKTime} ms`);
 
-            const serverResponse = await communication.sharePubKeyWithServer(authID, exportedPubKey);
-            if (!serverResponse) { infoAndWrongAnim('Server communication failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
-            if (!serverResponse.success) { infoAndWrongAnim(serverResponse.message); busy.splice(busy.indexOf('loginForm'), 1); return; }
+        const keyPair = await cryptoLight.generateKeyPair();
+        const exportedPubKey = await cryptoLight.exportPublicKey(keyPair.publicKey);
 
-            const serverPublicKey = await cryptoLight.publicKeyFromExported(serverResponse.serverPublicKey);
+        const serverResponse = await communication.sharePubKeyWithServer(authID, exportedPubKey);
+        if (!serverResponse) { infoAndWrongAnim('Server communication failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+        if (!serverResponse.success) { infoAndWrongAnim(serverResponse.message); busy.splice(busy.indexOf('loginForm'), 1); return; }
 
-            const serverResponse2 = await communication.sendAuthDataToServer(serverPublicKey, authID, authTokenHash, false);
-            if (!serverResponse2) { infoAndWrongAnim('Server communication failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
-            if (!serverResponse2.success) { infoAndWrongAnim(`authID: ${authID}\n${serverResponse2.message}`); busy.splice(busy.indexOf('loginForm'), 1); return; }
+        const serverPublicKey = await cryptoLight.publicKeyFromExported(serverResponse.serverPublicKey);
 
-            const encryptedPassComplementEnc = serverResponse2.encryptedPassComplement;
-            const encryptedPassComplement = await cryptoLight.decryptData(keyPair.privateKey, encryptedPassComplementEnc);
-            const passComplement = await cryptoLight.decryptText(encryptedPassComplement);
+        const serverResponse2 = await communication.sendAuthDataToServer(serverPublicKey, authID, authTokenHash, false);
+        if (!serverResponse2) { infoAndWrongAnim('Server communication failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+        if (!serverResponse2.success) { infoAndWrongAnim(`authID: ${authID}\n${serverResponse2.message}`); busy.splice(busy.indexOf('loginForm'), 1); return; }
 
-            passwordReadyUse = `${passwordReadyUse}${passComplement}`;
-        }
+        const encryptedPassComplementEnc = serverResponse2.encryptedPassComplement;
+        const encryptedPassComplement = await cryptoLight.decryptData(keyPair.privateKey, encryptedPassComplementEnc);
+        const passComplement = await cryptoLight.decryptText(encryptedPassComplement);
 
-        const res = await cryptoLight.generateKey(passwordReadyUse, salt1Base64, iv1Base64, hash);
-        if (!res) { infoAndWrongAnim('Key derivation failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
-        
-        cryptoLight.clear();
-        button.innerHTML = 'Unlock';
+        passwordReadyUse = `${passwordReadyUse}${passComplement}`;
+    }
 
-        totalTimings.argon2Time += res.argon2Time;
-        totalTimings.deriveKTime += res.deriveKTime;
-        totalTimings.total = Date.now() - startTimestamp;
-        console.log(totalTimings);
+    const res = await cryptoLight.generateKey(passwordReadyUse, salt1Base64, iv1Base64, hash);
+    if (!res) { infoAndWrongAnim('Key derivation failed'); busy.splice(busy.indexOf('loginForm'), 1); return; }
+    
+    cryptoLight.clear();
+    button.innerHTML = 'Unlock';
 
-        if (res.hashVerified) {
-            chrome.runtime.sendMessage({action: "openPage", password: passwordReadyUse});
-        } else {
-            infoAndWrongAnim('Wrong password');
-        }
-        
-        passwordReadyUse = null;
-        busy.splice(busy.indexOf('loginForm'), 1);
-    });
+    totalTimings.argon2Time += res.argon2Time;
+    totalTimings.deriveKTime += res.deriveKTime;
+    totalTimings.total = Date.now() - startTimestamp;
+    console.log(totalTimings);
+
+    if (res.hashVerified) {
+        chrome.runtime.sendMessage({action: "openPage", password: passwordReadyUse});
+    } else {
+        infoAndWrongAnim('Wrong password');
+    }
+    
+    passwordReadyUse = null;
+    busy.splice(busy.indexOf('loginForm'), 1);
 });
 document.addEventListener('click', function(e) {
     switch (e.target.id) {
         case 'miningBtn':
-            setVisibleForm('miningForm');
+            setVisibleForm('miningForm', false);
             break;
         case 'settingsBtn':
-            setVisibleForm('settingsForm');
+            setVisibleForm('settingsForm', false);
             break;
         default:
             break;
@@ -360,6 +456,17 @@ document.addEventListener('input', (event) => {
         const valueAsNumber = parseInt(rangeValue);
         chrome.storage.local.set({miningIntensity: valueAsNumber});
         //console.log(`intensity set to ${rangeValue}`);
+    }
+
+    const isServerAuthBoost = event.target.id === 'serverAuthBoost';
+    if (isServerAuthBoost) {
+        console.log('serverAuthBoost changed');
+        const label = event.target.parentElement;
+        // text : Cloud security boost (min length: 6)
+        //<input id="serverAuthBoost" type="checkbox" name="securityOption" value="improveSecurityUsingServer" checked>
+        const newText = event.target.checked ? 'Cloud security boost (min length: 6)' : 'Cloud security boost (min length: 12)';
+        const checked = event.target.checked ? 'checked' : '';
+        label.innerHTML = `<input id="serverAuthBoost" type="checkbox" name="securityOption" value="improveSecurityUsingServer" ${checked}> ${newText}`;
     }
 });
 //#endregion

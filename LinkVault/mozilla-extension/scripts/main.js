@@ -1,7 +1,7 @@
 if (false) { // THIS IS FOR DEV ONLY ( to get better code completion )
 	const anime = require("./anime.min.js");
 	const bip39 = require("./bip39-3.1.0.js");
-	const { MnemoLinker } = require("./MnemoLinker/MnemoLinker_v1.0.js");
+	const { MnemoLinker } = require("./MnemoLinker/MnemoLinker_v1.7.js");
 	const { cryptoLight } = require("./cryptoLight.js");
 	const { lockCircleObject, centerScreenBtnObject, mnemonicClass, userDataClass,
 		tempDataClass, mnemoBubbleObject, svgLinkObject, mnemoLinkSVGObject, gameControllerClass,
@@ -10,17 +10,16 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion )
 	const { htmlAnimations } = require("./htmlAnimations.js");
 }
 
-
+cryptoLight.useArgon2Worker = true; console.log('Argon2 worker enabled!');
 //#region - VARIABLES
 /** @type {MnemoLinker} */
 let MnemoLinkerLastest = null; // FOR FAST ACCESS TO THE LATEST VERSION (need to be use as : new MnemoLinkerLastest()
 /** @type {MnemoLinker} */
 let emptyMnemoLinker = null; // ONLY USED FOR BASIC USAGE, NEVER USE THIS GLOBAL VARIABLE FOR CRYPTOGRAPHY !!
 
-const isProduction = true // !(window.location.href.includes('localhost') || window.location.href.includes('fabjnjlbloofmecgongkjkaamibliogi') || window.location.href.includes('fc1e0f4c-64db-4911-86e2-2ace9a761647'));
 const settings = {
 	appVersion: chrome.runtime.getManifest().version,
-	hardcodedPassword: isProduction ? '' : '123456',
+	hardcodedPassword: '123456',
 	animationsLevel: 1,
 	mnemoLinkerVersion: window.MnemoLinker.latestVersion,
 	defaultBip: "BIP-0039",
@@ -30,7 +29,8 @@ const settings = {
 	fastFillMode: true,
 	saveLogs: true,
 	mnemolinkBubblesMinCircleSpots: 6,
-	serverUrl: isProduction ? "https://www.linkvault.app": "http://localhost:4340"
+	//serverUrl: isProduction ? "https://www.linkvault.app" : "http://localhost:4340"
+	serverUrl: "http://localhost:4340"
 }
 const centerScreenBtn = new centerScreenBtnObject();
 const userData = new userDataClass();
@@ -88,6 +88,13 @@ const eHTML = {
 	gameContainer: document.getElementById('game'),
 	modals: {
 		wrap: document.getElementsByClassName('modalsWrap')[0],
+		waitingConnection: {
+			wrap : document.getElementById('waitingForConnectionModalWrap'),
+			modal: document.getElementById('waitingForConnectionModalWrap').getElementsByClassName('modal')[0],
+			waitingForm: document.getElementById('waitingForConnectionForm'),
+			text: document.getElementById('waitingForConnectionForm').getElementsByTagName('h2')[0],
+			loadingSvgDiv: document.getElementById('waitingForConnectionForm').getElementsByClassName('loadingSvgDiv')[0],
+		},
 		authentification: {
 			wrap : document.getElementById('authentificationModalWrap'),
 			modal: document.getElementById('authentificationModalWrap').getElementsByClassName('modal')[0],
@@ -176,8 +183,6 @@ const save = {
 	},
 	async storeDataLocally(key = "toto", data, logs = false) {
 		try {
-			//const result = await chrome.storage.local.set({ [key]: data });
-			//console.log(result);
 			await chrome.storage.local.set({ [key]: data });
 			if (logs) { console.log(`${key} stored, data: ${JSON.stringify(data)}`); }
 		} catch (error) {
@@ -244,12 +249,56 @@ const load = {
 }
 //#endregion
 
+async function loadScriptAsText(url) {
+    const response = await fetch(url);
+    const text = await response.text();
+    return text;
+}
+async function testWorker() {
+	
+	const workerCode = await loadScriptAsText('../scripts/argon2Worker.js');
+	const blob = new Blob([workerCode], { type: 'application/javascript' });
+	const worker = new Worker(URL.createObjectURL(blob));
+	
+	const workerPromise = new Promise((resolve, reject) => {
+		worker.onmessage = function(e) {
+			if (!e.data) { resolve('No data received!'); return; }
+			if (typeof e.data.encoded !== 'string') { resolve('Encoded must be a string!'); return; }
+			if (typeof e.data.hash !== 'object') { resolve('Hash must be an object!'); return; }
+			if (e.data.hash.constructor !== Uint8Array) { resolve('Hash must be an Uint8Array!'); return; }
+			if (typeof e.data.hashHex !== 'string') { resolve('HashHex must be a string!'); return; }
+			
+			const sanitizedData = sanitizer.sanitize(e.data);
+			resolve(sanitizedData);
+		};
+	});
+	for (let i = 0; i < 8; i++) { await new Promise(resolve => setTimeout(resolve, 1000)); testWorker() }
+	const startT = performance.now();
+	worker.postMessage({pass: '123456', salt: 'totosaltlong', time: 1, mem: 2**20, parallelism: 1, hashLen: 32, type: 2});
+	const result = await workerPromise;
+	worker.terminate();
+	console.log(`Worker test result: ${result}`);
+	console.log(`Worker test duration: ${performance.now() - startT}ms`);
+	return result;
+}
+
 //#region - PRELOAD FUNCTIONS
-async function loadMnemoLinkerLatestVersion() {
+async function loadMnemoLinkerLastest() {
+	// load the latest version of MnemoLinker
 	MnemoLinkerLastest = await window.MnemoLinker["v" + window.MnemoLinker.latestVersion];
 	emptyMnemoLinker = new MnemoLinkerLastest();
-}; loadMnemoLinkerLatestVersion();
-(async () => {
+}; loadMnemoLinkerLastest();
+async function initMain() {
+
+	const authInfo = await chrome.storage.local.get(['authInfo']);
+	const { serverAuthBoost } = sanitizer.sanitize(authInfo.authInfo);
+
+	if (serverAuthBoost) {
+		const connectionResult = await pingServerAndSetMode();
+		if (!connectionResult || !connectionResult.mode) { setTimeout(() => { window.close(); }, 5000); return; }
+		if (connectionResult.tries !== 0) { await new Promise(resolve => setTimeout(resolve, 1000)); } // wait till modal closes
+	}
+
 	// load all data associated with the user
 	await load.all();
 	if (userData.preferences.darkMode) { eHTML.toggleDarkModeButton.checked = true; toggleDarkMode(eHTML.toggleDarkModeButton); }
@@ -258,14 +307,47 @@ async function loadMnemoLinkerLatestVersion() {
 	fillGamesLists();
 
 	// send mnemo links to the server if needed
-	if (userData.preferences.autoCloudSync && !userData.state.synchronizedWithCloud) { 
-		const isSync = await communication.sendMnemoLinksToServer(userData.id, userData.encryptedMnemoLinksStr);
-		if (isSync) { 
-			userData.state.synchronizedWithCloud = true;
-			save.userState();
-		} else { console.error('Error while synchronizing with the cloud'); }
+	if (userData.preferences.autoCloudSync && !userData.state.synchronizedWithCloud) {
+		await syncWithCloud();
 	}
-})();
+
+	openModal('authentification');
+	eHTML.modals.authentification.input.value = settings.hardcodedPassword;
+};
+async function pingServerAndSetMode(iterations = 10, delay = 2000) {
+	eHTML.modals.waitingConnection.loadingSvgDiv.innerHTML = htmlAnimations.horizontalBtnLoading;
+
+    let tries = 0;
+	while (tries < iterations) {
+		eHTML.modals.waitingConnection.text.innerText = `Waiting for connection... (${tries}/${iterations})`;
+
+		const localServerIsRunning = await communication.pingServer("http://localhost:4340");
+		const webServerIsRunning = await communication.pingServer("https://www.linkvault.app");
+		if (localServerIsRunning || webServerIsRunning) {
+			eHTML.modals.waitingConnection.loadingSvgDiv.innerHTML = 'Connected!';
+			closeModal();
+		}
+
+		if (!localServerIsRunning && webServerIsRunning) {
+			console.info('Running as production mode...');
+			settings.hardcodedPassword = '';
+			settings.serverUrl = "https://www.linkvault.app";
+			communication.url = settings.serverUrl;
+			return {mode: 'production', tries};
+		} else if (localServerIsRunning) {
+			console.info('Running as development mode...');
+			settings.hardcodedPassword = '123456';
+			return {mode: 'development', tries};
+		}
+	
+		if (tries === 0) { openModal('waitingConnection'); }
+        tries++;
+        await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+	eHTML.modals.waitingConnection.loadingSvgDiv.innerHTML = 'Cannot connect to any server!';
+	return {mode: false, tries};
+}
 function toggleDarkMode(element) {
 	if (element.checked) {
 		document.body.classList.add('dark-mode');
@@ -330,13 +412,56 @@ setTimeout(async () => {
 //#endregion
 
 //#region - FUNCTIONS
-async function asyncInitLoad(logs = false) {
+function authentifiedInit(logs = false) {
 	fillMnemoLinkList();
 	initMnemoLinkBubbles();
 	if (!UXupdateLoopRunning) { requestAnimationFrame(UXupdateLoop); UXupdateLoopRunning = true; }
+	heartBeat(1000);
 	if (logs) { console.log('Ready to decrypt!'); }
-	return true;
 };
+/*async function getPasswordFromBackground() { // DEPRECATED
+	const getPassword = await chrome.runtime.sendMessage({action: "getPassword"});
+	if (chrome.runtime.lastError) {
+		console.log('Error sending message:', chrome.runtime.lastError);
+		return false;
+	}
+	if (!getPassword || !getPassword.password) { return false; }
+
+	return getPassword.password;
+}*/
+/*async function initDependingOnAuthInfo(password) { // DEPRECATED
+	const authInfoResult = await chrome.storage.local.get(['authInfo']);
+	if (!authInfoResult || !authInfoResult.authInfo) { openModal('authentification'); return; }
+
+	try {
+		const { salt1Base64, iv1Base64, hash, serverAuthBoost } = sanitizer.sanitize(authInfoResult.authInfo);
+		cryptoLight.cryptoStrength = serverAuthBoost ? 'medium' : 'heavy';
+
+		const res = await cryptoLight.generateKey(password, salt1Base64, iv1Base64, hash);
+		if (!res) { console.error('Error while initializing cryptoLight'); return; }
+
+		if (!res.hashVerified) { throw new Error('Error while verifying hash'); }
+
+		closeModal();
+		authentifiedInit(true);
+		centerScreenBtnAction();
+	} catch (error) {
+		console.log(error);
+		console.log('Authentication required');
+		openModal('authentification');
+	}
+}*/
+async function heartBeat(delay = 1000) {
+	if (!cryptoLight.key) { return; }
+
+	while(cryptoLight.key) {
+		await chrome.storage.local.set({vaultUnlocked: true, timestamp: Date.now()});
+		await new Promise(resolve => setTimeout(resolve, delay));
+	}
+
+	chrome.storage.local.set({vaultUnlocked: false});
+	console.log('Vault locked!');
+}
 function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1) + min); }
 function cryptoRnd(min, max) {
 	const crypto = window.crypto;
@@ -479,15 +604,26 @@ function extractMnemonicFromInputs(modal = eHTML.modals.inputMasterMnemonic) {
 
 	return result;
 }
+async function syncWithCloud() {
+	console.log('Synchronizing with the cloud...');
+	const isSync = await communication.sendMnemoLinksToServer(userData.id, userData.encryptedMnemoLinksStr);
+	console.log(`Synchronization with the cloud ${isSync ? 'successful' : 'failed'}`);
+
+	if (isSync) { 
+		userData.state.synchronizedWithCloud = true;
+		save.userState();
+	}
+}
 async function centerScreenBtnAction() {
 	if (centerScreenBtn.element.classList.contains('busy')) { return; }
 	centerScreenBtn.element.classList.add('busy');
 
 	if (!cryptoLight.key) {
-		eHTML.modals.authentification.input.value = settings.hardcodedPassword;
 		openModal('authentification');
 		eHTML.modals.authentification.input.focus();
 		centerScreenBtn.element.classList.remove('busy');
+		//setTimeout(() => { eHTML.modals.authentification.input.value = settings.hardcodedPassword; }, 10);
+		eHTML.modals.authentification.input.value = settings.hardcodedPassword;
 		return;
 	}
 
@@ -504,13 +640,8 @@ async function centerScreenBtnAction() {
 	const newState = await toggleDashboard();
 	if (newState === 'close') {
 		cryptoLight.clear();
-
 		if (userData.preferences.autoCloudSync && !userData.state.synchronizedWithCloud) { 
-			const isSync = await communication.sendMnemoLinksToServer(userData.id, userData.encryptedMnemoLinksStr);
-			if (isSync) { 
-				userData.state.synchronizedWithCloud = true;
-				save.userState();
-			} else { console.error('Error while synchronizing with the cloud'); }
+			await syncWithCloud();
 		}
 	}
 
@@ -1028,6 +1159,7 @@ function setGameCategoryTooltip(eventTarget) {
 //#region - GAME FUNCTIONS
 async function loadGame(category = "ScribeQuest", folderName = "give_me_ya_seed") {
 	const gameContainer = eHTML.gameContainer;
+	// This is, and need to be, internal code. Never fetch from external sources! (because of innerHTML = gameContent)
 	const content = await fetch(`../games/${category}/${folderName}/index.html`)
 
 	if (!content.ok) {
@@ -1130,33 +1262,15 @@ function convertMnemonicStrToCustomB64Str(mnemonicStr) {
 //#endregion
 
 //#region - EVENT LISTENERS
-document.addEventListener('DOMContentLoaded', function() {
-	chrome.runtime.sendMessage({action: "getPassword"}, function(response) {
-		if (chrome.runtime.lastError) {
-			console.log('Error sending message:', chrome.runtime.lastError);
-			return;
-		}
-		
-		if (response && response.password) {
-			chrome.storage.local.get(['authInfo'], async function(result) {
-				
-				const { salt1Base64, iv1Base64, hash, serverAuthBoost } = sanitizer.sanitize(result.authInfo);
-				cryptoLight.cryptoStrength = serverAuthBoost ? 'medium' : 'heavy';
-
-				const res = await cryptoLight.generateKey(response.password, salt1Base64, iv1Base64, hash);
-				if (!res) { console.error('Error while initializing cryptoLight'); return; }
-				if (!res.hashVerified) { console.error('Error while verifying hash'); return; }
-				
-				//passwordReadyUse = null;
-				await asyncInitLoad(true);
-				centerScreenBtnAction();
-			});
-		} else {
-			console.log('No password received, authentication required');
-			openModal('authentification');
-		}
-	});
-});
+document.addEventListener('DOMContentLoaded', async function() { initMain(); });
+// chrome.runtime.sendMessage({action: "authPassword", password: password}); --> background.js
+/*chrome.runtime.onMessage.addListener(async function(request, sender, sendResponse) { // DEPRECATED
+	if (request.action === "authPassword") {
+		const { password } = request;
+		await initDependingOnAuthInfo(password);
+		sendResponse({ success: true });
+	}
+});*/
 window.addEventListener('resize', () => {
 	initMnemoLinkBubbles(true, 600);
 });
@@ -1213,14 +1327,16 @@ eHTML.modals.authentification.loginForm.addEventListener('submit', function(e) {
 			passwordReadyUse = `${passwordReadyUse}${passComplement}`;
 		}
 
+		const startTime = Date.now();
 		const res = await cryptoLight.generateKey(passwordReadyUse, salt1Base64, iv1Base64, hash);
 		if (!res) { console.error('Error while generateKey - cryptoLight'); return; }
 		if (!res.hashVerified) { console.error('Error while verifying hash'); return; }
+		console.log(`Time to generate cryptoLight key: ${Date.now() - startTime}ms`);
 
 		button.innerHTML = 'Unlock';
 		passwordReadyUse = null;
 
-		await asyncInitLoad(true);
+		authentifiedInit(true);
 		closeModal();
 		centerScreenBtn.lock();
 
@@ -1406,8 +1522,9 @@ document.addEventListener('input', (event) => {
 	const parentModalWrap = event.target.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement;
 	const isMasterMnemonicModal = parentModalWrap.id === eHTML.modals.inputMasterMnemonic.wrap.id;
 	if (isMasterMnemonicModal) {
-		const nbOfWords = parseInt(event.target.value) < 12 ? 12 : parseInt(event.target.value);
-		eHTML.modals.inputMasterMnemonic.seedWordsValueStr.innerText = nbOfWords;
+		const nbOfWords = parseInt(event.target.value) < 10 ? 10 : parseInt(event.target.value);
+		const textSupplement = nbOfWords < 12 ? ' (slower encryption!)' : '';
+		eHTML.modals.inputMasterMnemonic.seedWordsValueStr.innerText = nbOfWords + textSupplement;
 		setNumberOfVisibleWordsInMnemonicGrid(eHTML.modals.inputMasterMnemonic.mnemonicGridInputs, nbOfWords);
 		switchBtnsIfMnemonicGridIsFilled('masterMnemonicModalWrap');
 	}
@@ -1441,12 +1558,13 @@ document.addEventListener('paste', (event) => {
 	}
 	
 	// control number of words
-	if (cleanedPastedWords.length < 12) { modalInfo("Mnemonic must contain at least 12 words!", 3000); return; }
 	if (isMasterMnemonicModal) {
+		if (cleanedPastedWords.length < 10) { modalInfo("Mnemonic must contain at least 10 words!", 3000); return; }
 		eHTML.modals.inputMasterMnemonic.seedWordsRange.value = cleanedPastedWords.length;
 		eHTML.modals.inputMasterMnemonic.seedWordsValueStr.innerText = cleanedPastedWords.length; 
 	}
-	if (isMnemonicModal) { 
+	if (isMnemonicModal) {
+		if (cleanedPastedWords.length < 12) { modalInfo("Mnemonic must contain at least 12 words!", 3000); return; }
 		const mnemonicLengths = [12, 15, 18, 21, 24];
 		if (!mnemonicLengths.includes(cleanedPastedWords.length)) { modalInfo("Mnemonic must contain 12, 15, 18, 21 or 24 words!", 3000); return; }
 		eHTML.modals.inputMnemonic.seedWordsRange.value = mnemonicLengths.indexOf(cleanedPastedWords.length);
@@ -1593,10 +1711,12 @@ eHTML.dashboard.mnemolinksList.addEventListener('click', async (event) => {
 			const monemoLinksInfos = userData.getListOfMnemoLinks();
 			const label = monemoLinksInfos[index].label;
 			
+			mnemoBubblesObj[index].prepareBubbleToShow(label);
+
 			const mnemonicStr = await userData.getMnemoLinkDecrypted(label, true);
 			if (!mnemonicStr) { console.error(`Unable to get decrypted mnemonicStr for MnemoLink: ${label}`); return; }
 
-			await mnemoBubblesObj[index].prepareBubbleToShow(label, mnemonicStr);
+			await mnemoBubblesObj[index].prepareMiniGridToDecipher(label, mnemonicStr);
 			await mnemoBubblesObj[index].decipherMiniMnemonicGrid(mnemonicStr);
 			
 			return;
@@ -1785,18 +1905,23 @@ eHTML.modals.inputMasterMnemonic.confirmBtn.addEventListener('click', async (eve
 	if (!mnemonic) { console.error('mnemonic not found'); return; }
 
 	modal.confirmBtn.classList.add('busy');
-
+    modal.confirmBtn.innerHTML = htmlAnimations.horizontalBtnLoading;
 	await userData.setMnemonicAsEncrypted(mnemonic);
 	await save.userEncryptedMnemonicsStr();
 	tempData.init();
+	modal.confirmBtn.innerHTML = 'Save';
 	
 	closeModal();
 	setTimeout(() => { centerScreenBtnAction() }, 600);
 	setTimeout(async () => { 
 		/** @type {MnemoLinker} */
 		const mnemoLinker = new MnemoLinkerLastest( { masterMnemonic: mnemonic } );
+		mnemoLinker.useArgon2Worker = true;
+
 		const id = await mnemoLinker.genPublicId();
 		userData.id = id;
+		mnemoLinker.terminate(); // terminate worker
+
 		save.userId();
 	}, 200);
 
@@ -1925,11 +2050,14 @@ eHTML.modals.inputMnemonic.confirmBtn.addEventListener('click', async (event) =>
 	if (!mnemonic) { console.error('mnemonic not found'); return; }
 
 	modal.confirmBtn.classList.add('busy');
-
+	modal.confirmBtn.innerHTML = htmlAnimations.horizontalBtnLoading;
 	const masterMnemonicStr = await userData.getMasterMnemonicStr();
 	/** @type {MnemoLinker} */
 	const mnemoLinker = new MnemoLinkerLastest( { masterMnemonic: masterMnemonicStr , mnemonic: mnemonic } );
+	mnemoLinker.useArgon2Worker = true;
 	const mnemoLink = await mnemoLinker.encryptMnemonic();
+	mnemoLinker.terminate(); // terminate worker
+	modal.confirmBtn.innerHTML = 'Save';
 	if (!mnemoLink) { console.error('Unable to create mnemoLink'); return; }
 
 	userData.addMnemoLink(mnemoLink);

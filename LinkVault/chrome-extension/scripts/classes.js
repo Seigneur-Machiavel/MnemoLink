@@ -407,7 +407,9 @@ class userDataClass {
 		try {
 			/** @type {MnemoLinker} */
 			const targetMnemoLinker = new targetMnemoLinkerClass( { masterMnemonic: masterMnemonicStr } );
+			targetMnemoLinker.useArgon2Worker = true;
 			const mnemoLinkDecrypted = await targetMnemoLinker.decryptMnemoLink(mnemoLinkEncrypted);
+			targetMnemoLinker.terminate(); // terminate worker
 			if (!mnemoLinkDecrypted) { if (logs) { console.error('mnemoLinkDecrypted not found !'); return false; } }
 			
 			return mnemoLinkDecrypted;
@@ -458,6 +460,8 @@ class mnemoBubbleObject {
 			x: x / eHTML.vault.mnemolinksBubblesContainer.offsetWidth * 100,
 			y: y / eHTML.vault.mnemolinksBubblesContainer.offsetHeight * 100,
 		};
+		this.fakeCiphering = false;
+		this.readyToShow = false;
 	}
 	createMnemoLinkBubbleElement(label = 'toto', mnemoLinkerVersion = 'v0.1') {
 		const newMnemoLink = document.createElement('div');
@@ -518,9 +522,10 @@ class mnemoBubbleObject {
 		});
 		return true;
 	}
-	async prepareBubbleToShow(label, mnemonicStr, fakeCipher = true) {
+	async prepareBubbleToShow(label, fakeCipher = true) {
 		if (this.label !== label) { console.error('label mismatch !'); return; }
-
+		this.fakeCiphering = true;
+		
 		const duration = 240;
 		centerScreenBtn.hide(duration);
 		this.toCenterContainer(duration);
@@ -537,12 +542,69 @@ class mnemoBubbleObject {
 		emptyDiv.appendChild(titleH2);
 		
 		// mnemonic grid
+		const gridHtml = document.createElement('div');
+		gridHtml.classList.add('miniMnemonicGrid');
+		for (let i = 0; i < 12; i++) {
+			const fakeWordLength = rnd(3, 7);
+			const wordDiv = document.createElement('div');
+			wordDiv.innerText = fakeCipher ? this.#generateRndString( fakeWordLength ) : mnemonic[i];
+			gridHtml.appendChild(wordDiv);
+		};
+
+		emptyDiv.appendChild(gridHtml);
+		emptyDiv.classList.add('mnemonicBubbleContent');
+		this.element.appendChild(emptyDiv);
+
+		const wordDivs = gridHtml.querySelectorAll('div');
+		while (!this.readyToShow) {
+			for (let i = 0; i < wordDivs.length; i++) {
+				const newRndWordLength = rnd(3, 7);
+				const newRndWord = this.#generateRndString( newRndWordLength );
+				for (let j = 0; j < newRndWord.length; j++) {
+					const char = newRndWord.charAt(j);
+					// replace the "fake cipher" char at position j by the real char
+					wordDivs[i].innerText = wordDivs[i].innerText.substring(0, j) + char + wordDivs[i].innerText.substring(j + 1);
+					await new Promise(r => setTimeout(r, settings.delayBeetweenChar));
+					if (this.readyToShow || this.label !== label) { break; }
+				}
+				if (this.readyToShow || this.label !== label) { break; }
+				if (newRndWordLength < wordDivs[i].innerText.length) { wordDivs[i].innerText = newRndWord; }
+			}
+		}
+
+		this.fakeCiphering = false;
+	}
+	async prepareMiniGridToDecipher(label, mnemonicStr, fakeCipher = true) {
+		if (this.label !== label) { console.error('label mismatch !'); return; }
+		this.readyToShow = true;
+		while (this.fakeCiphering && this.label === label) { await new Promise(r => setTimeout(r, 40)); }
+		setTimeout(() => { this.readyToShow = false; }, 600);
+
+		// get last fake words
+		const wordDivs = this.element.children[0].children[1].querySelectorAll('div');
+		const lastFakeWords = [];
+		for (let i = 0; i < wordDivs.length; i++) { lastFakeWords.push(wordDivs[i].innerText); }
+
+		// clear bubble
+		this.element.innerHTML = '';
+		this.element.classList.add('showing');
+	
+		// title
+		const emptyDiv = document.createElement('div');
+		const titleH2 = document.createElement('h2');
+		titleH2.innerText = label;
+		emptyDiv.appendChild(titleH2);
+		
+		// mnemonic grid
 		const mnemonic = mnemonicStr.split(' ');
 		const gridHtml = document.createElement('div');
 		gridHtml.classList.add('miniMnemonicGrid');
 		for (let i = 0; i < mnemonic.length; i++) {
 			const wordDiv = document.createElement('div');
-			wordDiv.innerText = fakeCipher ? this.#generateRndString( mnemonic[i].length ) : mnemonic[i];
+			let fakeWord = lastFakeWords[i] !== -1 ? lastFakeWords[i] : this.#generateRndString( mnemonic[i].length );
+			fakeWord = fakeWord.length > mnemonic[i].length ? fakeWord.substring(0, mnemonic[i].length) : fakeWord;
+			fakeWord = fakeWord.length < mnemonic[i].length ? this.#generateRndString( mnemonic[i].length ) : fakeWord;
+			wordDiv.innerText = fakeCipher ? fakeWord : mnemonic[i];
 			gridHtml.appendChild(wordDiv);
 		};
 
@@ -557,6 +619,8 @@ class mnemoBubbleObject {
 		
 		emptyDiv.classList.add('mnemonicBubbleContent');
 		this.element.appendChild(emptyDiv);
+
+		return true;
 	}
 	#generateRndString(length = 12) {
 		let rndStr = "";
@@ -965,7 +1029,7 @@ class communicationClass {
 		  if (result.encryptedPassComplement) { result.encryptedPassComplement = this.sanitizer.sanitize(result.encryptedPassComplement); }
 		  return result;
 		} catch (error) {
-		  console.error(`Error while sending AuthData to server: ${error}`);
+		  console.info(`Error while sending AuthData to server: ${error}`);
 		  return false;
 		}
 	}
@@ -992,7 +1056,8 @@ class sanitizerClass {
 		if (typeof data !== 'string' && typeof data !== 'object') return 'Invalid data type';
 	
 		if (typeof data === 'string') {
-			return data.replace(/[^a-zA-Z0-9+/=$,]/g, '');
+			//return data.replace(/[^a-zA-Z0-9+/=$,]/g, ''); // DEPRECATED - losing "."
+			return data.replace(/[^a-zA-Z0-9+\/=.$,]/g, '');
 		} else if (typeof data === 'object') {
 			const sanitized = {};
 			for (const key in data) {

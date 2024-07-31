@@ -3,8 +3,8 @@
 
 // BEGIN OF GENERATED FILE
 window.MnemoLinker = {
-		latestVersion: "1.2",
-		versions: ["1.0", "1.1", "1.2"]
+		latestVersion: "1.7",
+		versions: ["1.6", "1.7"]
 	};
 window.MnemoLinker.versions.forEach(version => {
 		const filePath = "./MnemoLinker/MnemoLinker_v" + version + ".js";

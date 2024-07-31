@@ -14,7 +14,7 @@ const sanitizer = new Sanitizer();
     const stateValidity = 2000;
 
     while(true) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 400));
 
         const result = await chrome.storage.local.get(['vaultUnlocked', 'timestamp']);
         if (!result || !result.timestamp) {
@@ -29,12 +29,12 @@ const sanitizer = new Sanitizer();
             await chrome.storage.local.set({vaultUnlocked: false});
             if (vaultState === 'unlocked') { 
                 vaultState = 'locked';
-                console.log('Vault locked!');
+                //console.log('Vault locked!');
             }
         } else if (result.vaultUnlocked && !expired) {
             if (vaultState === 'locked') {
                 vaultState = 'unlocked';
-                console.log('Vault unlocked!');
+                //console.log('Vault unlocked!');
             }
         }
     }
@@ -54,23 +54,49 @@ async function pingServerAndSetMode() {
 
     console.info('Cannot connect to any server!');
 }
+function openInternalPage(url = 'views/index.html') {
+    const internalPageURL = chrome.runtime.getURL(url);
+    chrome.tabs.create({url: internalPageURL}, function(tab) {
+        chrome.storage.local.set({internalPageTabId: tab.id});
+    });
+}
+async function openOrFocusInternalPage() {
+    const internalPageURL = chrome.runtime.getURL('views/index.html');
 
-chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+    const internalPageTabId = await chrome.storage.local.get("internalPageTabId");
+    if (!internalPageTabId || !internalPageTabId.internalPageTabId) {
+        openInternalPage();
+        return;
+    }
+
+    chrome.tabs.get(internalPageTabId.internalPageTabId, function(tab) {
+        if (chrome.runtime.lastError) {
+            openInternalPage();
+            return;
+        } else {
+            chrome.tabs.update(tab.id, {active: true});
+            chrome.windows.update(tab.windowId, {focused: true});
+        }
+    });
+}
+
+chrome.runtime.onMessage.addListener(async function(request, sender, sendResponse) {
     if (typeof request.action !== "string") { return; }
     if (!sanitizer.sanitize(request)) { console.info('data possibly corrupted!'); return; }
     
     switch (request.action) {
         case "openPage":
-            let password = request.password;
-            let passComplement = request.passComplement;
-            chrome.tabs.create({'url': chrome.runtime.getURL('views/index.html')}, function(tab) {
-                console.log('Tab opened');
-
+            openOrFocusInternalPage();
+            // DEPRECATED to avoid password transit
+            /*let { password } = request;
+            const vaultState = await chrome.storage.local.get(['vaultUnlocked']);
+            if (!vaultState || !vaultState.vaultUnlocked) {
+                await chrome.tabs.create({'url': chrome.runtime.getURL('views/index.html')}); // open internal page
                 // Declaration of the listener as a named function to be able to remove it later
                 const passwordListener = function(request, sender, sendResponse) {
                     if (typeof request.action !== "string") { return; }
                     if (request.action == "getPassword") {
-                        sendResponse({password, passComplement});
+                        sendResponse({password});
                         password = null;
                         // Delete the listener after serving the password
                         chrome.runtime.onMessage.removeListener(passwordListener);
@@ -78,7 +104,10 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 };
 
                 chrome.runtime.onMessage.addListener(passwordListener);
-            });
+            } else {
+                chrome.runtime.sendMessage({action: "authPassword", password});
+            }*/
+            
             break;
         case "requestAuth":
             // open popup for authentication

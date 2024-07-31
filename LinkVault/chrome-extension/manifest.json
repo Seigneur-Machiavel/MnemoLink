@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LinkVault",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "Decentralized mnemonic(seed) manager. Ensures your digital assets remain securely linked and accessible for life.",
   "action": {
     "default_popup": "views/popup.html",

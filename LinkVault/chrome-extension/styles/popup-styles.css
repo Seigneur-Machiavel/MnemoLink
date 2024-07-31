@@ -7,6 +7,26 @@
     --correct-color: green;
 }
 
+html {
+    overflow: hidden;
+}
+body {
+    overflow: hidden;
+    font-family: monospace;
+    color: var(--text-color);
+    background-color: #2c2c2c;
+    margin: 0;
+}
+#popUpContent {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 300px;
+}
+#popUpContent .wrap {
+    height: -webkit-fill-available !important;
+}
+
 .input-range {
     -webkit-appearance: none;
     appearance: none;
@@ -32,14 +52,21 @@
 .hidden {
     display: none !important;
 }
-
-body {
-    font-family: monospace;
-    color: var(--text-color);
-    background-color: #2c2c2c;
-    margin: 0;
-    width: 300px;
+@keyframes blink {
+    0% {
+        opacity: .8;
+        scale: 1;
+    }
+    50% {
+        opacity: 1;
+        scale: 1.02;
+    }
+    100% {
+        opacity: .8;
+        scale: 1;
+    }
 }
+
 .appTitle {
     font-family: "Inter", "Source Sans Pro", "Helvetica Neue", Arial, sans-serif;
     text-align: center;
@@ -104,6 +131,13 @@ button {
     border-radius: 10px;
     font-size: large;
 }
+#waitingForConnectionForm h2 {
+    animation: blink 1s infinite;
+}
+.loadingSvgDiv {
+    width: 240px;
+    height: 42px;
+}
 .bottomInfo {
     text-align: center;
     font-weight: bold;
@@ -138,24 +172,35 @@ button {
 }
 #bottomBar {
     display: flex;
+    align-items: center;
     border-top-style: solid;
     border-width: 1px;
     border-color: #ffffff17;
-    padding: 6px 0;
+    /*padding: 6px 0;*/
+    height: 50px;
 }
 #bottomBar button {
     display: flex;
     justify-content: center;
     align-items: center;
     background-color: transparent;
+    cursor: initial;
 }
-#bottomBar button:hover {
+#bottomBar button.active {
+    cursor: pointer;
+}
+#bottomBar button.active:hover {
     background-color: #ffffff17;
+}
+#bottomBar button.active:hover img {
     transform: scale(1.02);
+    filter: brightness(1) drop-shadow(0px 0px 2px rgba(255, 255, 255, .2));
 }
 #bottomBar button img {
     pointer-events: none;
     height: 80%;
+    filter: brightness(0.4);
+    transition: transform 0.12s ease-in-out, filter 0.12s ease-in-out;
 }
 #bottomBar .inlineCheckBox {
     width: 220px;

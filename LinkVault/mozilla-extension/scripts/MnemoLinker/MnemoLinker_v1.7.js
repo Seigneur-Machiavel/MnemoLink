@@ -2,9 +2,41 @@ if (false) { // CODE NEVER REACHED, SHOWS THE IMPORTS FOR DOCUMENTATION PURPOSES
 	const bip39 = require('./bip39 3.1.0.js');
 }
 
-const BIPTablesHardcoded = {};
-const BIPOfficialNamesHardcoded = {};
-const versionHardcoded = [];
+const BIPTablesHardcoded = {
+    "BIP-0039": {
+        "chinesetraditional": {
+            "officialLanguageStr": "chinese_traditional"
+        },
+        "czech": {
+            "officialLanguageStr": "czech"
+        },
+        "english": {
+            "officialLanguageStr": "english"
+        },
+        "french": {
+            "officialLanguageStr": "french"
+        },
+        "italian": {
+            "officialLanguageStr": "italian"
+        },
+        "japanese": {
+            "officialLanguageStr": "japanese"
+        },
+        "korean": {
+            "officialLanguageStr": "korean"
+        },
+        "portuguese": {
+            "officialLanguageStr": "portuguese"
+        },
+        "spanish": {
+            "officialLanguageStr": "spanish"
+        }
+    }
+};
+const BIPOfficialNamesHardcoded = {
+    "BIP-0039": "bip39"
+};
+const versionHardcoded = [1,7];
 const base64EncodingChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 const argon2KeyLen = 32; // need to be a multiple of 2
@@ -21,7 +53,7 @@ const IVStrLength = 16; // need to be a multiple of 2
  * @param {Object} params.officialBIPs - The official BIPs - > Only used with nodeJS!
  * @param {string} params.version - The version of the table - > Only used with nodeJS!
  */
-class MnemoLinker {
+export class MnemoLinker {
 	constructor(params = { masterMnemonic: null, mnemonic: null, BIPTables: undefined, officialBIPs: undefined, version: undefined}) {
 		this.minMnemonicLength = 10;
 		this.memByMnemoLen = { "10": 2**19, "11": 2**18, "12": 2**16 };
@@ -657,5 +689,3 @@ class MnemoLinker {
 /* CODE RELEASED ONLY WHEN EXPORTED --- DONT USE "//" or "/*" COMMENTS IN THIS SECTION !!! ---
 */
 
-//END --- ANY CODE AFTER THIS LINE WILL BE REMOVED DURING EXPORT, SHOULD BE USE FOR TESTING ONLY ---
-if (typeof(exports) !== 'undefined') { module.exports = MnemoLinker }
